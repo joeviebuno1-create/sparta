@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BSU Lipa Campus Navigator - SPARTA</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="navigation-styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+<!-- ============ SIDEBAR ============ -->
+<div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+        <div class="close-sb" onclick="toggleSidebar()">✕</div>
+        <div class="logo-wrap"><img src="../images/logo.png" alt="BSU Logo"></div>
+        <h1>BSU LIPA</h1>
+        <p>Campus Navigator</p>
+    </div>
+
+    <!-- Search -->
+    <div class="search-section">
+        <div class="search-wrap">
+            <span class="search-icon">🔍</span>
+            <input type="text" class="search-input" id="searchInput" placeholder="Room 301, Library…" autocomplete="off">
+            <button class="search-btn" onclick="searchLocation()">Search</button>
+            <div class="search-results" id="searchResults"></div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('locations',this)"><span class="t-icon">📍</span>Locations</button>
+        <button class="tab-btn" onclick="switchTab('favorites',this)"><span class="t-icon">⭐</span>Favs</button>
+        <button class="tab-btn evac-tab" onclick="switchTab('evacuation',this)"><span class="t-icon">🚨</span>Evacuation</button>
+        <button class="tab-btn" onclick="switchTab('legend',this)"><span class="t-icon">🗺️</span>Legend</button>
+        <button class="tab-btn" onclick="switchTab('about',this)"><span class="t-icon">ℹ️</span>About</button>
+    </div>
+
+    <!-- ---- LOCATIONS TAB ---- -->
+    <div class="tab-panel active" id="tab-locations">
+        <div class="viewing-strip" id="viewingStrip">
+            <span class="vs-icon">📍</span>
+            <div class="vs-text">
+                <div class="vs-label">Viewing Now</div>
+                <div class="vs-name" id="vsName">—</div>
+                <div class="vs-sub" id="vsSub">—</div>
+            </div>
+            <span class="vs-close" onclick="clearViewingStrip()">✕</span>
+        </div>
+
+        <!-- Type Filters -->
+        <div class="filter-bar" id="filterBar">
+            <button class="filter-pill active" data-filter="all" onclick="applyFilter('all',this)">All</button>
+        </div>
+
+        <!-- Floor Pills -->
+        <div class="floor-bar" id="floorBar">
+            <button class="floor-pill active" data-floor="all" onclick="applyFloor('all',this)">All Floors</button>
+        </div>
+
+        <!-- Nearby Section -->
+        <div id="nearbySection" style="display:none;">
+            <div class="nearby-label">📍 Nearby</div>
+            <div id="nearbyList" style="padding:0 .85rem;"></div>
+        </div>
+
+        <!-- Location List -->
+        <div class="loc-panel-inner" id="locationsListContent">
+            <div class="empty-state"><div class="es-icon">🗺️</div><p>Loading locations…</p></div>
+        </div>
+    </div>
+
+    <!-- ---- FAVORITES TAB ---- -->
+    <div class="tab-panel" id="tab-favorites">
+        <div id="favoritesContent" style="padding:.6rem .85rem .85rem;">
+            <div class="empty-state"><div class="es-icon">⭐</div><p>No favorites yet</p><p class="es-sub">Tap ☆ on any location to save it here</p></div>
+        </div>
+    </div>
+
+    <!-- ---- LEGEND TAB ---- -->
+    <div class="tab-panel" id="tab-legend">
+        <div class="legend-inner">
+            <div class="legend-card">
+                <div class="legend-card-title">📍 Map Markers</div>
+                <div class="legend-row"><div class="legend-dot green">●</div><div><div class="legend-label">Start Point</div><div class="legend-desc">Main Entrance / Gate</div></div></div>
+                <div class="legend-row"><div class="legend-dot" style="background:#4A90E2;">●</div><div><div class="legend-label">Destination</div><div class="legend-desc">Your selected location</div></div></div>
+                <div class="legend-row"><div class="legend-dot evac">●</div><div><div class="legend-label">Emergency Exit</div><div class="legend-desc">Evacuation points</div></div></div>
+            </div>
+            
+            <div class="legend-card">
+                <div class="legend-card-title">🛤️ Path Types</div>
+                <div class="legend-row"><div class="legend-line"></div><div><div class="legend-label">Navigation Path</div><div class="legend-desc">Animated golden route with arrows</div></div></div>
+                <div class="legend-row"><div class="legend-line evac"></div><div><div class="legend-label">Evacuation Route</div><div class="legend-desc">Orange emergency escape path</div></div></div>
+            </div>
+            
+            <div class="legend-card">
+                <div class="legend-card-title">🏢 Location Types</div>
+                <div class="legend-row"><span style="font-size:1rem;">🏫</span><div><div class="legend-label">Classroom</div><div class="legend-desc">Lecture halls &amp; rooms</div></div></div>
+                <div class="legend-row"><span style="font-size:1rem;">🏛️</span><div><div class="legend-label">Office/Admin</div><div class="legend-desc">Administrative offices</div></div></div>
+                <div class="legend-row"><span style="font-size:1rem;">📚</span><div><div class="legend-label">Library</div><div class="legend-desc">Reading &amp; study areas</div></div></div>
+                <div class="legend-row"><span style="font-size:1rem;">🔬</span><div><div class="legend-label">Laboratory</div><div class="legend-desc">Science &amp; computer labs</div></div></div>
+                <div class="legend-row"><span style="font-size:1rem;">🍽️</span><div><div class="legend-label">Cafeteria</div><div class="legend-desc">Dining &amp; food areas</div></div></div>
+                <div class="legend-row"><span style="font-size:1rem;">🏋️</span><div><div class="legend-label">Gymnasium</div><div class="legend-desc">Sports &amp; fitness facilities</div></div></div>
+                <div class="legend-row"><span style="font-size:1rem;">🏥</span><div><div class="legend-label">Clinic</div><div class="legend-desc">Medical &amp; health services</div></div></div>
+                <div class="legend-row"><span style="font-size:1rem;">🚻</span><div><div class="legend-label">Restroom</div><div class="legend-desc">Comfort rooms</div></div></div>
+                <div class="legend-row"><span style="font-size:1rem;">🅿️</span><div><div class="legend-label">Parking</div><div class="legend-desc">Vehicle parking areas</div></div></div>
+                <div class="legend-row"><span style="font-size:1rem;">🚪</span><div><div class="legend-label">Entrance/Exit</div><div class="legend-desc">Campus access points</div></div></div>
+            </div>
+            
+            <div class="legend-card">
+                <div class="legend-card-title">♿ Accessibility</div>
+                <div class="legend-row"><span style="font-size:1rem;">♿</span><div><div class="legend-label">Accessible</div><div class="legend-desc">Wheelchair-friendly locations</div></div></div>
+                <div class="legend-row"><span style="font-size:.9rem;">🚶</span><div><div class="legend-label">Ramp Available</div><div class="legend-desc">Alternative to stairs</div></div></div>
+                <div class="legend-row"><span style="font-size:.9rem;">🛗</span><div><div class="legend-label">Elevator</div><div class="legend-desc">Accessible vertical transport</div></div></div>
+            </div>
+            
+            <div class="legend-card">
+                <div class="legend-card-title">🕹️ Map Controls</div>
+                <div class="legend-row"><span style="font-size:.9rem;">🖱️</span><div><div class="legend-label">Rotate</div><div class="legend-desc">Click + drag to rotate view</div></div></div>
+                <div class="legend-row"><span style="font-size:.9rem;">➕/➖</span><div><div class="legend-label">Zoom</div><div class="legend-desc">Scroll wheel or pinch</div></div></div>
+                <div class="legend-row"><span style="font-size:.9rem;">🔄</span><div><div class="legend-label">Auto-Rotate</div><div class="legend-desc">Toggle automatic rotation</div></div></div>
+                <div class="legend-row"><span style="font-size:.9rem;">🧭</span><div><div class="legend-label">Reset View</div><div class="legend-desc">Return to default position</div></div></div>
+                <div class="legend-row"><span style="font-size:.9rem;">📱</span><div><div class="legend-label">Pan</div><div class="legend-desc">Two-finger drag (mobile)</div></div></div>
+            </div>
+            
+            <div class="legend-card">
+                <div class="legend-card-title">⭐ Features</div>
+                <div class="legend-row"><span style="font-size:.9rem;">🔍</span><div><div class="legend-label">Search</div><div class="legend-desc">Find locations by name</div></div></div>
+                <div class="legend-row"><span style="font-size:.9rem;">⭐</span><div><div class="legend-label">Favorites</div><div class="legend-desc">Save frequently visited places</div></div></div>
+                <div class="legend-row"><span style="font-size:.9rem;">🏷️</span><div><div class="legend-label">Filters</div><div class="legend-desc">Filter by location type</div></div></div>
+                <div class="legend-row"><span style="font-size:.9rem;">📊</span><div><div class="legend-label">Floors</div><div class="legend-desc">Select building floor level</div></div></div>
+                <div class="legend-row"><span style="font-size:.9rem;">📏</span><div><div class="legend-label">Path Stats</div><div class="legend-desc">Distance &amp; estimated time</div></div></div>
+                <div class="legend-row"><span style="font-size:.9rem;">🚨</span><div><div class="legend-label">Evacuation</div><div class="legend-desc">Emergency exits &amp; procedures</div></div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ---- ABOUT TAB ---- -->
+    <div class="tab-panel" id="tab-about">
+        <div class="about-inner">
+            <div class="about-hero">
+                <h3>SPARTA</h3>
+                <p>Smart Campus Companion</p>
+            </div>
+            <div class="about-section">
+                <div class="about-section-title">✨ New Features</div>
+                <div class="about-item"><span class="ab-bullet">›</span> <strong>Enhanced Path Animation</strong> - Flowing animated paths with glow effects</div>
+                <div class="about-item"><span class="ab-bullet">›</span> <strong>Smart Waypoint Navigation</strong> - Multi-segment pathfinding around buildings</div>
+                <div class="about-item"><span class="ab-bullet">›</span> <strong>Path Statistics</strong> - Distance and estimated walk time display</div>
+                <div class="about-item"><span class="ab-bullet">›</span> <strong>Turn-by-Turn Guidance</strong> - Clear step-by-step directions</div>
+            </div>
+            <div class="about-section">
+                <div class="about-section-title">About This Navigator</div>
+                <div class="about-item"><span class="ab-bullet">›</span> Interactive 3D campus map of BSU Lipa</div>
+                <div class="about-item"><span class="ab-bullet">›</span> Real-time location search &amp; pinning</div>
+                <div class="about-item"><span class="ab-bullet">›</span> Path drawing from Entrance Gate to any destination</div>
+                <div class="about-item"><span class="ab-bullet">›</span> Evacuation routes &amp; emergency exit guides</div>
+                <div class="about-item"><span class="ab-bullet">›</span> Favorites, filters, floor selection &amp; accessibility info</div>
+                <div class="about-item"><span class="ab-bullet">›</span> Locations managed via Admin Dashboard</div>
+            </div>
+            <div class="about-section">
+                <div class="about-section-title">How To Use</div>
+                <div class="about-item"><span class="ab-bullet">1</span> Search or tap a location in the list</div>
+                <div class="about-item"><span class="ab-bullet">2</span> A red pin marks the destination on the 3D map</div>
+                <div class="about-item"><span class="ab-bullet">3</span> An animated golden path shows the route from the main gate</div>
+                <div class="about-item"><span class="ab-bullet">4</span> View distance and estimated time in the stats badge</div>
+                <div class="about-item"><span class="ab-bullet">5</span> Tap 🚨 to view evacuation routes &amp; exits</div>
+                <div class="about-item"><span class="ab-bullet">6</span> Drag, scroll &amp; pinch to explore freely</div>
+            </div>
+            <div class="about-section">
+                <div class="about-section-title">Contact</div>
+                <div class="about-item"><span class="ab-bullet">›</span> Batangas State University – The NEU, Lipa Campus</div>
+                <div class="about-item"><span class="ab-bullet">›</span> Lipa City, Batangas, Philippines</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ EVACUATION TAB ============ -->
+    <div class="tab-panel" id="tab-evacuation">
+        <div class="evac-inner">
+            <div class="evac-alert">
+                <div class="ea-icon">🚨</div>
+                <h3>EMERGENCY EVACUATION</h3>
+                <p>Know your nearest emergency exits</p>
+            </div>
+
+            <div class="evac-section">
+                <div class="evac-section-title">
+                    <span>📋</span> Evacuation Procedures
+                </div>
+                <div class="evac-info-box">
+                    <p><strong>1. Stay Calm:</strong> Don't panic. Follow instructions from faculty or emergency personnel.</p>
+                    <p><strong>2. Use Nearest Exit:</strong> Proceed to the closest safe emergency exit. Do not use elevators.</p>
+                    <p><strong>3. Assembly Point:</strong> Gather at the designated assembly point (Open Field near Main Gate).</p>
+                    <p><strong>4. Account for Everyone:</strong> Faculty will conduct headcount. Report missing persons immediately.</p>
+                    <p><strong>5. Wait for Instructions:</strong> Do not re-enter buildings until authorized by emergency personnel.</p>
+                </div>
+            </div>
+
+            <div class="evac-section">
+                <div class="evac-section-title">
+                    <span>📞</span> Emergency Contacts
+                </div>
+                <div class="evac-info-box">
+                    <p><strong>Campus Security:</strong> (043) 756-5555 local 101</p>
+                    <p><strong>Medical Clinic:</strong> (043) 756-5555 local 201</p>
+                    <p><strong>Lipa City Emergency:</strong> 911</p>
+                    <p><strong>Fire Department:</strong> (043) 756-1234</p>
+                    <p><strong>Police Station:</strong> (043) 756-4321</p>
+                </div>
+            </div>
+
+            <div class="evac-section">
+                <div class="evac-section-title">
+                    <span>⚠️</span> Safety Reminders
+                </div>
+                <div class="evac-info-box">
+                    <p>• Know at least two evacuation routes from your current location</p>
+                    <p>• Keep emergency exits clear at all times</p>
+                    <p>• Familiarize yourself with fire alarm sounds</p>
+                    <p>• Assist persons with disabilities during evacuation</p>
+                    <p>• Report any blocked exits or safety hazards to Security</p>
+                </div>
+            </div>
+
+            <div class="evac-section">
+                <div class="evac-section-title">
+                    <span>🚪</span> Emergency Exits
+                </div>
+                
+                <div id="emergencyExitsList">
+                    <!-- Emergency exits will be loaded dynamically from API -->
+                    <div class="empty-state">
+                        <div class="es-icon">🚪</div>
+                        <p>Loading emergency exits...</p>
+                        <p class="es-sub">Emergency exit locations will appear here</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ EVACUATION MODAL ============ -->
+<div class="evac-overlay" id="evacOverlay" onclick="closeEvacModal(event)">
+    <div class="evac-modal" onclick="event.stopPropagation()">
+        <div class="evac-modal-header">
+            <div class="evac-modal-header-left">
+                <span class="emh-icon">🚨</span>
+                <div><h2>Evacuation Routes</h2><p>Emergency exits &amp; escape paths</p></div>
+            </div>
+            <span class="evac-modal-close" onclick="closeEvacModal()">✕</span>
+        </div>
+        <div class="evac-modal-body">
+            <!-- Steps -->
+            <div class="evac-step">
+                <div class="evac-step-num">1</div>
+                <div class="evac-step-content">
+                    <div class="evac-step-title">Stay Calm</div>
+                    <div class="evac-step-desc">Do not panic. Listen for announcements from campus security or faculty members near you.</div>
+                </div>
+            </div>
+            <div class="evac-step">
+                <div class="evac-step-num">2</div>
+                <div class="evac-step-content">
+                    <div class="evac-step-title">From Your Location → Evacuation Area</div>
+                    <div class="evac-step-desc">From your specific location, follow the <strong style="color:var(--evac);">orange evacuation path</strong> on the 3D map leading to the nearest emergency exit or assembly area. Tap "Pin on Map" on any exit below to see its route.</div>
+                </div>
+            </div>
+            <div class="evac-step">
+                <div class="evac-step-num">3</div>
+                <div class="evac-step-content">
+                    <div class="evac-step-title">Arrive at Evacuation Area</div>
+                    <div class="evac-step-desc">Reach the designated evacuation area or assembly point safely. Assist others if needed and do not re-enter any building.</div>
+                </div>
+            </div>
+            <div class="evac-step">
+                <div class="evac-step-num">4</div>
+                <div class="evac-step-content">
+                    <div class="evac-step-title">Reach the Assembly Area</div>
+                    <div class="evac-step-desc">Proceed to the designated assembly point outside the main gate. Assist anyone who needs help.</div>
+                </div>
+            </div>
+            <div class="evac-step">
+                <div class="evac-step-num">5</div>
+                <div class="evac-step-content">
+                    <div class="evac-step-title">Report &amp; Await Instructions</div>
+                    <div class="evac-step-desc">Check in with your department head or nearest security officer. Do not re-enter any building until cleared.</div>
+                </div>
+            </div>
+
+            <!-- Exits -->
+            <div class="evac-exits-title">🚪 Emergency Exits</div>
+            <div id="evacExitsList">
+                <!-- populated by JS -->
+            </div>
+
+            <!-- Warning -->
+            <div class="evac-warning">
+                <span class="evac-warning-icon">⚠️</span>
+                <div class="evac-warning-text"><strong>Important:</strong> This guide is for general reference. Always follow the physical evacuation signs posted inside buildings and obey instructions from campus security personnel during an actual emergency.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ MAIN MAP ============ -->
+<div class="map-container" id="mapContainer">
+    <div class="top-nav">
+        <div class="nav-left">
+            <button class="toggle-sb" onclick="toggleSidebar()">☰</button>
+            <div class="breadcrumb">
+                <span>🏛️ Campus</span><span>›</span>
+                <span class="bc-active" id="currentLocation">Main Building</span>
+            </div>
+        </div>
+        <div class="nav-actions">
+            <a href="sparta_chatbot.html" class="action-btn chatbot-nav-btn" title="Go to Chatbot">💬 Talk to Sparta</a>
+            <button class="action-btn" onclick="resetView()">🔄 Reset</button>
+            <button class="action-btn primary" onclick="showFullScreen()">⛶</button>
+        </div>
+    </div>
+
+    <div class="map-viewer">
+        <div class="map-loading" id="mapLoading">
+            <div class="loader"></div>
+            <p style="color:#777;font-size:.82rem;">Loading 3D Campus Map…</p>
+        </div>
+        <canvas id="map3dCanvas" class="map-iframe" style="display:none;"></canvas>
+    </div>
+
+    <div class="map-controls">
+        <button class="ctrl-btn" onclick="zoomIn()" title="Zoom In">＋</button>
+        <button class="ctrl-btn" onclick="zoomOut()" title="Zoom Out">－</button>
+        <button class="ctrl-btn" onclick="rotate()">🔄</button>
+        <button class="ctrl-btn" onclick="resetOrientation()">🧭</button>
+    </div>
+
+    <!-- Path Statistics Badge -->
+    <div class="path-stats" id="pathStats">
+        <div class="path-stats-title">📊 Route Info</div>
+        <div class="path-stat">
+            <span class="path-stat-icon">📏</span>
+            <span class="path-stat-label">Distance</span>
+            <span class="path-stat-value" id="pathDistance">—</span>
+        </div>
+        <div class="path-stat">
+            <span class="path-stat-icon">⏱️</span>
+            <span class="path-stat-label">Est. Time</span>
+            <span class="path-stat-value" id="pathTime">—</span>
+        </div>
+        <div class="path-stat">
+            <span class="path-stat-icon">🚶</span>
+            <span class="path-stat-label">Waypoints</span>
+            <span class="path-stat-value" id="pathWaypoints">—</span>
+        </div>
+    </div>
+
+    <div class="info-panel" id="infoPanel">
+        <div class="info-header">
+            <h2 class="info-title" id="infoTitle">Location</h2>
+            <span class="close-info" onclick="closeInfo()">×</span>
+        </div>
+        <div class="info-content" id="infoContent"></div>
+        <button class="directions-btn" onclick="getDirections()">📍 Get Directions</button>
+    </div>
+</div>
+
+<!-- ============ JAVASCRIPT ============ -->
+<script src="navigation-script.js"></script>
+</body>
+</html>

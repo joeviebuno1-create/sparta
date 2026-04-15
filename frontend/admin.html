@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPARTA Admin Dashboard - BSU Lipa</title>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Three.js Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
+    
+    <!-- External Stylesheet -->
+    <link rel="stylesheet" href="admin-styles.css">
+    
+    <style>
+        /* 3D Map Container Styles - Matching Campus Navigator */
+        #map3DPicker {
+            position: relative;
+            width: 100%;
+            height: 600px;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #f0f1f3;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        #map3DCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        
+        #mapLoading {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            z-index: 10;
+        }
+        
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            margin-top: 1rem;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+        
+        .loading-subtext {
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        /* Map Controls Overlay */
+        .map-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 20;
+        }
+        
+        .map-control-btn {
+            background: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            transition: all 0.3s ease;
+        }
+        
+        .map-control-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        .map-control-btn:active {
+            transform: scale(0.95);
+        }
+        
+        /* Coordinate Display Enhancement */
+        #coordDisplay {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: linear-gradient(135deg, rgba(201, 48, 48, 0.05), rgba(163, 32, 32, 0.02));
+            border: 2px solid rgba(201, 48, 48, 0.2);
+            border-radius: 10px;
+            font-weight: 600;
+            color: #1e293b;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        #coordDisplay::before {
+            content: '📍';
+            font-size: 1.5rem;
+        }
+        
+        .coord-help-text {
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+            color: #64748b;
+            font-style: italic;
+        }
+        
+        /* File Upload Area Styles */
+        .file-upload-area {
+            border: 3px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f8fafc;
+        }
+        
+        .file-upload-area:hover {
+            border-color: #C93030;
+            background: rgba(201, 48, 48, 0.02);
+        }
+        
+        .file-upload-area.dragover {
+            border-color: #C93030;
+            background: rgba(201, 48, 48, 0.05);
+            transform: scale(1.02);
+        }
+        
+        .file-upload-placeholder {
+            color: #64748b;
+        }
+        
+        .file-upload-selected {
+            color: #1e293b;
+        }
+    </style>
+</head>
+<body>
+    <!-- ========== LOGIN OVERLAY ========== -->
+    <div id="loginOverlay">
+
+        <!-- ===== LEFT PANEL ===== -->
+        <div class="lp-left">
+            <!-- Animated diagonal stripes (same as dashboard header) -->
+            <div class="lp-pattern"></div>
+            <!-- Glow orbs -->
+            <div class="lp-orb lp-orb1"></div>
+            <div class="lp-orb lp-orb2"></div>
+            <div class="lp-orb lp-orb3"></div>
+
+            <div class="lp-left-content">
+                <!-- Logo ring -->
+                <div class="lp-logo-ring">
+                    <img src="/images/logo.png" alt="SPARTHA" class="lp-logo-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+                    <div class="lp-logo-fallback">&#128272;</div>
+                    <div class="lp-logo-pulse"></div>
+                </div>
+
+                <div class="lp-brand">SPARTA</div>
+                <div class="lp-title">ADMIN DASHBOARD</div>
+                <div class="lp-divider"></div>
+                <div class="lp-subtitle">Smart Campus Companion<br>Management Portal</div>
+
+                <!-- Floating stats chips -->
+                <div class="lp-chips">
+                    <div class="lp-chip">&#127979; BSU Lipa</div>
+                    <div class="lp-chip">&#127981; Campus Navigator</div>
+                    <div class="lp-chip">&#128101; Admin Access</div>
+                </div>
+            </div>
+
+            <!-- Bottom badge -->
+            <div class="lp-badge">
+                <span class="lp-badge-title">BSU LIPA</span>
+                <span class="lp-badge-sub">The National Engineering University</span>
+            </div>
+        </div>
+
+        <!-- ===== RIGHT PANEL ===== -->
+        <div class="lp-right">
+            <div class="lp-form-wrap">
+
+                <!-- Alert -->
+                <div id="loginAlert" class="lp-alert" style="display:none;"></div>
+
+                <!-- Username -->
+                <div class="lp-field">
+                    <label class="lp-label">Username</label>
+                    <div class="lp-input-wrap">
+                        <span class="lp-input-icon">&#128100;</span>
+                        <input id="loginUsername" type="text" class="lp-input"
+                            placeholder="Enter your username"
+                            autocomplete="username"
+                            onkeydown="if(event.key==='Enter')document.getElementById('loginPassword').focus()">
+                    </div>
+                </div>
+
+                <!-- Password -->
+                <div class="lp-field">
+                    <label class="lp-label">Password</label>
+                    <div class="lp-input-wrap">
+                        <span class="lp-input-icon">&#128274;</span>
+                        <input id="loginPassword" type="password" class="lp-input"
+                            placeholder="Enter your password"
+                            autocomplete="current-password"
+                            style="padding-right:3.5rem;"
+                            onkeydown="if(event.key==='Enter')submitLogin()">
+                        <button type="button" class="lp-eye-btn" onclick="toggleLoginPassword()" title="Toggle password">
+                            <span id="eyeIcon">&#128065;</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Login Button -->
+                <button id="loginBtn" class="lp-btn" onclick="submitLogin()">
+                    <span id="loginBtnText">&#128640;&nbsp; Login to Dashboard</span>
+                    <div class="lp-btn-shine"></div>
+                </button>
+
+
+
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== CHANGE CREDENTIALS MODAL ===== -->
+    <div id="changeCredModal">
+        <div class="cc-backdrop" onclick="closeChangeCredModal()"></div>
+        <div class="cc-card">
+            <!-- Red header bar -->
+            <div class="cc-header">
+                <div class="cc-header-pattern"></div>
+                <div class="cc-header-orb"></div>
+                <div class="cc-header-content">
+                    <div class="cc-header-icon">&#128273;</div>
+                    <div>
+                        <div class="cc-header-title">Change Credentials</div>
+                        <div class="cc-header-sub">Update your admin username or password</div>
+                    </div>
+                    <button class="cc-close-btn" onclick="closeChangeCredModal()">&#10005;</button>
+                </div>
+            </div>
+
+            <div class="cc-body">
+                <div id="changeCredAlert" style="display:none;margin-bottom:1.25rem;"></div>
+
+                <div class="cc-section-label">&#128274; Verify Current Credentials</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Current Username *</label>
+                        <input type="text" id="cc_current_username" placeholder="Your current username">
+                    </div>
+                    <div class="form-group">
+                        <label>Current Password *</label>
+                        <input type="password" id="cc_current_password" placeholder="Your current password">
+                    </div>
+                </div>
+
+                <div class="cc-divider">
+                    <span>New Values <span style="font-weight:400;font-size:0.78rem;color:#94a3b8;">(leave blank to keep current)</span></span>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>New Username</label>
+                        <input type="text" id="cc_new_username" placeholder="Leave blank to keep">
+                    </div>
+                    <div class="form-group">
+                        <label>New Password</label>
+                        <input type="password" id="cc_new_password" placeholder="Leave blank to keep">
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:1rem;margin-top:0.5rem;">
+                    <button onclick="submitChangeCredentials()" class="btn" style="flex:1;justify-content:center;">
+                        &#10003;&nbsp; Save Changes
+                    </button>
+                    <button onclick="closeChangeCredModal()" class="btn btn-secondary" style="flex:1;justify-content:center;">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        /* =============================================
+           LOGIN OVERLAY — SPLIT SCREEN
+           ============================================= */
+        #loginOverlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 9999;
+            display: flex;
+            font-family: 'Poppins', sans-serif;
+            background: #f0f2f5;
+        }
+
+        /* ---- LEFT PANEL ---- */
+        .lp-left {
+            position: relative;
+            width: 45%;
+            background: linear-gradient(160deg, #c93030 0%, #8b1a1a 60%, #5c0f0f 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            animation: lpLeftIn 0.8s cubic-bezier(0.22,1,0.36,1) both;
+        }
+        @keyframes lpLeftIn {
+            from { transform: translateX(-60px); opacity: 0; }
+            to   { transform: translateX(0);    opacity: 1; }
+        }
+
+        /* Diagonal stripe pattern (same as dashboard header) */
+        .lp-pattern {
+            position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+            background: repeating-linear-gradient(45deg,transparent,transparent 12px,
+                rgba(255,255,255,0.04) 12px,rgba(255,255,255,0.04) 24px);
+            animation: headerPattern 25s linear infinite;
+        }
+
+        /* Glow orbs */
+        .lp-orb { position: absolute; border-radius: 50%; pointer-events: none; }
+        .lp-orb1 {
+            width: 320px; height: 320px; top: -80px; right: -80px;
+            background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 70%);
+            animation: pulse 5s ease-in-out infinite;
+        }
+        .lp-orb2 {
+            width: 200px; height: 200px; bottom: 60px; left: -40px;
+            background: radial-gradient(circle, rgba(244,208,63,0.15) 0%, transparent 70%);
+            animation: pulse 7s ease-in-out infinite reverse;
+        }
+        .lp-orb3 {
+            width: 140px; height: 140px; bottom: 200px; right: 30px;
+            background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+            animation: pulse 4s ease-in-out infinite 1s;
+        }
+
+        .lp-left-content {
+            position: relative; z-index: 1;
+            display: flex; flex-direction: column;
+            align-items: center; text-align: center;
+            padding: 2rem;
+        }
+
+        /* Logo ring */
+        .lp-logo-ring {
+            position: relative;
+            width: 110px; height: 110px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.12);
+            border: 3px solid rgba(255,255,255,0.3);
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 1.75rem;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 8px rgba(255,255,255,0.05);
+            animation: logoFloat 3s ease-in-out infinite;
+        }
+        .lp-logo-img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; }
+        .lp-logo-fallback {
+            display: none; font-size: 3rem;
+            width: 80px; height: 80px; align-items: center; justify-content: center;
+        }
+        .lp-logo-pulse {
+            position: absolute; top: -8px; left: -8px;
+            right: -8px; bottom: -8px; border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.2);
+            animation: logoPulseRing 2.5s ease-out infinite;
+        }
+        @keyframes logoPulseRing {
+            0%   { transform: scale(1);   opacity: 0.6; }
+            100% { transform: scale(1.3); opacity: 0; }
+        }
+
+        .lp-brand {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 3.2rem; letter-spacing: 6px; color: #fff;
+            text-shadow: 0 4px 16px rgba(0,0,0,0.4);
+            line-height: 1;
+            background: linear-gradient(90deg, #fff 0%, rgba(255,255,255,0.75) 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .lp-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.3rem; letter-spacing: 5px;
+            color: rgba(255,255,255,0.7);
+            margin-top: 0.2rem; margin-bottom: 1.25rem;
+        }
+        .lp-divider {
+            width: 60px; height: 3px;
+            background: linear-gradient(90deg, rgba(244,208,63,0.9), rgba(244,208,63,0.3));
+            border-radius: 2px; margin-bottom: 1.25rem;
+        }
+        .lp-subtitle {
+            color: rgba(255,255,255,0.75);
+            font-size: 0.9rem; line-height: 1.7; margin-bottom: 2rem;
+        }
+
+        /* Floating chips */
+        .lp-chips { display: flex; flex-direction: column; gap: 0.6rem; width: 100%; max-width: 240px; }
+        .lp-chip {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.18);
+            border-radius: 50px;
+            padding: 0.5rem 1.2rem;
+            font-size: 0.82rem; color: rgba(255,255,255,0.9);
+            backdrop-filter: blur(4px);
+            display: flex; align-items: center; gap: 0.5rem;
+            transition: all 0.3s ease;
+        }
+        .lp-chip:hover {
+            background: rgba(255,255,255,0.18);
+            transform: translateX(4px);
+        }
+
+        /* Bottom badge */
+        .lp-badge {
+            position: absolute; bottom: 1.75rem; left: 0; right: 0;
+            text-align: center; z-index: 1;
+        }
+        .lp-badge-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.1rem; letter-spacing: 3px; color: rgba(255,255,255,0.9);
+            display: block;
+        }
+        .lp-badge-sub {
+            font-size: 0.72rem; color: rgba(255,255,255,0.55); display: block;
+        }
+
+        /* ---- RIGHT PANEL ---- */
+        .lp-right {
+            flex: 1;
+            display: flex; align-items: center; justify-content: center;
+            padding: 2rem;
+            overflow-y: auto;
+            background: #f0f2f5;
+            animation: lpRightIn 0.8s cubic-bezier(0.22,1,0.36,1) 0.1s both;
+        }
+        @keyframes lpRightIn {
+            from { transform: translateX(40px); opacity: 0; }
+            to   { transform: translateX(0);    opacity: 1; }
+        }
+
+        .lp-form-wrap {
+            width: 100%; max-width: 400px;
+        }
+
+
+
+        /* Alert */
+        .lp-alert {
+            padding: 1rem 1.25rem; border-radius: 12px;
+            font-size: 0.875rem; font-weight: 500;
+            margin-bottom: 1.25rem;
+            animation: slideDown 0.4s ease-out;
+        }
+        .lp-alert.err {
+            background: linear-gradient(135deg, rgba(201,48,48,0.08), rgba(163,32,32,0.04));
+            border: 1px solid rgba(201,48,48,0.25);
+            color: #a32020;
+        }
+        .lp-alert.ok {
+            background: linear-gradient(135deg, rgba(17,153,142,0.08), rgba(56,239,125,0.04));
+            border: 1px solid rgba(17,153,142,0.25);
+            color: #0c6b5f;
+        }
+
+        /* Fields */
+        .lp-field { margin-bottom: 1.4rem; }
+        .lp-label {
+            display: block; font-weight: 600; font-size: 0.875rem;
+            color: #1a202c; margin-bottom: 0.5rem;
+            transition: color 0.2s;
+        }
+        .lp-field:focus-within .lp-label { color: #c93030; }
+
+        .lp-input-wrap { position: relative; }
+        .lp-input-icon {
+            position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+            font-size: 1rem; pointer-events: none; z-index: 1;
+        }
+        .lp-input {
+            width: 100%;
+            padding: 0.9rem 1.2rem 0.9rem 3rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            font-family: 'Poppins', sans-serif;
+            color: #1a202c;
+            background: #fff;
+            transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+            outline: none;
+        }
+        .lp-input:focus {
+            border-color: #c93030;
+            box-shadow: 0 0 0 4px rgba(201,48,48,0.1);
+            transform: translateY(-2px);
+        }
+        .lp-eye-btn {
+            position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+            background: none; border: none; cursor: pointer; font-size: 1rem;
+            color: #94a3b8; padding: 0.25rem; line-height: 1;
+            transition: color 0.2s;
+        }
+        .lp-eye-btn:hover { color: #c93030; }
+
+        /* Login Button */
+        .lp-btn {
+            width: 100%;
+            padding: 1rem 2rem;
+            background: linear-gradient(135deg, #c93030 0%, #a32020 100%);
+            color: #fff; border: none; border-radius: 12px;
+            font-size: 1rem; font-weight: 700;
+            font-family: 'Poppins', sans-serif;
+            cursor: pointer; letter-spacing: 0.5px;
+            box-shadow: 0 6px 20px rgba(201,48,48,0.35);
+            position: relative; overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+            margin-top: 0.5rem;
+        }
+        .lp-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 28px rgba(201,48,48,0.45);
+        }
+        .lp-btn:active { transform: translateY(-1px); }
+        .lp-btn:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+        .lp-btn-shine {
+            position: absolute; top: 0; left: -100%; width: 60%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+            transform: skewX(-20deg);
+            animation: btnShine 3s ease-in-out infinite 1s;
+        }
+        @keyframes btnShine {
+            0%,70%,100% { left: -100%; }
+            35%          { left: 150%; }
+        }
+
+
+
+        /* ---- RESPONSIVE ---- */
+        @media (max-width: 700px) {
+            #loginOverlay { flex-direction: column; }
+            .lp-left {
+                width: 100%; min-height: 220px;
+                flex-shrink: 0;
+            }
+            .lp-left-content { padding: 1.5rem 1rem; }
+            .lp-brand { font-size: 2.2rem; letter-spacing: 4px; }
+            .lp-chips, .lp-subtitle { display: none; }
+            .lp-badge { position: static; margin-top: 0.5rem; }
+            .lp-logo-ring { width: 80px; height: 80px; margin-bottom: 1rem; }
+            .lp-logo-img { width: 56px; height: 56px; }
+            .lp-right { padding: 1.5rem 1rem; }
+        }
+
+        /* =============================================
+           CHANGE CREDENTIALS MODAL
+           ============================================= */
+        #changeCredModal {
+            display: none; position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%; z-index: 10000;
+            align-items: center; justify-content: center;
+            font-family: 'Poppins', sans-serif;
+        }
+        #changeCredModal.open { display: flex; }
+
+        .cc-backdrop {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15,20,40,0.65);
+            backdrop-filter: blur(5px);
+        }
+        .cc-card {
+            position: relative; z-index: 1;
+            background: #fff;
+            border-radius: 20px;
+            width: 100%; max-width: 540px; margin: 1rem;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+            overflow: hidden;
+            animation: cardSlideUp 0.4s cubic-bezier(0.22,1,0.36,1) both;
+        }
+
+        /* Card header */
+        .cc-header {
+            background: linear-gradient(135deg, #c93030 0%, #a32020 100%);
+            padding: 1.5rem 2rem;
+            position: relative; overflow: hidden;
+        }
+        .cc-header-pattern {
+            position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+            background: repeating-linear-gradient(45deg,transparent,transparent 10px,
+                rgba(255,255,255,0.04) 10px,rgba(255,255,255,0.04) 20px);
+            animation: headerPattern 20s linear infinite;
+        }
+        .cc-header-orb {
+            position: absolute; top: -20px; right: -20px;
+            width: 120px; height: 120px; border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 70%);
+        }
+        .cc-header-content {
+            position: relative; z-index: 1;
+            display: flex; align-items: center; gap: 1rem;
+        }
+        .cc-header-icon {
+            width: 48px; height: 48px; border-radius: 50%;
+            background: rgba(255,255,255,0.15);
+            border: 2px solid rgba(255,255,255,0.3);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.4rem; flex-shrink: 0;
+        }
+        .cc-header-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.5rem; letter-spacing: 2px; color: #fff;
+        }
+        .cc-header-sub { font-size: 0.8rem; color: rgba(255,255,255,0.8); margin-top: 0.1rem; }
+        .cc-close-btn {
+            margin-left: auto; background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.25); border-radius: 50%;
+            width: 36px; height: 36px; color: #fff; cursor: pointer;
+            font-size: 0.9rem; display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s; flex-shrink: 0;
+        }
+        .cc-close-btn:hover { background: rgba(255,255,255,0.25); transform: rotate(90deg); }
+
+        .cc-body { padding: 2rem; }
+
+        .cc-section-label {
+            font-size: 0.78rem; font-weight: 700; color: #94a3b8;
+            letter-spacing: 1px; text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+        .cc-divider {
+            display: flex; align-items: center; gap: 0.75rem;
+            margin: 1.25rem 0;
+            font-size: 0.82rem; font-weight: 600; color: #64748b;
+        }
+        .cc-divider::before, .cc-divider::after {
+            content: ''; flex: 1; height: 1px; background: #e2e8f0;
+        }
+    </style>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="header-content">
+            <img src="/images/logo.png" alt="SPARTHA Logo" class="spartha-logo" onerror="this.style.display='none'">
+            <div class="header-text">
+                <h1>SPARTA ADMIN DASHBOARD</h1>
+                <p>Smart Campus Companion Management Portal</p>
+            </div>
+            <div class="university-badge">
+                <div class="bsu">BSU LIPA</div>
+                <div class="tagline">The National Engineering University</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Tabs Navigation -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('authorities', event)">👥 University Authorities</button>
+            <button class="tab-btn" onclick="switchTab('history', event)">📜 University History</button>
+            <button class="tab-btn" onclick="switchTab('announcements', event)">📢 Announcements</button>
+            <button class="tab-btn" onclick="switchTab('popupAnnouncements', event)">🔔 Popup Announcements</button>
+            <button class="tab-btn" onclick="switchTab('intents', event)">💬 Custom Responses</button>
+            <button class="tab-btn" onclick="switchTab('navigation', event)">🗺️ Campus Navigation</button>
+            <button class="tab-btn" onclick="switchTab('model3d', event)">🏗️ 3D Campus Model</button>
+            <button class="tab-btn" onclick="switchTab('orgchart', event)">🏢 Organizational Chart</button>
+        </div>
+
+        <!-- Authorities Tab -->
+        <div id="authorities" class="tab-content active">
+            <div class="card">
+                <h2>Add New Authority</h2>
+                <div id="authoritiesAlert"></div>
+                <form id="authorityForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Name *</label>
+                            <input type="text" id="auth_name" required placeholder="Dr. John Doe">
+                        </div>
+                        <div class="form-group">
+                            <label>Position *</label>
+                            <input type="text" id="auth_position" placeholder="Dean of Engineering" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Department *</label>
+                            <input type="text" id="auth_department" required placeholder="Engineering Department">
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="auth_email" placeholder="john.doe@bsu.edu.ph">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Phone</label>
+                            <input type="text" id="auth_phone" placeholder="+63 912 345 6789">
+                        </div>
+                        <div class="form-group">
+                            <label>Office Location</label>
+                            <input type="text" id="auth_office" placeholder="Building A, Room 201">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Biography</label>
+                        <textarea id="auth_bio" placeholder="Brief biography, credentials, and areas of expertise..."></textarea>
+                    </div>
+                    <button type="submit" class="btn">✓ Add Authority</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>Current Authorities</h2>
+                <table class="data-table" id="authoritiesTable">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Position</th>
+                            <th>Department</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- History Tab -->
+        <div id="history" class="tab-content">
+            <div class="card">
+                <h2>Add Historical Event</h2>
+                <div id="historyAlert"></div>
+                <form id="historyForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Year *</label>
+                            <input type="number" id="hist_year" required placeholder="1903">
+                        </div>
+                        <div class="form-group">
+                            <label>Title *</label>
+                            <input type="text" id="hist_title" required placeholder="University Founded">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Description *</label>
+                        <textarea id="hist_description" required placeholder="Describe this significant event in the university's history..."></textarea>
+                    </div>
+                    <button type="submit" class="btn">✓ Add Historical Event</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>University History Timeline</h2>
+                <table class="data-table" id="historyTable">
+                    <thead>
+                        <tr>
+                            <th>Year</th>
+                            <th>Title</th>
+                            <th>Description</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Announcements Tab -->
+        <div id="announcements" class="tab-content">
+            <div class="card">
+                <h2>Create New Announcement</h2>
+                <div id="announcementsAlert"></div>
+                <form id="announcementForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Title *</label>
+                            <input type="text" id="ann_title" required placeholder="Important Campus Update">
+                        </div>
+                        <div class="form-group">
+                            <label>Category *</label>
+                            <select id="ann_category" required>
+                                <option value="Academic">Academic</option>
+                                <option value="Events">Events</option>
+                                <option value="General">General</option>
+                                <option value="Emergency">Emergency</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Content *</label>
+                        <textarea id="ann_content" required placeholder="Write your announcement here..."></textarea>
+                    </div>
+                    <button type="submit" class="btn">✓ Post Announcement</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>Recent Announcements</h2>
+                <table class="data-table" id="announcementsTable">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Content</th>
+                            <th>Category</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Popup Announcements Tab -->
+        <div id="popupAnnouncements" class="tab-content">
+            <div class="card">
+                <h2>🔔 Create Popup Announcement</h2>
+                <p style="color:#64748b;margin-bottom:1rem;font-size:0.92rem;">
+                    Popup announcements are shown automatically to users on the main menu page. You can include an image.
+                </p>
+                <div id="popupAlert"></div>
+                <form id="popupForm" enctype="multipart/form-data">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Title *</label>
+                            <input type="text" id="popup_title" required placeholder="Important Update">
+                        </div>
+                        <div class="form-group">
+                            <label>Category *</label>
+                            <select id="popup_category" required>
+                                <option value="General">General</option>
+                                <option value="Academic">Academic</option>
+                                <option value="Events">Events</option>
+                                <option value="Emergency">Emergency</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Priority (higher = shown first)</label>
+                            <input type="number" id="popup_priority" value="0" min="0" max="100" placeholder="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Status</label>
+                            <select id="popup_is_active">
+                                <option value="true">Active (visible on main menu)</option>
+                                <option value="false">Inactive (hidden)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Content / Message</label>
+                        <textarea id="popup_content" placeholder="Write your announcement details here..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Image (optional — JPG, PNG, GIF, WebP)</label>
+                        <input type="file" id="popup_image" accept="image/*" style="padding:0.5rem;">
+                        <div id="popup_image_preview" style="margin-top:0.5rem;display:none;">
+                            <img id="popup_preview_img" src="" alt="Preview" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid #e2e8f0;">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn">✓ Save Popup Announcement</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>Existing Popup Announcements</h2>
+                <table class="data-table" id="popupTable">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Category</th>
+                            <th>Has Image</th>
+                            <th>Priority</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="popupTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Custom Intents Tab -->
+        <div id="intents" class="tab-content">
+            <div class="card">
+                <h2>Add Custom Response</h2>
+                <div id="intentsAlert"></div>
+                <form id="intentForm">
+                    <div class="form-group">
+                        <label>Intent Type *</label>
+                        <input type="text" id="intent_type" required placeholder="greeting, thanks, directions, etc.">
+                    </div>
+                    <div class="form-group">
+                        <label>Keywords (comma separated) *</label>
+                        <input type="text" id="intent_keywords" required placeholder="hello, hi, hey, good morning">
+                    </div>
+                    <div class="form-group">
+                        <label>Response Template *</label>
+                        <textarea id="intent_response" required placeholder="Hello! Welcome to BSU Lipa. How can I help you today?"></textarea>
+                    </div>
+                    <button type="submit" class="btn">✓ Add Custom Response</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>Custom Responses</h2>
+                <table class="data-table" id="intentsTable">
+                    <thead>
+                        <tr>
+                            <th>Intent Type</th>
+                            <th>Keywords</th>
+                            <th>Response</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Navigation Tab -->
+        <div id="navigation" class="tab-content">
+            <!-- 3D Map Picker - Campus Navigator Style -->
+            <div class="card">
+                <h2>🗺️ Interactive 3D Campus Map</h2>
+                <p style="color: #64748b; margin-bottom: 1rem;">
+                    Click on the 3D model to select coordinates for locations. Rotate, pan, and zoom to explore the campus.
+                </p>
+                
+                <div id="map3DPicker">
+                    <canvas id="map3DCanvas"></canvas>
+                    
+                    <!-- Loading Overlay -->
+                    <div id="mapLoading">
+                        <div class="loading-spinner"></div>
+                        <div class="loading-text">Loading 3D Campus Map</div>
+                        <div class="loading-subtext">Please wait...</div>
+                    </div>
+                    
+                    <!-- Map Controls -->
+                    <div class="map-controls">
+                        <button class="map-control-btn" onclick="resetCameraView()" title="Reset View">
+                            🔄
+                        </button>
+                        <button class="map-control-btn" onclick="zoomIn()" title="Zoom In">
+                            ➕
+                        </button>
+                        <button class="map-control-btn" onclick="zoomOut()" title="Zoom Out">
+                        </button>
+                        <button class="map-control-btn" onclick="clearAllMarkers()" title="Clear All Markers">
+                            🧹
+                            ➖
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="coordDisplay">
+                    Click on the map to select coordinates
+                </div>
+                <p class="coord-help-text">
+                    💡 Tip: Use mouse to rotate (left click + drag), pan (right click + drag), and zoom (scroll wheel)
+                </p>
+            </div>
+
+            <!-- Location Form -->
+            <div class="card">
+                <h2>➕ Add New Campus Location</h2>
+                <div id="navAlert"></div>
+                <form id="locationForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Location Name *</label>
+                            <input type="text" id="loc_name" required placeholder="e.g., Computer Laboratory 1">
+                        </div>
+                        <div class="form-group">
+                            <label>Building *</label>
+                            <input type="text" id="loc_building" required placeholder="e.g., Engineering Building">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Floor *</label>
+                            <input type="number" id="loc_floor" required placeholder="1" min="0" max="10">
+                        </div>
+                        <div class="form-group">
+                            <label>Location Type *</label>
+                            <select id="loc_type" required onchange="updateIconPreview()">
+                                <option value="">Select type...</option>
+                                <option value="entrance">🚪 Entrance</option>
+                                <option value="evacuation">🚨 Evacuation Area</option>
+                                <option value="classroom">🏫 Classroom</option>
+                                <option value="laboratory">🔬 Laboratory</option>
+                                <option value="office">🏢 Office</option>
+                                <option value="library">📚 Library</option>
+                                <option value="cafeteria">🍽️ Cafeteria</option>
+                                <option value="auditorium">🎭 Auditorium</option>
+                                <option value="gym">🏃 Gymnasium</option>
+                                <option value="restroom">🚻 Restroom</option>
+                                <option value="parking">🚗 Parking</option>
+                                <option value="other">📌 Other</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Custom Icon (optional)</label>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <input type="text" id="loc_icon" placeholder="🏛️" maxlength="2" onchange="updateIconPreview()" style="flex: 1;">
+                                <span id="icon_preview" style="font-size: 2rem; display: none;"></span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Capacity (optional)</label>
+                            <input type="number" id="loc_capacity" placeholder="50" min="0">
+                        </div>
+                    </div>
+
+                    <!-- Coordinates Display -->
+                    <div class="coordinates-display">
+                        <h4>📍 Location Coordinates</h4>
+                        <div class="coord-grid">
+                            <div class="coord-item">
+                                <span class="coord-label">X:</span>
+                                <span class="coord-value" id="display_coord_x">0.0</span>
+                                <input type="hidden" id="loc_coord_x" value="0">
+                            </div>
+                            <div class="coord-item">
+                                <span class="coord-label">Y:</span>
+                                <span class="coord-value" id="display_coord_y">0.0</span>
+                                <input type="hidden" id="loc_coord_y" value="0">
+                            </div>
+                            <div class="coord-item">
+                                <span class="coord-label">Z:</span>
+                                <span class="coord-value" id="display_coord_z">0.0</span>
+                                <input type="hidden" id="loc_coord_z" value="0">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Description (optional)</label>
+                        <textarea id="loc_description" placeholder="Additional details about this location..."></textarea>
+                    </div>
+
+                    <!-- Navigation Paths Section -->
+                    <div class="section-divider"></div>
+                    
+                    <div class="section-header">
+                        <h3>🛤️ Navigation Paths (Optional)</h3>
+                        <p class="section-subtitle">Build custom paths by manually clicking waypoints on the 3D map</p>
+                    </div>
+
+                    <!-- Path Building Controls -->
+                    <div class="path-builder-controls">
+                        <div class="path-type-selector">
+
+                            <label class="path-card path-card--none">
+                                <input type="radio" name="pathType" value="none" checked onchange="changePathMode('none')">
+                                <div class="path-card-inner">
+                                    <span class="path-card-icon">🚫</span>
+                                    <div class="path-card-text">
+                                        <span class="path-card-title">No Path</span>
+                                        <span class="path-card-desc">Save location only</span>
+                                    </div>
+                                </div>
+                            </label>
+
+                            <label class="path-card path-card--to">
+                                <input type="radio" name="pathType" value="to_location" onchange="changePathMode('to_location')">
+                                <div class="path-card-inner">
+                                    <span class="path-card-icon">🟢</span>
+                                    <div class="path-card-text">
+                                        <span class="path-card-title">Path <strong>TO</strong> This Location</span>
+                                        <span class="path-card-desc">From entrance → destination</span>
+                                    </div>
+                                    <span class="path-card-arrow">→</span>
+                                </div>
+                            </label>
+
+                            <label class="path-card path-card--from">
+                                <input type="radio" name="pathType" value="from_location" onchange="changePathMode('from_location')">
+                                <div class="path-card-inner">
+                                    <span class="path-card-icon">🟠</span>
+                                    <div class="path-card-text">
+                                        <span class="path-card-title">Path <strong>FROM</strong> This Location</span>
+                                        <span class="path-card-desc">From location → evacuation exit</span>
+                                    </div>
+                                    <span class="path-card-arrow">←</span>
+                                </div>
+                            </label>
+
+                        </div>
+                    </div>
+
+                    <!-- Path Configuration -->
+                    <div id="pathConfigSection" style="display: none;">
+                        <div class="path-config-box">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Path Name *</label>
+                                    <input type="text" id="path_name" placeholder="e.g., Main Entrance to Library">
+                                </div>
+                                <div class="form-group">
+                                    <label>Connected Location *</label>
+                                    <select id="path_connected_location">
+                                        <option value="">Select location...</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Path Color *</label>
+                                    <div class="path-color-selector">
+                                        <button type="button" class="color-preset-btn active" data-color="#F4D03F" onclick="selectPathColor(this, '#F4D03F')" style="background: linear-gradient(135deg, #F4D03F, #D4B030);">
+                                            <span>🟡 Yellow (Normal)</span>
+                                        </button>
+                                        <button type="button" class="color-preset-btn" data-color="#E67E22" onclick="selectPathColor(this, '#E67E22')" style="background: linear-gradient(135deg, #E67E22, #D35400);">
+                                            <span>🟠 Orange (Emergency)</span>
+                                        </button>
+                                    </div>
+                                    <input type="hidden" id="path_color" value="#F4D03F">
+                                </div>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="path_wheelchair">
+                                        <span>♿ Wheelchair Accessible</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Build Path Button -->
+                            <button type="button" class="btn btn-build-path" onclick="startPathBuilding()">
+                                <span id="buildPathBtnText">🛤️ Click Map to Build Path</span>
+                            </button>
+
+                            <!-- Path Waypoints Display -->
+                            <div class="path-waypoints-box" id="pathWaypointsBox" style="display: none;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                    <h4 style="margin: 0;">📍 Path Waypoints (<span id="pathWaypointCount">0</span>)</h4>
+                                    <div>
+                                        <button type="button" class="btn btn-small btn-secondary" onclick="previewCurrentPath()">
+                                            👁️ Preview
+                                        </button>
+                                        <button type="button" class="btn btn-small btn-danger" onclick="clearPathWaypoints()">
+                                            🗑️ Clear
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div id="pathWaypointsList" class="waypoints-list">
+                                    <p class="empty-state">Click points on the 3D map to add waypoints</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div class="submit-section">
+                        <button type="submit" class="btn btn-submit">✓ Save Location & Paths</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Current Locations -->
+            <div class="card">
+                <h2>📍 Campus Locations</h2>
+                <div class="filter-buttons" style="margin-bottom: 1rem;">
+                    <button class="btn btn-secondary" onclick="filterLocations('all')">All Locations</button>
+                    <button class="btn btn-small" onclick="filterLocations('entrance')">🚪 Entrances</button>
+                    <button class="btn btn-small" onclick="filterLocations('evacuation')">🚨 Evacuation</button>
+                    <button class="btn btn-small" onclick="filterLocations('classroom')">🏫 Classrooms</button>
+                    <button class="btn btn-small" onclick="filterLocations('laboratory')">🔬 Labs</button>
+                    <button class="btn btn-small" onclick="filterLocations('office')">🏢 Offices</button>
+                    <button class="btn btn-small" onclick="filterLocations('library')">📚 Libraries</button>
+                    <button class="btn btn-small" onclick="filterLocations('cafeteria')">🍽️ Cafeterias</button>
+                </div>
+                
+                <table class="data-table" id="locationsTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 60px;">Icon</th>
+                            <th>Location Name</th>
+                            <th>Building</th>
+                            <th>Floor</th>
+                            <th>Type</th>
+                            <th>Coordinates (X, Y, Z)</th>
+                            <th>Paths</th>
+                            <th style="width: 120px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+        </div>
+
+        <!-- 3D Model Upload Tab -->
+        <div id="model3d" class="tab-content">
+            <div class="card">
+                <h2>🏗️ Upload 3D Campus Model</h2>
+                <div id="model3dAlert"></div>
+                
+                <div style="background: linear-gradient(135deg, rgba(201, 48, 48, 0.05), rgba(163, 32, 32, 0.02)); padding: 1.5rem; border-radius: 10px; border: 2px solid rgba(201, 48, 48, 0.2); margin-bottom: 2rem;">
+                    <h3 style="margin-top: 0; color: #C93030;">⚠️ Important Information</h3>
+                    <ul style="margin-bottom: 0;">
+                        <li>Upload a <strong>.GLB or .GLTF</strong> file of your campus 3D model</li>
+                        <li>The new model will <strong>replace the current model</strong> in both admin and campus navigator</li>
+                        <li>Recommended file size: <strong>Less than 50MB</strong> for best performance</li>
+                        <li>After upload, <strong>refresh the page</strong> to see the new model</li>
+                        <li><strong>Existing location coordinates</strong> will be preserved but may need adjustment</li>
+                    </ul>
+                </div>
+
+                <form id="model3dForm" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label>Current Active Model</label>
+                        <div id="currentModelDisplay" style="padding: 1rem; background: #f0f1f3; border-radius: 8px; margin-bottom: 1rem;">
+                            <div style="display: flex; align-items: center; gap: 1rem;">
+                                <span style="font-size: 3rem;">🏛️</span>
+                                <div>
+                                    <div style="font-weight: 600; color: #1e293b;">
+                                        <span id="currentModelVersion">Loading...</span>
+                                    </div>
+                                    <div style="font-size: 0.85rem; color: #64748b; margin-top: 0.25rem;">
+                                        <span id="currentModelTitle"></span>
+                                    </div>
+                                    <div style="font-size: 0.85rem; color: #64748b; margin-top: 0.25rem;">
+                                        Activated: <span id="currentModelDate">N/A</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Version Number * <span style="font-size: 0.85rem; color: #64748b; font-weight: normal;">(e.g., v1.0, v2.1, 2024.01)</span></label>
+                        <input type="text" id="model3d_version" name="version" required placeholder="v1.0" style="font-weight: 600;">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Model Title (Optional)</label>
+                        <input type="text" id="model3d_title" name="title" placeholder="e.g., BSU Lipa Campus - Engineering Wing Added">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Upload New 3D Model (.GLB or .GLTF) *</label>
+                        <div class="file-upload-area" id="fileUploadArea">
+                            <input type="file" id="model3d_file" name="file" accept=".glb,.gltf" required style="display: none;">
+                            <div class="file-upload-placeholder" id="fileUploadPlaceholder">
+                                <div style="font-size: 3rem; margin-bottom: 0.5rem;">📁</div>
+                                <div style="font-weight: 600; margin-bottom: 0.5rem;">Click to upload or drag & drop</div>
+                                <div style="font-size: 0.9rem; color: #64748b;">GLB or GLTF files only (Max 50MB)</div>
+                            </div>
+                            <div class="file-upload-selected" id="fileUploadSelected" style="display: none;">
+                                <div style="font-size: 3rem; margin-bottom: 0.5rem;">✅</div>
+                                <div style="font-weight: 600; margin-bottom: 0.25rem;" id="selectedFileName"></div>
+                                <div style="font-size: 0.9rem; color: #64748b;" id="selectedFileSize"></div>
+                                <button type="button" class="btn btn-small btn-secondary" onclick="clearFileSelection()" style="margin-top: 1rem;">
+                                    Change File
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Description (Optional)</label>
+                        <textarea id="model3d_description" name="description" placeholder="What's included in this model..." rows="2"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Changelog (Optional) <span style="font-size: 0.85rem; color: #64748b; font-weight: normal;">What changed from the previous version?</span></label>
+                        <textarea id="model3d_changelog" name="changelog" placeholder="- Added new engineering building&#10;- Updated cafeteria location&#10;- Fixed library entrance" rows="3"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Tags (Optional) <span style="font-size: 0.85rem; color: #64748b; font-weight: normal;">Comma-separated</span></label>
+                        <input type="text" id="model3d_tags" name="tags" placeholder="main-campus, 2024, engineering-wing">
+                    </div>
+
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" id="model3d_set_current" name="set_as_current" checked style="width: auto; margin: 0;">
+                            <span>Set as current active model after upload</span>
+                        </label>
+                        <p style="font-size: 0.85rem; color: #64748b; margin-top: 0.5rem; margin-left: 1.5rem;">
+                            If unchecked, the model will be uploaded but not activated. You can activate it later from the history table.
+                        </p>
+                    </div>
+
+                    <div style="background: #fff3cd; padding: 1rem; border-radius: 8px; border: 1px solid #ffc107; margin-bottom: 1.5rem;">
+                        <div style="display: flex; align-items: start; gap: 0.5rem;">
+                            <span style="font-size: 1.5rem;">💡</span>
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; color: #856404; margin-bottom: 0.25rem;">Upload Progress</div>
+                                <div style="font-size: 0.9rem; color: #856404;">
+                                    Large files may take several minutes to upload. Please be patient and don't close this page.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="uploadProgress" style="display: none; margin-bottom: 1.5rem;">
+                        <div style="margin-bottom: 0.5rem; font-weight: 600; color: #1e293b;">
+                            Uploading... <span id="uploadPercent">0%</span>
+                        </div>
+                        <div style="width: 100%; height: 30px; background: #e2e8f0; border-radius: 15px; overflow: hidden;">
+                            <div id="uploadProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #C93030, #A32020); transition: width 0.3s ease; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.85rem;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-submit">🚀 Upload New Model Version</button>
+                </form>
+            </div>
+
+            <!-- Model Upload History -->
+            <div class="card">
+                <h2>📋 Model Version History</h2>
+                <table class="data-table" id="modelHistoryTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 80px;">Status</th>
+                            <th>Version</th>
+                            <th>Title</th>
+                            <th>Size</th>
+                            <th>Uploaded</th>
+                            <th>Changelog</th>
+                            <th style="width: 180px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 2rem; color: #64748b;">
+                                No model versions yet
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Organizational Chart Tab -->
+        <div id="orgchart" class="tab-content">
+            <div class="card">
+                <h2>➕ Add Organization</h2>
+                <div id="orgchartAlert"></div>
+                <form id="orgForm">
+                    <div class="form-group">
+                        <label>Organization Name *</label>
+                        <input type="text" id="org_name" required placeholder="e.g., College of Engineering">
+                    </div>
+                    <div class="form-group">
+                        <label>Description (Optional)</label>
+                        <textarea id="org_description" placeholder="Brief description of the organization..." rows="3"></textarea>
+                    </div>
+                    <button type="submit" class="btn">✓ Add Organization</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>📋 Organizations List</h2>
+                <table class="data-table" id="orgTable">
+                    <thead>
+                        <tr>
+                            <th>Organization Name</th>
+                            <th>Description</th>
+                            <th>Members Count</th>
+                            <th>Created At</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <!-- Add Member Section (shown when org is selected) -->
+            <div class="card" id="memberSection" style="display: none;">
+                <h2>➕ Add Member to <span id="selectedOrgName"></span></h2>
+                <div id="memberAlert"></div>
+                <form id="memberForm">
+                    <input type="hidden" id="memberOrgId">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Member Name *</label>
+                            <input type="text" id="member_name" required placeholder="e.g., John Doe">
+                        </div>
+                        <div class="form-group">
+                            <label>Position *</label>
+                            <input type="text" id="member_position" required placeholder="e.g., Dean">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn">✓ Add Member</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeMemberSection()">Cancel</button>
+                </form>
+
+                <h3 style="margin-top: 2rem;">Members of <span id="selectedOrgNameMembers"></span></h3>
+                <table class="data-table" id="membersTable">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Position</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div style="position:fixed;bottom:2rem;right:2rem;display:flex;flex-direction:column;gap:0.6rem;z-index:1000;align-items:flex-end;">
+        <button onclick="openChangeCredModal()" style="
+            background:rgba(255,255,255,0.9);backdrop-filter:blur(8px);
+            color:#c93030;border:2px solid rgba(201,48,48,0.25);
+            padding:0.6rem 1.25rem;border-radius:50px;
+            font-family:'Poppins',sans-serif;font-size:0.82rem;font-weight:600;
+            cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.1);
+            display:flex;align-items:center;gap:0.4rem;
+            transition:all 0.3s ease;letter-spacing:0.3px;"
+            onmouseover="this.style.background='#fff';this.style.borderColor='rgba(201,48,48,0.5)';this.style.transform='translateY(-2px)'"
+            onmouseout="this.style.background='rgba(255,255,255,0.9)';this.style.borderColor='rgba(201,48,48,0.25)';this.style.transform='translateY(0)'">
+            &#128273; Credentials
+        </button>
+        <button class="logout-btn" onclick="logout()">&#128682; Logout</button>
+    </div>
+
+    <!-- External JavaScript (all popup logic is included inside admin-script.js) -->
+    <script src="admin-script.js"></script>
+</body>
+</html>

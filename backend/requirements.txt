@@ -1,0 +1,27 @@
+# SPARTHA Chatbot Requirements with Database-RAG
+# Compatible with Python 3.8 - 3.14
+# Install with: pip install -r requirements.txt
+
+# Core Framework
+fastapi==0.115.0
+uvicorn==0.32.0
+python-dotenv==1.0.0
+python-multipart==0.0.12
+
+# Database - UPDATED for Python 3.14 compatibility
+sqlalchemy==2.0.36  # Fixed version for Python 3.14
+pg8000==1.31.2
+psycopg2-binary==2.9.10  # Alternative PostgreSQL adapter
+
+# Validation - UPDATED
+pydantic==2.10.3
+
+# Machine Learning / NLP (for RAG)
+sentence-transformers==3.3.1
+torch==2.5.1
+transformers==4.47.1
+numpy==1.26.4
+
+# Utilities
+tqdm==4.67.1
+scikit-learn==1.6.0

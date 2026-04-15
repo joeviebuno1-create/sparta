@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#c41e3a">
+    <title>SPARTA - University Information Chatbot (Enhanced)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="chatbot_styles.css">
+</head>
+<body>
+    <div class="chat-container">
+        <!-- Header -->
+        <div class="chat-header">
+            <div class="header-content">
+                <div class="header-left">
+                    <div class="logo-container">
+                        <img src="/images/logo.png" alt="BSU Logo">
+                    </div>
+                    <div class="header-text">
+                        <h1>SPARTA</h1>
+                        <p>Your BSU Lipa Campus Assistant</p>
+                    </div>
+                </div>
+                <div class="header-controls">
+                    <!-- Campus Navigator shortcut button -->
+                    <a href="sparta_campus-navigator.html" class="nav-icon-btn" title="Campus Navigator">
+                        <span class="nav-icon-emoji">🗺️</span>
+                        <span class="nav-icon-label">Navigate</span>
+                    </a>
+                    <select id="langSelect">
+                        <option value="en-US">English</option>
+                        <option value="tl-PH">Tagalog</option>
+                    </select>
+                    <div class="status-indicator">
+                        <span class="status-dot"></span>
+                        <span>Online</span>
+                    </div>
+                    <!-- TTS speaking indicator pill -->
+                    <div class="tts-header-indicator" id="ttsHeaderIndicator">
+                        <div class="tts-wave">
+                            <div class="tts-wave-bar"></div>
+                            <div class="tts-wave-bar"></div>
+                            <div class="tts-wave-bar"></div>
+                            <div class="tts-wave-bar"></div>
+                            <div class="tts-wave-bar"></div>
+                        </div>
+                        <span>Speaking...</span>
+                        <button class="tts-stop-btn" onclick="stopSpeaking()" title="Stop">✕</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        <div class="chat-messages" id="chatMessages">
+            <!-- Welcome message -->
+            <div class="message bot">
+                <div class="message-content">
+                    <strong>👋 Welcome to SPARTA!</strong>
+                    <br><br>
+                    I'm your intelligent assistant for BSU Lipa Campus. I can help you with:
+                    <br><br>
+                    <strong>👥 People</strong> - Find faculty, staff, and administrators<br>
+                    <strong>📍 Locations</strong> - Navigate campus buildings and rooms<br>
+                    <strong>📅 Events</strong> - Get latest announcements and updates<br>
+                    <strong>🏛️ History</strong> - Learn about our university's heritage<br>
+                    <strong>🎓 Organizations</strong> - Discover student groups and clubs
+                    <br><br>
+                    <span style="font-size: 13px; opacity: 0.8;">💡 Tip: Try the quick questions below or type your own!</span>
+                    <span class="message-time">Just now</span>
+                </div>
+            </div>
+
+            <!-- Typing Indicator -->
+            <div class="typing-indicator" id="typingIndicator">
+                <div class="typing-dots">
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- DYNAMIC QUICK QUESTIONS -->
+        <div class="quick-questions" id="quickQuestionsContainer">
+            <!-- Default questions (will be dynamically updated) -->
+            <button class="quick-question-btn" onclick="sendQuickQuestion('Who is the dean?')">
+                🎓 Who is the dean?
+            </button>
+            <button class="quick-question-btn" onclick="sendQuickQuestion('Who is the chancellor of BSU Lipa')">
+                🎓 Who is the chancellor of BSU Lipa?
+            </button>
+            <button class="quick-question-btn" onclick="sendQuickQuestion('Where is the speech lab?')">
+                📍 Where is the speech lab?
+            </button>
+            <button class="quick-question-btn" onclick="sendQuickQuestion('Tell me about SETS organization')">
+                🏆 Tell me about SETS org
+            </button>
+            <button class="quick-question-btn" onclick="sendQuickQuestion('When was BSU Lipa Founded?')">
+                🏛️ When was BSU Lipa Founded?
+            </button>
+        </div>
+
+        <!-- Input Area -->
+        <div class="chat-input-container">
+            <div class="input-wrapper">
+                <input 
+                    type="text" 
+                    id="userInput" 
+                    placeholder="Type your question or click the mic to speak..."
+                    autocomplete="off"
+                />
+                <button id="micBtn" class="input-btn" onclick="startVoice()">
+                    <span>🎤</span>
+                </button>
+                <button id="sendBtn" class="input-btn" onclick="sendMessage()">
+                    <span>Send</span>
+                    <span style="font-size: 16px;">→</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+<script src="chatbot_script.js"></script>
+</body>
+</html>

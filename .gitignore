@@ -1,0 +1,30 @@
+# Secrets
+.env
+*.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+
+# Database dumps
+*.sql
+
+# Test files
+test_*.py
+rehash_password.py
+migrate_routes.py
+
+# Large files
+static/
+*.glb
+*.gltf
+
+# Windows
+*.lnk
+Thumbs.db
+Desktop.ini
+
+# VS Code
+.vscode/

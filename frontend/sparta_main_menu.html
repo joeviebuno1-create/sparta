@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPARTHA - BSU Lipa Campus Companion</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-red: #c41e3a;
+            --deep-red: #8b0000;
+            --gold: #ffd700;
+            --cream: #fef5e7;
+            --dark-text: #1a1a1a;
+            --light-text: #ffffff;
+        }
+
+        body {
+            font-family: 'Work Sans', sans-serif;
+            overflow-x: hidden;
+            min-height: 100vh;
+            min-height: 100dvh; /* dynamic viewport for mobile browsers */
+        }
+
+        /* Animated background with BSU campus image */
+        .background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            /* Replace 'your-background.jpg' with your actual background image file */
+            background-image: url("../images/background.jpg");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            z-index: 0;
+        }
+
+        .background::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, 
+                rgba(196, 30, 58, 0.92) 0%, 
+                rgba(139, 0, 0, 0.88) 50%,
+                rgba(196, 30, 58, 0.92) 100%);
+            animation: gradientShift 20s ease infinite;
+        }
+
+        .background::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(255, 215, 0, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 50%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+            animation: pulseGlow 8s ease-in-out infinite;
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.95; }
+        }
+
+        @keyframes pulseGlow {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 0.8; }
+        }
+
+        /* Pattern overlay */
+        .pattern-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                repeating-linear-gradient(
+                    45deg,
+                    transparent,
+                    transparent 10px,
+                    rgba(255, 255, 255, 0.02) 10px,
+                    rgba(255, 255, 255, 0.02) 20px
+                );
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .container {
+            position: relative;
+            z-index: 2;
+            min-height: 100vh;
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1.5rem 5rem; /* bottom pad clears footer */
+            padding-top: max(2rem, env(safe-area-inset-top));
+            padding-bottom: max(5rem, env(safe-area-inset-bottom));
+        }
+
+        /* Hero section with mascot */
+        .hero {
+            text-align: center;
+            margin-bottom: 2.5rem;
+            animation: fadeInDown 0.8s ease-out;
+            padding-top: 1rem;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .mascot-container {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 1rem;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(2deg); }
+        }
+
+        .mascot {
+            width: 140px;
+            height: 140px;
+            background: var(--gold);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 
+                0 10px 40px rgba(0, 0, 0, 0.3),
+                0 0 0 10px rgba(255, 215, 0, 0.2),
+                0 0 0 20px rgba(255, 215, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .mascot img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        h1 {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 900;
+            font-size: 4rem;
+            color: var(--light-text);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.5rem;
+            text-shadow: 
+                0 2px 10px rgba(0, 0, 0, 0.3),
+                0 0 30px rgba(255, 215, 0, 0.3);
+            line-height: 1.1;
+        }
+
+        .spartha-text {
+            background: linear-gradient(135deg, #ffd700 0%, #ffffff 50%, #ffd700 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 3s linear infinite;
+            background-size: 200% auto;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: 0% center; }
+            100% { background-position: 200% center; }
+        }
+
+        .subtitle {
+            font-size: 1.3rem;
+            color: var(--cream);
+            font-weight: 500;
+            letter-spacing: 0.05em;
+            opacity: 0.95;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Menu buttons */
+        .menu {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            width: 100%;
+            max-width: 500px;
+            animation: fadeInUp 0.8s ease-out 0.2s backwards;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .menu-button {
+            background: rgba(255, 255, 255, 0.98);
+            border: none;
+            border-radius: 16px;
+            padding: 1.5rem 2.5rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--primary-red);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 
+                0 4px 20px rgba(0, 0, 0, 0.15),
+                0 0 0 1px rgba(255, 255, 255, 0.1);
+            font-family: 'Work Sans', sans-serif;
+            letter-spacing: 0.02em;
+        }
+
+        .menu-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.3), transparent);
+            transition: left 0.5s;
+        }
+
+        .menu-button:hover::before {
+            left: 100%;
+        }
+
+        .menu-button:hover {
+            background: rgba(255, 255, 255, 1);
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: 
+                0 12px 35px rgba(0, 0, 0, 0.25),
+                0 0 0 3px rgba(255, 215, 0, 0.4);
+            color: var(--deep-red);
+        }
+
+        .menu-button:active {
+            transform: translateY(-2px) scale(1.01);
+        }
+
+        .menu-button-icon {
+            display: inline-block;
+            margin-right: 0.75rem;
+            font-size: 1.4rem;
+            transition: transform 0.3s;
+        }
+
+        .menu-button:hover .menu-button-icon {
+            transform: scale(1.2) rotate(5deg);
+        }
+
+        /* University seal watermark */
+        .seal-watermark {
+            position: fixed;
+            bottom: -100px;
+            right: -100px;
+            width: 500px;
+            height: 500px;
+            opacity: 0.08;
+            pointer-events: none;
+            z-index: 1;
+            animation: rotateWatermark 60s linear infinite;
+        }
+
+        @keyframes rotateWatermark {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Footer info */
+        .footer-info {
+            position: fixed;
+            bottom: 1.5rem;
+            left: 0;
+            right: 0;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.9rem;
+            z-index: 2;
+            animation: fadeIn 1s ease-out 0.5s backwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* ── Responsive: tablet ── */
+        @media (max-width: 768px) {
+            h1 { font-size: 2.6rem; }
+            .subtitle { font-size: 1.05rem; }
+            .mascot { width: 110px; height: 110px; }
+            .mascot-container { margin-bottom: 0.9rem; }
+            .hero { margin-bottom: 2rem; }
+            .menu-button { padding: 1.2rem 2rem; font-size: 1.05rem; }
+            .menu { max-width: 420px; gap: 0.9rem; }
+            .footer-info { font-size: 0.8rem; }
+        }
+
+        /* ── Responsive: large phone (≤480px) ── */
+        @media (max-width: 480px) {
+            h1 { font-size: 2rem; letter-spacing: 0.06em; }
+            .subtitle { font-size: 0.9rem; }
+            .mascot { width: 90px; height: 90px; }
+            .mascot-container { margin-bottom: 0.75rem; }
+            .hero { margin-bottom: 1.5rem; }
+            .menu-button {
+                padding: 1rem 1.5rem;
+                font-size: 0.97rem;
+                border-radius: 14px;
+            }
+            .menu { gap: 0.75rem; }
+            .menu-button-icon { font-size: 1.2rem; margin-right: 0.6rem; }
+            .footer-info { font-size: 0.75rem; bottom: 0.75rem; }
+        }
+
+        /* ── Responsive: small phone (≤380px) ── */
+        @media (max-width: 380px) {
+            h1 { font-size: 1.7rem; }
+            .subtitle { font-size: 0.82rem; }
+            .mascot { width: 78px; height: 78px; }
+            .menu-button { padding: 0.9rem 1.2rem; font-size: 0.92rem; }
+        }
+
+        /* Accessibility */
+        .menu-button:focus {
+            outline: 3px solid var(--gold);
+            outline-offset: 4px;
+        }
+
+        /* Loading animation */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* =============================================
+           ANNOUNCEMENT POPUP — REDESIGNED
+        ============================================= */
+
+        /* ── Bell button ── */
+        .notif-bell {
+            position: fixed;
+            top: 1.4rem;
+            right: 1.4rem;
+            z-index: 100;
+            width: 54px; height: 54px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.12);
+            border: 1.5px solid rgba(255,255,255,0.35);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            transition: background 0.25s, transform 0.25s, box-shadow 0.25s;
+            animation: fadeIn 1s ease-out 0.6s backwards;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+        .notif-bell:hover {
+            background: rgba(255,255,255,0.22);
+            transform: scale(1.1);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+        }
+        .notif-bell-icon {
+            font-size: 1.45rem;
+            display: block;
+            animation: bellRing 4s ease-in-out 2s infinite;
+            transform-origin: top center;
+        }
+        @keyframes bellRing {
+            0%,80%,100% { transform: rotate(0deg); }
+            83%          { transform: rotate(14deg); }
+            86%          { transform: rotate(-12deg); }
+            89%          { transform: rotate(8deg); }
+            92%          { transform: rotate(-6deg); }
+            95%          { transform: rotate(3deg); }
+        }
+        .notif-badge {
+            position: absolute;
+            top: -3px; right: -3px;
+            background: var(--gold);
+            color: #7a0000;
+            font-size: 0.65rem;
+            font-weight: 900;
+            border-radius: 50%;
+            width: 19px; height: 19px;
+            display: flex; align-items: center; justify-content: center;
+            border: 2px solid #c41e3a;
+            font-family: 'Montserrat', sans-serif;
+        }
+
+        /* ── Overlay ── */
+        .popup-overlay {
+            position: fixed; inset: 0;
+            background: rgba(10,5,20,0.72);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            z-index: 200;
+            display: none;
+            align-items: flex-end;       /* sheet from bottom on mobile */
+            justify-content: center;
+            padding: 0.75rem;
+            padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+        }
+        @media (min-width: 540px) {
+            .popup-overlay { align-items: center; padding: 1rem; }
+        }
+        .popup-overlay.visible {
+            display: flex;
+            animation: overlayIn 0.35s ease both;
+        }
+        @keyframes overlayIn {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+
+        /* ── Card ── */
+        .popup-card {
+            background: #fff;
+            border-radius: 24px;
+            width: 100%;
+            max-width: 580px;
+            max-height: 92vh;
+            max-height: 92dvh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow:
+                0 2px 4px rgba(0,0,0,0.04),
+                0 8px 24px rgba(0,0,0,0.1),
+                0 30px 80px rgba(0,0,0,0.35);
+            animation: cardDrop 0.45s cubic-bezier(0.175,0.885,0.32,1.275) both;
+        }
+        /* Bottom-sheet style on small phones */
+        @media (max-width: 539px) {
+            .popup-card {
+                border-radius: 20px 20px 16px 16px;
+                max-height: 94dvh;
+                width: 100%;
+                animation: cardSheet 0.38s cubic-bezier(0.22,1,0.36,1) both;
+            }
+            @keyframes cardSheet {
+                from { transform: translateY(60px); opacity: 0; }
+                to   { transform: translateY(0);    opacity: 1; }
+            }
+        }
+        @keyframes cardDrop {
+            from { transform: scale(0.88) translateY(30px); opacity: 0; }
+            to   { transform: scale(1)    translateY(0);    opacity: 1; }
+        }
+
+        /* ── Hero image area ── */
+        .popup-hero {
+            position: relative;
+            width: 100%;
+            flex-shrink: 0;
+            background: #0f172a;
+            line-height: 0;
+        }
+        .popup-hero-img {
+            width: 100%;
+            height: auto;
+            max-height: 55vh;
+            max-height: 55dvh;
+            object-fit: contain;
+            display: block;
+            background: #0f172a;
+        }
+        @media (max-width: 539px) {
+            .popup-hero-img { max-height: 45dvh; }
+        }
+        .popup-hero-overlay {
+            position: absolute; inset: 0;
+            background: linear-gradient(
+                to bottom,
+                rgba(0,0,0,0.18) 0%,
+                rgba(0,0,0,0.0) 40%,
+                rgba(0,0,0,0.45) 100%
+            );
+            pointer-events: none;
+        }
+        /* When no image: decorative BSU pattern */
+        .popup-hero-noimg {
+            width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .popup-hero-noimg::before {
+            content: '';
+            position: absolute; inset: 0;
+            background:
+                repeating-linear-gradient(
+                    45deg,
+                    transparent, transparent 18px,
+                    rgba(255,255,255,0.04) 18px, rgba(255,255,255,0.04) 36px
+                );
+        }
+        .popup-hero-noimg-icon {
+            font-size: 4.5rem;
+            opacity: 0.35;
+            filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));
+        }
+
+        /* ── Close button (floats over hero) ── */
+        .popup-close {
+            position: absolute;
+            top: 0.85rem; right: 0.85rem;
+            z-index: 10;
+            background: rgba(0,0,0,0.35);
+            border: 1.5px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            width: 36px; height: 36px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            color: #fff;
+            font-size: 0.95rem;
+            transition: background 0.2s, transform 0.2s;
+            backdrop-filter: blur(6px);
+        }
+        .popup-close:hover {
+            background: rgba(196,30,58,0.85);
+            transform: rotate(90deg) scale(1.1);
+        }
+
+        /* ── Category pill (floats over hero bottom-left) ── */
+        .popup-hero-badge {
+            position: absolute;
+            bottom: 0.9rem; left: 1rem;
+            z-index: 5;
+            padding: 0.22rem 0.85rem;
+            border-radius: 50px;
+            font-size: 0.7rem;
+            font-weight: 800;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-family: 'Montserrat', sans-serif;
+        }
+        .cat-Academic  { background: rgba(37,99,235,0.9);  color: #fff; }
+        .cat-Events    { background: rgba(5,150,105,0.9);  color: #fff; }
+        .cat-General   { background: rgba(100,116,139,0.85); color: #fff; }
+        .cat-Emergency { background: rgba(220,38,38,0.95); color: #fff; box-shadow: 0 0 12px rgba(220,38,38,0.6); }
+
+        /* ── Content area ── */
+        .popup-body {
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            flex: 1;
+            padding: 1.25rem 1.5rem 0.75rem;
+            scrollbar-width: thin;
+            scrollbar-color: #e2e8f0 transparent;
+            overscroll-behavior: contain;
+        }
+        .popup-body::-webkit-scrollbar { width: 4px; }
+        .popup-body::-webkit-scrollbar-track { background: transparent; }
+        .popup-body::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
+        @media (max-width: 539px) {
+            .popup-body { padding: 1rem 1.2rem 0.5rem; }
+        }
+
+        /* Slide transition */
+        .popup-item { display: none; }
+        .popup-item.active {
+            display: block;
+            animation: slideContent 0.3s ease both;
+        }
+        @keyframes slideContent {
+            from { opacity: 0; transform: translateX(12px); }
+            to   { opacity: 1; transform: translateX(0); }
+        }
+
+        .popup-ann-title {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 900;
+            font-size: 1.35rem;
+            color: #0f172a;
+            line-height: 1.3;
+            margin-bottom: 0.85rem;
+            letter-spacing: -0.01em;
+        }
+        .popup-ann-content {
+            font-size: 0.95rem;
+            color: #475569;
+            line-height: 1.75;
+            white-space: pre-line;
+        }
+        .popup-ann-date {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            margin-top: 1.1rem;
+            padding-top: 0.85rem;
+            border-top: 1px solid #f1f5f9;
+            font-size: 0.77rem;
+            color: #94a3b8;
+            font-weight: 500;
+        }
+
+        /* ── Footer: dots + arrows ── */
+        .popup-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1.25rem 1rem;
+            flex-shrink: 0;
+            gap: 0.5rem;
+        }
+        @media (max-width: 539px) {
+            .popup-footer {
+                padding: 0.6rem 1rem max(0.8rem, env(safe-area-inset-bottom));
+            }
+        }
+
+        .popup-arrow {
+            width: 38px; height: 38px;
+            border-radius: 50%;
+            border: 1.5px solid #e2e8f0;
+            background: #fff;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            font-size: 1rem;
+            color: #475569;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .popup-arrow:hover:not(:disabled) {
+            border-color: var(--primary-red);
+            color: var(--primary-red);
+            background: #fff5f5;
+            transform: scale(1.1);
+        }
+        .popup-arrow:disabled { opacity: 0.25; cursor: default; }
+
+        .popup-dots {
+            display: flex;
+            gap: 0.35rem;
+            align-items: center;
+            flex: 1;
+            justify-content: center;
+        }
+        .popup-dot {
+            height: 7px;
+            border-radius: 50px;
+            background: #e2e8f0;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+            width: 7px;
+        }
+        .popup-dot.active {
+            background: var(--primary-red);
+            width: 22px;
+        }
+
+        .popup-counter {
+            font-size: 0.78rem;
+            color: #94a3b8;
+            font-weight: 600;
+            font-family: 'Montserrat', sans-serif;
+            min-width: 36px;
+            text-align: center;
+        }
+
+        /* ── Empty state ── */
+        .popup-empty {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: #94a3b8;
+        }
+        .popup-empty-icon { font-size: 3rem; margin-bottom: 0.75rem; display: block; }
+        .popup-empty-text { font-size: 0.95rem; }
+
+        /* ── Swipe hint (mobile) ── */
+        .popup-swipe-hint {
+            text-align: center;
+            font-size: 0.7rem;
+            color: #cbd5e1;
+            padding-bottom: 0.2rem;
+            letter-spacing: 0.04em;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 480px) {
+            .popup-card { border-radius: 18px; max-height: 95vh; }
+            .popup-hero { background: #0f172a; }
+            .popup-ann-title { font-size: 1.1rem; }
+            .popup-body { padding: 1rem 1.2rem 0.5rem; }
+            .popup-ann-title { font-size: 1.15rem; }
+            .popup-body { padding: 1.2rem 1.3rem 0.75rem; }
+        }
+        
+    </style>
+</head>
+<body>
+    <!-- Background layers -->
+    <div class="background"></div>
+    <div class="pattern-overlay"></div>
+
+    <!-- Notification Bell -->
+    <button class="notif-bell" onclick="openAnnouncementsPopup()" id="notifBell" title="View Announcements" style="display:none;">
+        <span class="notif-bell-icon">🔔</span>
+        <span class="notif-badge" id="notifBadge">0</span>
+    </button>
+
+    <!-- Announcements Popup Overlay -->
+    <div class="popup-overlay" id="popupOverlay" onclick="handleOverlayClick(event)">
+        <div class="popup-card" id="popupCard">
+
+            <!-- Hero / Image area -->
+            <div class="popup-hero" id="popupHero">
+                <!-- Filled dynamically -->
+                <button class="popup-close" onclick="closeAnnouncementsPopup()" title="Close">✕</button>
+            </div>
+
+            <!-- Content body -->
+            <div class="popup-body" id="popupBody">
+                <div class="popup-empty">
+                    <span class="popup-empty-icon">📭</span>
+                    <span class="popup-empty-text">No announcements at this time.</span>
+                </div>
+            </div>
+
+            <!-- Footer: prev · dots · next -->
+            <div class="popup-footer" id="popupFooter" style="display:none;">
+                <button class="popup-arrow" id="prevBtn" onclick="changePopup(-1)" title="Previous">&#8592;</button>
+                <div class="popup-dots" id="popupDots"></div>
+                <span class="popup-counter" id="popupCounter"></span>
+                <button class="popup-arrow" id="nextBtn" onclick="changePopup(1)" title="Next">&#8594;</button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Watermark seal -->
+    <svg class="seal-watermark" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="100" cy="100" r="95" stroke="white" stroke-width="2"/>
+        <circle cx="100" cy="100" r="75" stroke="white" stroke-width="1"/>
+        <path d="M100 30 L110 70 L150 70 L120 95 L130 135 L100 110 L70 135 L80 95 L50 70 L90 70 Z" fill="white"/>
+        <text x="100" y="165" font-family="Arial" font-size="12" fill="white" text-anchor="middle">BSU LIPA</text>
+    </svg>
+
+    <!-- Main container -->
+    <div class="container">
+        <!-- Hero section -->
+        <div class="hero">
+            <div class="mascot-container">
+                <div class="mascot">
+                    <!-- Replace 'your-logo.png' with your actual logo file -->
+                    <img src="../images/logo.png" alt="SPARTHA Logo">
+                </div>
+            </div>
+            <h1>
+                Welcome to <span class="spartha-text">SPARTA</span>
+            </h1>
+            <p class="subtitle">Your smart campus companion at BSU Lipa</p>
+        </div>
+
+        <!-- Menu buttons -->
+        <div class="menu">
+            <button class="menu-button" onclick="talkToSpartha()">
+                <span class="menu-button-icon">💬</span>
+                Talk to SPARTA
+            </button>
+            
+            <button class="menu-button" onclick="navigateCampus()">
+                <span class="menu-button-icon">🗺️</span>
+                Navigate the Campus
+            </button>
+            
+            <button class="menu-button" onclick="howToUse()">
+                <span class="menu-button-icon">📖</span>
+                How to Use SPARTA
+            </button>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer-info">
+        Batangas State University - The National Engineering University
+    </div>
+
+    <script>
+        // =============================================
+        // ANNOUNCEMENT POPUP LOGIC
+        // =============================================
+        const API_BASE = window.location.origin; // works on localhost AND shared ports
+
+        let popupAnnouncements = [];
+        let currentPopupIndex = 0;
+
+        async function loadAnnouncements() {
+            try {
+                const res = await fetch(`${API_BASE}/api/announcement-popups`);
+                if (!res.ok) return;
+                const data = await res.json();
+                popupAnnouncements = data;
+                if (popupAnnouncements.length > 0) {
+                    const bell = document.getElementById('notifBell');
+                    const badge = document.getElementById('notifBadge');
+                    bell.style.display = 'flex';
+                    badge.textContent = popupAnnouncements.length;
+
+                    // Auto-show popup every time the page loads and there are active announcements.
+                    // To show only once per browser session, uncomment the sessionStorage lines below.
+                    setTimeout(() => openAnnouncementsPopup(), 800);
+
+                    // -- Once-per-session alternative: --
+                    // if (!sessionStorage.getItem('announcementsShown')) {
+                    //     sessionStorage.setItem('announcementsShown', '1');
+                    //     setTimeout(() => openAnnouncementsPopup(), 800);
+                    // }
+                }
+            } catch (e) {
+                console.warn('Could not load announcements:', e);
+            }
+        }
+
+        function openAnnouncementsPopup() {
+            currentPopupIndex = 0;
+            renderPopup();
+            document.getElementById('popupOverlay').classList.add('visible');
+        }
+
+        function closeAnnouncementsPopup() {
+            document.getElementById('popupOverlay').classList.remove('visible');
+        }
+
+        function handleOverlayClick(e) {
+            if (e.target === document.getElementById('popupOverlay')) closeAnnouncementsPopup();
+        }
+
+        function changePopup(dir) {
+            currentPopupIndex = Math.max(0, Math.min(popupAnnouncements.length - 1, currentPopupIndex + dir));
+            renderPopup();
+        }
+
+        function goToPopup(idx) {
+            currentPopupIndex = idx;
+            renderPopup();
+        }
+
+        function getCategoryClass(cat) {
+            const map = { Academic: 'cat-Academic', Events: 'cat-Events', Emergency: 'cat-Emergency' };
+            return map[cat] || 'cat-General';
+        }
+
+        function formatDate(iso) {
+            if (!iso) return '';
+            try {
+                return new Date(iso).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
+            } catch { return iso; }
+        }
+
+        function renderPopup() {
+            const hero   = document.getElementById('popupHero');
+            const body   = document.getElementById('popupBody');
+            const dots   = document.getElementById('popupDots');
+            const footer = document.getElementById('popupFooter');
+            const prev   = document.getElementById('prevBtn');
+            const next   = document.getElementById('nextBtn');
+            const ctr    = document.getElementById('popupCounter');
+
+            if (popupAnnouncements.length === 0) {
+                // Restore the close button in hero before clearing
+                hero.innerHTML = `<button class="popup-close" onclick="closeAnnouncementsPopup()" title="Close">✕</button>
+                    <div class="popup-hero-noimg"><span class="popup-hero-noimg-icon">📢</span></div>`;
+                body.innerHTML = `<div class="popup-empty">
+                    <span class="popup-empty-icon">📭</span>
+                    <span class="popup-empty-text">No announcements at this time.</span>
+                </div>`;
+                dots.innerHTML = '';
+                footer.style.display = 'none';
+                return;
+            }
+
+            const ann = popupAnnouncements[currentPopupIndex];
+            const catClass = getCategoryClass(ann.category);
+
+            // ── Hero area ──
+            if (ann.image_data) {
+                hero.innerHTML = `
+                    <button class="popup-close" onclick="closeAnnouncementsPopup()" title="Close">✕</button>
+                    <img src="${ann.image_data}" alt="${escText(ann.title)}" class="popup-hero-img">
+                    <div class="popup-hero-overlay"></div>
+                    <span class="popup-hero-badge ${catClass}">${escText(ann.category)}</span>`;
+            } else {
+                hero.innerHTML = `
+                    <button class="popup-close" onclick="closeAnnouncementsPopup()" title="Close">✕</button>
+                    <div class="popup-hero-noimg">
+                        <span class="popup-hero-noimg-icon">${getCategoryIcon(ann.category)}</span>
+                    </div>
+                    <div class="popup-hero-overlay"></div>
+                    <span class="popup-hero-badge ${catClass}">${escText(ann.category)}</span>`;
+            }
+
+            // ── Body ──
+            body.innerHTML = `
+                <div class="popup-item active">
+                    <div class="popup-ann-title">${escText(ann.title)}</div>
+                    ${ann.content ? `<div class="popup-ann-content">${escText(ann.content)}</div>` : ''}
+                    <div class="popup-ann-date">
+                        <span>📅</span>
+                        <span>Posted ${formatDate(ann.created_at)}</span>
+                    </div>
+                </div>`;
+
+            // ── Footer dots & arrows ──
+            if (popupAnnouncements.length > 1) {
+                footer.style.display = 'flex';
+                prev.disabled = currentPopupIndex === 0;
+                next.disabled = currentPopupIndex === popupAnnouncements.length - 1;
+                ctr.textContent = `${currentPopupIndex + 1}/${popupAnnouncements.length}`;
+                dots.innerHTML = popupAnnouncements.map((_, i) =>
+                    `<div class="popup-dot ${i === currentPopupIndex ? 'active' : ''}" onclick="goToPopup(${i})"></div>`
+                ).join('');
+            } else {
+                footer.style.display = 'none';
+            }
+        }
+
+        function getCategoryIcon(cat) {
+            const icons = { Academic: '🎓', Events: '🎉', Emergency: '🚨', General: '📢' };
+            return icons[cat] || '📢';
+        }
+
+        function escText(str) {
+            if (!str) return '';
+            const d = document.createElement('div');
+            d.textContent = str;
+            return d.innerHTML;
+        }
+
+        // Load on page load
+        loadAnnouncements();
+
+        // =============================================
+        // MENU NAVIGATION
+        // =============================================
+        function talkToSpartha() {
+            console.log('Talk to SPARTHA clicked');
+            window.location.href = 'sparta_chatbot.html';
+        }
+        function navigateCampus() {
+            console.log('Navigate Campus clicked');
+            window.location.href = 'sparta_campus-navigator.html';
+        }
+
+        function howToUse() {
+            console.log('How to Use clicked');
+            window.location.href = 'how_to_use.html';
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') { closeAnnouncementsPopup(); return; }
+            // Arrow keys navigate popup if open
+            if (document.getElementById('popupOverlay').classList.contains('visible')) {
+                if (e.key === 'ArrowRight') { changePopup(1); return; }
+                if (e.key === 'ArrowLeft')  { changePopup(-1); return; }
+            }
+            const buttons = document.querySelectorAll('.menu-button');
+            const activeElement = document.activeElement;
+            const currentIndex = Array.from(buttons).indexOf(activeElement);
+            if (e.key === 'ArrowDown' && currentIndex < buttons.length - 1) {
+                e.preventDefault(); buttons[currentIndex + 1].focus();
+            } else if (e.key === 'ArrowUp' && currentIndex > 0) {
+                e.preventDefault(); buttons[currentIndex - 1].focus();
+            }
+        });
+
+        // Touch swipe for mobile
+        (function() {
+            let touchStartX = 0;
+            const card = document.getElementById('popupCard');
+            card.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; }, { passive: true });
+            card.addEventListener('touchend', e => {
+                const dx = e.changedTouches[0].clientX - touchStartX;
+                if (Math.abs(dx) > 50) changePopup(dx < 0 ? 1 : -1);
+            }, { passive: true });
+        })();
+
+        // Particle effect
+        document.addEventListener('mousemove', (e) => {
+            if (Math.random() > 0.95) createParticle(e.clientX, e.clientY);
+        });
+
+        function createParticle(x, y) {
+            const particle = document.createElement('div');
+            particle.style.cssText = `position:fixed;left:${x}px;top:${y}px;width:4px;height:4px;border-radius:50%;background:rgba(255,215,0,0.6);pointer-events:none;z-index:999;animation:particleFade 1s ease-out forwards;`;
+            document.body.appendChild(particle);
+            setTimeout(() => particle.remove(), 1000);
+        }
+
+        const style = document.createElement('style');
+        style.textContent = `@keyframes particleFade { to { opacity: 0; transform: translateY(-30px) scale(0); } }`;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>
