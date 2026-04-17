@@ -1,8 +1,8 @@
 // ============ GLOBAL API HOST ============
-const isDevTunnel = window.location.hostname.includes('devtunnels.ms') || window.location.hostname.includes('app.github.dev');
+const isDevTunnel = window.location.hostname.includes('devtunnels.ms') || window.location.hostname.includes('localhost');
 const CHAT_API_URL = isDevTunnel
     ? `${window.location.protocol}//${window.location.hostname}/api/chat`
-    : `${window.location.protocol}//${window.location.hostname}:8000/api/chat`;
+    : `sparta-production-0acb.up.railway.app`;
 
 
 document.addEventListener('DOMContentLoaded', function() {

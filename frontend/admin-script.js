@@ -4,7 +4,7 @@
    =================================== */
 
 // ========== CONFIGURATION ==========
-const API_BASE = 'http://localhost:8000/api/admin';
+const API_BASE = 'https://your-railway-url.up.railway.app/api/admin';
 
 // Global state
 let allLocations = [];
