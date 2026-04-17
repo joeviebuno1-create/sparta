@@ -1,25 +1,13 @@
-# SPARTHA - Complete Requirements
-# Python 3.11 recommended for Railway
-
-# ── Core Framework ─────────────────────────────────────────────────
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
 python-dotenv==1.0.0
 python-multipart==0.0.12
 starlette==0.41.2
-
-# ── Database ───────────────────────────────────────────────────────
 sqlalchemy==2.0.36
 psycopg2-binary==2.9.10
-
-# ── Authentication & Security ──────────────────────────────────────
 bcrypt==4.2.1
 itsdangerous==2.2.0
-
-# ── Validation ─────────────────────────────────────────────────────
 pydantic==2.10.3
-
-# ── Machine Learning / NLP (RAG) ───────────────────────────────────
 sentence-transformers==3.3.1
 torch==2.5.1
 transformers==4.47.1
@@ -27,8 +15,6 @@ numpy==1.26.4
 scikit-learn==1.6.0
 huggingface-hub==0.27.0
 tokenizers==0.21.0
-
-# ── Utilities ──────────────────────────────────────────────────────
 tqdm==4.67.1
 requests==2.32.3
 pillow==11.0.0
