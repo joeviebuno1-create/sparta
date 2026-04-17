@@ -16,11 +16,6 @@ test_*.py
 rehash_password.py
 migrate_routes.py
 
-# Large files
-static/
-*.glb
-*.gltf
-
 # Windows
 *.lnk
 Thumbs.db
