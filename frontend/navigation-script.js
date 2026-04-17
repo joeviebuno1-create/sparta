@@ -1,8 +1,8 @@
 // ============ GLOBAL API HOST ============
-const isDevTunnel = window.location.hostname.includes('devtunnels.ms') || window.location.hostname.includes('app.github.dev');
-const API_HOST = isDevTunnel
-    ? `${window.location.protocol}//${window.location.hostname}`
-    : `${window.location.protocol}//${window.location.hostname}:8000`;
+const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const API_HOST = isLocal
+    ? `http://localhost:8000`
+    : `https://sparta-production-0acb.up.railway.app/api/chat`;
 
 // ============ STATE ============
 let locations = [];

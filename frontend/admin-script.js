@@ -4,7 +4,7 @@
    =================================== */
 
 // ========== CONFIGURATION ==========
-const API_BASE = 'https://your-railway-url.up.railway.app/api/admin';
+const API_BASE = 'https://sparta-production-0acb.up.railway.app/api/admin';
 
 // Global state
 let allLocations = [];
