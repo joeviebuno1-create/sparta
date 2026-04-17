@@ -125,9 +125,9 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=os.getenv("SECRET_KEY", "fallback-secret-change-this"),
     session_cookie="spartha_session",
-    max_age=60 * 60 * int(os.getenv("ACCESS_TOKEN_EXPIRE_HOURS", 8)),
+    max_age=60 * 60 * 24,  # ← 24 hours instead of dynamic value
     https_only=os.getenv("IS_PRODUCTION", "false").lower() == "true",
-    same_site="lax"
+    same_site="none",  # ← change "lax" to "none" for cross-domain
 )
 
 # Paths relative to backend/ (where main.py lives)
