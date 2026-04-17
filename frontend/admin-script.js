@@ -1073,7 +1073,7 @@ function initNavigationTab() {
     // Load GLB model
     const loader = new THREE.GLTFLoader();
     loader.load(
-        '/static/batangas_state_university-_the_neu_lipa_map.glb',
+        'https://sparta-production-0acb.up.railway.app/static/batangas_state_university-_the_neu_lipa_map.glb',
         (gltf) => {
             campusModel = gltf.scene;
             
