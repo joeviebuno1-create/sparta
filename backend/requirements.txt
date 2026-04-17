@@ -2,7 +2,7 @@ fastapi==0.115.0
 uvicorn[standard]==0.32.0
 python-dotenv==1.0.0
 python-multipart==0.0.12
-starlette==0.41.2
+starlette==0.38.6
 sqlalchemy==2.0.36
 psycopg2-binary==2.9.10
 bcrypt==4.2.1
