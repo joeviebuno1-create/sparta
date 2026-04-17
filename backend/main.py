@@ -129,20 +129,23 @@ app.add_middleware(
     same_site="lax"
 )
 
-# Paths relative to SPARTHA root
-SPARTHA_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Paths relative to backend/ (where main.py lives)
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+SPARTHA_DIR = BACKEND_DIR  # static and images are now inside backend/
 
 # Security middleware — rate limiting + security headers
 app.add_middleware(SecurityMiddleware)
 
-# Mount static files (GLB models etc) from SPARTHA/static/
-app.mount("/static", StaticFiles(directory=os.path.join(SPARTHA_DIR, "static")), name="static")
+# Mount static files (GLB models etc) from backend/static/
+if os.path.exists(os.path.join(BACKEND_DIR, "static")):
+    app.mount("/static", StaticFiles(directory=os.path.join(BACKEND_DIR, "static")), name="static")
 
-# Mount images from SPARTHA/images/
-app.mount("/images", StaticFiles(directory=os.path.join(SPARTHA_DIR, "images")), name="images")
+# Mount images from backend/images/
+if os.path.exists(os.path.join(BACKEND_DIR, "images")):
+    app.mount("/images", StaticFiles(directory=os.path.join(BACKEND_DIR, "images")), name="images")
 
 # Serve admin HTML files directly so cookies work (same origin as API)
-BASE_DIR = os.path.join(SPARTHA_DIR, "frontend")  # SPARTHA/frontend/
+BASE_DIR = os.path.join(BACKEND_DIR, "frontend")  # backend/frontend/
 
 from fastapi.responses import FileResponse
 
