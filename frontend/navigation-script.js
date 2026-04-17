@@ -2,7 +2,7 @@
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const API_HOST = isLocal
     ? `http://localhost:8000`
-    : `https://sparta-production-0acb.up.railway.app/api/chat`;
+    : `https://sparta-production-0acb.up.railway.app`;
 
 // ============ STATE ============
 let locations = [];
@@ -488,7 +488,7 @@ function init3DScene() {
             console.error('Failed to fetch model info, using default:', error);
             // Fallback to default with cache buster
             const cacheBuster = new Date().getTime();
-            const modelPath = `/static/batangas_state_university-_the_neu_lipa_map.glb?v=${cacheBuster}`;
+            const modelPath = `https://sparta-production-0acb.up.railway.app/static/batangas_state_university-_the_neu_lipa_map.glb?v=${cacheBuster}`;
             loadModel(modelPath);
         });
     
