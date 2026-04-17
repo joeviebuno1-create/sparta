@@ -112,7 +112,7 @@ app.add_middleware(
         "http://localhost:5500",
         "http://127.0.0.1:5500",
         "https://1fz5f30f-8000.asse.devtunnels.ms",
-        "https://benevolent-mooncake-20bd4d.netlify.app/",
+        "https://benevolent-mooncake-20bd4d.netlify.app",
     ],
     allow_origin_regex="https://.*(devtunnels\\.ms|trycloudflare\\.com|ngrok-free\\.app|ngrok\\.io)",
     allow_credentials=True,   # Required for cookies to work
