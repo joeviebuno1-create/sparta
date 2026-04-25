@@ -977,6 +977,18 @@ async def create_organization(org: OrganizationCreate, db: Session = Depends(get
     db.refresh(db_org)
     return db_org
 
+@admin_router.put("/organizations/{org_id}")
+async def update_organization(org_id: int, org: OrganizationCreate, db: Session = Depends(get_db)):
+    db_org = db.query(models.Organization).filter(models.Organization.id == org_id).first()
+    if not db_org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    db_org.name = org.name
+    db_org.description = org.description
+    db_org.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(db_org)
+    return db_org
+
 @admin_router.post("/organization-members")
 async def create_organization_member(member: OrganizationMemberCreate, db: Session = Depends(get_db)):
     db_member = models.OrganizationMember(
