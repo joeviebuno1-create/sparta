@@ -100,6 +100,44 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 # Create tables
 models.Base.metadata.create_all(bind=engine)
 
+# ── Auto-migrate: add new _tl columns if they don't exist yet ──────────────
+def _run_migrations():
+    """Safely add new columns to existing tables without data loss."""
+    from sqlalchemy import text, inspect
+    from database import engine as _engine
+    inspector = inspect(_engine)
+    with _engine.connect() as conn:
+        # Intent: response_template_tl
+        intent_cols = [c['name'] for c in inspector.get_columns('intents')]
+        if 'response_template_tl' not in intent_cols:
+            conn.execute(text("ALTER TABLE intents ADD COLUMN response_template_tl TEXT"))
+            print("[migration] Added intents.response_template_tl")
+
+        # History: title_tl, description_tl
+        history_cols = [c['name'] for c in inspector.get_columns('history')]
+        if 'title_tl' not in history_cols:
+            conn.execute(text("ALTER TABLE history ADD COLUMN title_tl TEXT"))
+            print("[migration] Added history.title_tl")
+        if 'description_tl' not in history_cols:
+            conn.execute(text("ALTER TABLE history ADD COLUMN description_tl TEXT"))
+            print("[migration] Added history.description_tl")
+
+        # Announcement: title_tl, content_tl
+        ann_cols = [c['name'] for c in inspector.get_columns('announcements')]
+        if 'title_tl' not in ann_cols:
+            conn.execute(text("ALTER TABLE announcements ADD COLUMN title_tl TEXT"))
+            print("[migration] Added announcements.title_tl")
+        if 'content_tl' not in ann_cols:
+            conn.execute(text("ALTER TABLE announcements ADD COLUMN content_tl TEXT"))
+            print("[migration] Added announcements.content_tl")
+
+        conn.commit()
+
+try:
+    _run_migrations()
+except Exception as _me:
+    print(f"[migration] Non-fatal migration warning: {_me}")
+
 app = FastAPI()
 
 # CORS middleware
@@ -127,7 +165,7 @@ app.add_middleware(
     session_cookie="spartha_session",
     max_age=60 * 60 * 24,  # ← 24 hours instead of dynamic value
     https_only=os.getenv("IS_PRODUCTION", "false").lower() == "true",
-    same_site="none",  # ← change "lax" to "none" for cross-domain
+    same_site="lax",  # ← change "lax" to "none" for cross-domain
 )
 
 # Paths relative to backend/ (where main.py lives)
@@ -146,7 +184,7 @@ if os.path.exists(os.path.join(BACKEND_DIR, "images")):
     app.mount("/images", StaticFiles(directory=os.path.join(BACKEND_DIR, "images")), name="images")
 
 # Serve admin HTML files directly so cookies work (same origin as API)
-BASE_DIR = os.path.join(BACKEND_DIR, "frontend")  # backend/frontend/
+BASE_DIR = os.path.join(BACKEND_DIR, "..", "frontend")  # backend/frontend/
 
 from fastapi.responses import FileResponse
 
@@ -192,6 +230,8 @@ async def serve_chatbot_script():  return frontend_file("chatbot_script.js")
 @app.get("/navigation-script.js")
 async def serve_nav_script():      return frontend_file("navigation-script.js")
 
+@app.get("/sparta_popup_announcements.js")
+async def serve_popup_script(): return frontend_file("sparta_popup_announcements.js")
 # Load offline ML model (runs once on startup)
 print("Loading RAG embedding model... (this may take a moment)")
 embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
@@ -213,22 +253,28 @@ class AuthorityCreate(BaseModel):
     phone: Optional[str] = None
     office_location: Optional[str] = None
     bio: Optional[str] = None
+    photo: Optional[str] = None
 
 class HistoryCreate(BaseModel):
     year: int
     title: str
     description: str
+    title_tl: Optional[str] = None
+    description_tl: Optional[str] = None
 
 class AnnouncementCreate(BaseModel):
     title: str
     content: str
     category: str
     date_posted: Optional[datetime] = None
+    title_tl: Optional[str] = None
+    content_tl: Optional[str] = None
 
 class IntentCreate(BaseModel):
     intent_type: str
     keywords: str
     response_template: str
+    response_template_tl: Optional[str] = None
 
 class CoordinatesSchema(BaseModel):
     x: Optional[float] = None
@@ -644,23 +690,70 @@ async def get_authorities(db: Session = Depends(get_db)):
     return db.query(models.Authority).all()
 
 @admin_router.post("/authorities")
-async def create_authority(authority: AuthorityCreate, db: Session = Depends(get_db)):
-    db_authority = models.Authority(**authority.dict())
+async def create_authority(
+    name: str = Form(...),
+    position: str = Form(...),
+    department: str = Form(...),
+    email: Optional[str] = Form(None),
+    phone: Optional[str] = Form(None),
+    office_location: Optional[str] = Form(None),
+    bio: Optional[str] = Form(None),
+    photo: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    import base64
+    photo_data = None
+    if photo and photo.filename:
+        raw = await photo.read()
+        if len(raw) > 2 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Photo too large. Please use an image under 2MB.")
+        b64 = base64.b64encode(raw).decode("utf-8")
+        mime = photo.content_type or "image/jpeg"
+        photo_data = f"data:{mime};base64,{b64}"
+    db_authority = models.Authority(
+        name=name, position=position, department=department,
+        email=email or None, phone=phone or None,
+        office_location=office_location or None, bio=bio or None, photo=photo_data,
+    )
     db.add(db_authority)
     db.commit()
     db.refresh(db_authority)
-    return db_authority
+    return {"id": db_authority.id, "name": db_authority.name, "photo": db_authority.photo}
 
 @admin_router.put("/authorities/{authority_id}")
-async def update_authority(authority_id: int, authority: AuthorityCreate, db: Session = Depends(get_db)):
+async def update_authority(
+    authority_id: int,
+    name: str = Form(...), position: str = Form(...), department: str = Form(...),
+    email: Optional[str] = Form(None), phone: Optional[str] = Form(None),
+    office_location: Optional[str] = Form(None), bio: Optional[str] = Form(None),
+    photo: Optional[UploadFile] = File(None),
+    keep_existing_photo: str = Form("true"),
+    db: Session = Depends(get_db)
+):
+    import base64
     db_authority = db.query(models.Authority).filter(models.Authority.id == authority_id).first()
     if not db_authority:
         raise HTTPException(status_code=404, detail="Authority not found")
-    for key, value in authority.dict().items():
-        setattr(db_authority, key, value)
+    db_authority.name = name
+    db_authority.position = position
+    db_authority.department = department
+    db_authority.email = email or None
+    db_authority.phone = phone or None
+    db_authority.office_location = office_location or None
+    db_authority.bio = bio or None
+    if photo and photo.filename:
+        raw = await photo.read()
+        if len(raw) > 2 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Photo too large. Please use an image under 2MB.")
+        b64 = base64.b64encode(raw).decode("utf-8")
+        mime = photo.content_type or "image/jpeg"
+        db_authority.photo = f"data:{mime};base64,{b64}"
+    elif keep_existing_photo.lower() != "true":
+        db_authority.photo = None
+    # else: no new file + keep_existing_photo=true → leave photo unchanged
     db.commit()
     db.refresh(db_authority)
-    return db_authority
+    return {"id": db_authority.id, "name": db_authority.name, "photo": db_authority.photo}
 
 @admin_router.delete("/authorities/{authority_id}")
 async def delete_authority(authority_id: int, db: Session = Depends(get_db)):
@@ -696,7 +789,7 @@ async def get_history_singular(db: Session = Depends(get_db)):
 
 @admin_router.post("/histories")
 async def create_history(history: HistoryCreate, db: Session = Depends(get_db)):
-    db_history = models.History(**history.dict())
+    db_history = models.History(**history.model_dump())
     db.add(db_history)
     db.commit()
     db.refresh(db_history)
@@ -711,7 +804,7 @@ async def update_history(history_id: int, history: HistoryCreate, db: Session = 
     db_history = db.query(models.History).filter(models.History.id == history_id).first()
     if not db_history:
         raise HTTPException(status_code=404, detail="History not found")
-    for key, value in history.dict().items():
+    for key, value in history.model_dump().items():
         setattr(db_history, key, value)
     db.commit()
     db.refresh(db_history)
@@ -742,7 +835,7 @@ async def get_announcements(db: Session = Depends(get_db)):
 
 @admin_router.post("/announcements")
 async def create_announcement(announcement: AnnouncementCreate, db: Session = Depends(get_db)):
-    announcement_data = announcement.dict()
+    announcement_data = announcement.model_dump()
     if not announcement_data.get('date_posted'):
         announcement_data['date_posted'] = datetime.utcnow()
     db_announcement = models.Announcement(**announcement_data)
@@ -756,7 +849,7 @@ async def update_announcement(announcement_id: int, announcement: AnnouncementCr
     db_announcement = db.query(models.Announcement).filter(models.Announcement.id == announcement_id).first()
     if not db_announcement:
         raise HTTPException(status_code=404, detail="Announcement not found")
-    for key, value in announcement.dict().items():
+    for key, value in announcement.model_dump().items():
         setattr(db_announcement, key, value)
     db.commit()
     db.refresh(db_announcement)
@@ -779,7 +872,7 @@ async def get_locations(db: Session = Depends(get_db)):
 
 @admin_router.post("/locations")
 async def create_location(location: RoomLocationCreate, db: Session = Depends(get_db)):
-    location_data = location.dict()
+    location_data = location.model_dump()
     if location_data.get('coordinates'):
         coords = location_data['coordinates']
         if isinstance(coords, dict):
@@ -795,7 +888,7 @@ async def update_location(location_id: int, location: RoomLocationCreate, db: Se
     db_location = db.query(models.RoomLocation).filter(models.RoomLocation.id == location_id).first()
     if not db_location:
         raise HTTPException(status_code=404, detail="Location not found")
-    location_data = location.dict()
+    location_data = location.model_dump()
     if location_data.get('coordinates'):
         coords = location_data['coordinates']
         if isinstance(coords, dict):
@@ -1046,6 +1139,7 @@ async def get_intents(db: Session = Depends(get_db)):
                 "intent_type": intent.intent_type,
                 "keywords": intent.keywords,
                 "response_template": intent.response_template,
+                "response_template_tl": getattr(intent, 'response_template_tl', None),
                 "created_at": intent.created_at.isoformat() if intent.created_at else None
             }
             for intent in intents
@@ -1060,6 +1154,7 @@ async def create_intent(intent_data: dict, db: Session = Depends(get_db)):
             intent_type=intent_data.get("intent_type"),
             keywords=intent_data.get("keywords"),
             response_template=intent_data.get("response_template"),
+            response_template_tl=intent_data.get("response_template_tl"),
             created_at=datetime.utcnow()
         )
         db.add(db_intent)
@@ -1070,6 +1165,7 @@ async def create_intent(intent_data: dict, db: Session = Depends(get_db)):
             "intent_type": db_intent.intent_type,
             "keywords": db_intent.keywords,
             "response_template": db_intent.response_template,
+            "response_template_tl": getattr(db_intent, 'response_template_tl', None),
             "created_at": db_intent.created_at.isoformat() if db_intent.created_at else None
         }
     except Exception as e:
@@ -1088,6 +1184,8 @@ async def update_intent(intent_id: int, intent_data: dict, db: Session = Depends
             db_intent.keywords = intent_data["keywords"]
         if "response_template" in intent_data:
             db_intent.response_template = intent_data["response_template"]
+        if "response_template_tl" in intent_data:
+            db_intent.response_template_tl = intent_data["response_template_tl"]
         db.commit()
         db.refresh(db_intent)
         return {
@@ -1095,6 +1193,7 @@ async def update_intent(intent_id: int, intent_data: dict, db: Session = Depends
             "intent_type": db_intent.intent_type,
             "keywords": db_intent.keywords,
             "response_template": db_intent.response_template,
+            "response_template_tl": getattr(db_intent, 'response_template_tl', None),
             "created_at": db_intent.created_at.isoformat() if db_intent.created_at else None
         }
     except HTTPException:
@@ -1489,6 +1588,41 @@ async def health_check():
         "model_loaded": embedding_model is not None,
         "model_name": "all-MiniLM-L6-v2",
         "version": "2.0-RAG"
+    }
+
+# ============================================
+# STATISTICS ENDPOINT (ADMIN)
+# ============================================
+
+@admin_router.get("/statistics")
+def get_statistics(db: Session = Depends(get_db)):
+    from datetime import date
+    from sqlalchemy import func, cast, Date
+    total = db.query(models.SearchLog).count()
+    today = db.query(models.SearchLog).filter(
+        cast(models.SearchLog.searched_at, Date) == date.today()
+    ).count()
+    avg_conf = db.query(func.avg(models.SearchLog.confidence)).scalar() or 0
+    intent_breakdown = db.query(
+        models.SearchLog.intent, func.count().label('count')
+    ).group_by(models.SearchLog.intent).order_by(func.count().desc()).limit(8).all()
+    top_entities = db.query(
+        models.SearchLog.entity_name, func.count().label('count')
+    ).filter(models.SearchLog.entity_name != None).group_by(
+        models.SearchLog.entity_name
+    ).order_by(func.count().desc()).limit(10).all()
+    recent = db.query(models.SearchLog).order_by(
+        models.SearchLog.searched_at.desc()
+    ).limit(20).all()
+    top_intent = intent_breakdown[0][0] if intent_breakdown else None
+    return {
+        "total_queries": total, "today_queries": today,
+        "avg_confidence": float(avg_conf), "top_intent": top_intent,
+        "intent_breakdown": [{"intent": r[0], "count": r[1]} for r in intent_breakdown],
+        "top_entities": [{"entity": r[0], "count": r[1]} for r in top_entities],
+        "recent_queries": [{"query": r.query, "intent": r.intent, "confidence": r.confidence,
+                            "language": r.language, "searched_at": r.searched_at.isoformat() if r.searched_at else None}
+                           for r in recent]
     }
 
 # ============================================

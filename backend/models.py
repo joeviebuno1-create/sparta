@@ -14,6 +14,7 @@ class Authority(Base):
     phone = Column(String, nullable=True)
     office_location = Column(String, nullable=True)
     bio = Column(Text, nullable=True)
+    photo = Column(Text, nullable=True)   # base64-encoded image or URL
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class History(Base):
@@ -23,6 +24,8 @@ class History(Base):
     year = Column(Integer, nullable=False)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=False)
+    title_tl = Column(String, nullable=True)        # Filipino translation
+    description_tl = Column(Text, nullable=True)    # Filipino translation
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class Announcement(Base):
@@ -32,6 +35,8 @@ class Announcement(Base):
     title = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     category = Column(String, nullable=False)
+    title_tl = Column(String, nullable=True)        # Filipino translation
+    content_tl = Column(Text, nullable=True)        # Filipino translation
     date_posted = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -42,6 +47,7 @@ class Intent(Base):
     intent_type = Column(String, nullable=False)
     keywords = Column(Text, nullable=False)
     response_template = Column(Text, nullable=False)
+    response_template_tl = Column(Text, nullable=True)  # Filipino translation
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class RoomLocation(Base):
@@ -135,7 +141,7 @@ class Map3DUpload(Base):
     is_active = Column(Boolean, default=True, nullable=True)
 
 # NOTE: model_3d_uploads table exists in your database but is NOT used
-# If you need it later, you can add the Msodel3DUpload class back
+# If you need it later, you can add the Model3DUpload class back
 class Organization(Base):
     """
     Organization/Department table for organizational chart
@@ -170,6 +176,19 @@ class OrganizationMember(Base):
     
     # Relationship to organization
     organization = relationship("Organization", back_populates="members")
+
+class SearchLog(Base):
+    """Tracks every chatbot query for analytics / statistics."""
+    __tablename__ = "search_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    query = Column(Text, nullable=False)
+    intent = Column(String, nullable=True)          # detected intent
+    entity_name = Column(String, nullable=True)     # top entity (location/person name)
+    confidence = Column(Float, nullable=True)
+    language = Column(String, default="en")
+    searched_at = Column(DateTime, default=datetime.utcnow)
+
 
 class AdminCredentials(Base):
     __tablename__ = "admin_credentials"

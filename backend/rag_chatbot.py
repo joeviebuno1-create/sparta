@@ -1291,8 +1291,13 @@ class EnhancedDatabaseRAG:
         position = doc.position
         department = doc.department
 
+        # Photo tag — backend sends base64 or URL in doc.photo
+        photo_html = ''
+        if getattr(doc, 'photo', None):
+            photo_html = f'[PHOTO:{doc.photo}]'
+
         if lang == 'tl':
-            response = f"Ang **{position}** ng **{department}** ay si **{name}**. 😊\n\n"
+            response = f"{photo_html}Ang **{position}** ng **{department}** ay si **{name}**. 😊\n\n"
             if doc.office_location: response += f"📍 Mahahanap ang kanyang opisina sa {doc.office_location}.\n"
             if doc.email: response += f"📧 Para sa katanungan, makipag-ugnayan sa {doc.email}.\n"
             if doc.phone: response += f"📱 Maaari ka ring tumawag sa {doc.phone}.\n"
@@ -1303,7 +1308,7 @@ class EnhancedDatabaseRAG:
                     response += "\n\n**Maaari ka ring naghahanap ng:**\n"
                     for rd,_ in others: response += f"• **{rd.name}** — {rd.position}\n"
             return response
-        response = f"The **{position}** of **{department}** is **{name}**. 😊\n\n"
+        response = f"{photo_html}The **{position}** of **{department}** is **{name}**. 😊\n\n"
 
         details = []
         if doc.office_location:
@@ -1349,28 +1354,39 @@ class EnhancedDatabaseRAG:
         return response
 
     def format_history_response(self, doc: Any, query: str, score: float, lang: str = 'en') -> str:
+        # Use Tagalog DB fields when available, fall back to English fields
+        # Use Filipino fields if lang=tl; strip to catch whitespace-only values
+        _title_tl = (getattr(doc, 'title_tl', None) or '').strip()
+        _desc_tl  = (getattr(doc, 'description_tl', None) or '').strip()
+        title       = (_title_tl or doc.title)       if lang == 'tl' else doc.title
+        description = (_desc_tl  or doc.description) if lang == 'tl' else doc.description
         if lang == 'tl':
             return (f"Narito ang isang bahagi ng kasaysayan ng BSU Lipa! 🏛️\n\n"
-                    f"**{doc.year} — {doc.title}**\n\n{doc.description}\n\n"
+                    f"**{doc.year} — {title}**\n\n{description}\n\n"
                     f"Gusto mo bang malaman ang higit pa tungkol sa kasaysayan ng unibersidad?")
         return (
             f"Here's a piece of BSU Lipa's history! 🏛️\n\n"
-            f"**{doc.year} — {doc.title}**\n\n"
-            f"{doc.description}\n\n"
+            f"**{doc.year} — {title}**\n\n"
+            f"{description}\n\n"
             f"Would you like to know more about the university's history or milestones?"
         )
 
     def format_announcement_response(self, doc: Any, query: str, score: float, lang: str = 'en') -> str:
         date_str = doc.date_posted.strftime('%B %d, %Y') if doc.date_posted else ('Kamakailan' if lang == 'tl' else 'Recently')
+        # Use Tagalog DB fields when available, fall back to English fields
+        _atitle_tl   = (getattr(doc, 'title_tl', None) or '').strip()
+        _acontent_tl = (getattr(doc, 'content_tl', None) or '').strip()
+        title   = (_atitle_tl   or doc.title)   if lang == 'tl' else doc.title
+        content = (_acontent_tl or doc.content) if lang == 'tl' else doc.content
         if lang == 'tl':
-            r = f"Narito ang pinakabagong balita! 📢\n\n**{doc.title}**\n"
-            r += f"🗓️ Nai-post noong {date_str} · 🏷️ {doc.category}\n\n{doc.content}\n\n"
+            r = f"Narito ang pinakabagong balita! 📢\n\n**{title}**\n"
+            r += f"🗓️ Nai-post noong {date_str} · 🏷️ {doc.category}\n\n{content}\n\n"
             r += "Gusto mo bang makita ang higit pang mga anunsyo?"
             return r
         response = f"Here's the latest on that! 📢\n\n"
-        response += f"**{doc.title}**\n"
+        response += f"**{title}**\n"
         response += f"🗓️ Posted on {date_str} · 🏷️ {doc.category}\n\n"
-        response += f"{doc.content}\n\n"
+        response += f"{content}\n\n"
         response += "Would you like to see more announcements or news?"
         return response
 
@@ -1379,7 +1395,9 @@ class EnhancedDatabaseRAG:
             response = f"Narito ang mga pinakabagong anunsyo mula sa BSU Lipa! 📢\n\n"
             for doc, score in context:
                 d = doc.date_posted.strftime('%B %d, %Y') if doc.date_posted else 'Kamakailan'
-                response += f"📅 **{d}** · {doc.category}\n**{doc.title}**\n\n"
+                _lt = (getattr(doc, 'title_tl', None) or '').strip()
+                title = _lt or doc.title
+                response += f"📅 **{d}** · {doc.category}\n**{title}**\n\n"
             response += "Magtanong tungkol sa alinman para sa buong detalye!"
             return response.strip()
         response = f"Here are the latest announcements from BSU Lipa! 📢\n\n"
@@ -1525,16 +1543,20 @@ class EnhancedDatabaseRAG:
         }
         return fallbacks.get(intent, fallbacks['general_info'])
 
-    def check_custom_response(self, query: str, db: Session) -> Optional[str]:
+    def check_custom_response(self, query: str, db: Session,
+                               lang: str = 'en') -> Optional[str]:
         """
         Check the intents table for a matching custom response FIRST.
         Keywords field is comma-separated e.g. 'enrollment, how to enroll'.
-        Returns the response_template if matched, else None.
+        Returns the localised response_template if matched, else None.
+        - lang='tl'  → uses response_template_tl if set, else falls back to response_template
+        - lang='en'  → always uses response_template
         """
         try:
             intents = db.query(models.Intent).all()
             query_lower = query.lower()
-            best_match = None
+            best_match_en = None
+            best_match_tl = None
             best_score = 0
             for intent in intents:
                 if not intent.keywords or not intent.response_template:
@@ -1543,8 +1565,14 @@ class EnhancedDatabaseRAG:
                 for keyword in keywords:
                     if keyword in query_lower and len(keyword) > best_score:
                         best_score = len(keyword)
-                        best_match = intent.response_template
-            return best_match
+                        best_match_en = intent.response_template
+                        best_match_tl = getattr(intent, 'response_template_tl', None) or None
+            if best_match_en is None:
+                return None
+            # Return Filipino version if lang is tl AND a tl template exists
+            if lang == 'tl' and best_match_tl:
+                return best_match_tl
+            return best_match_en
         except Exception as e:
             print(f"Custom response check error: {e}")
             return None
@@ -1559,11 +1587,14 @@ class EnhancedDatabaseRAG:
         try:
             original_query = query.strip()
 
-            # Step 0: Language — UI selector takes priority, else auto-detect
+            # Step 0: Language — UI selector ALWAYS wins.
+            # If forced_lang is set (from the frontend selector), use it unconditionally.
+            # Only auto-detect when no selector choice was made.
             lang = forced_lang if forced_lang else detect_language(original_query)
+            print(f"[process_query] forced_lang='{forced_lang}' → lang='{lang}' | query='{original_query[:60]}'")
 
             # Step 0.5: Check custom responses FIRST — highest priority
-            custom = self.check_custom_response(original_query, db)
+            custom = self.check_custom_response(original_query, db, lang=lang)
             if custom:
                 return {
                     'response': custom,
@@ -1600,6 +1631,27 @@ class EnhancedDatabaseRAG:
                 )
             else:
                 overall_confidence = intent_confidence * 0.35
+
+            # Step 7: Log the search for analytics
+            try:
+                entity_name = None
+                if entities.get('first_names'):
+                    entity_name = entities['first_names'][0]
+                elif entities.get('locations'):
+                    entity_name = entities['locations'][0]
+                elif entities.get('departments'):
+                    entity_name = entities['departments'][0]
+                log_entry = models.SearchLog(
+                    query=original_query,
+                    intent=intent,
+                    entity_name=entity_name,
+                    confidence=overall_confidence,
+                    language=lang,
+                )
+                db.add(log_entry)
+                db.commit()
+            except Exception as log_err:
+                print(f"[search_log] non-fatal logging error: {log_err}")
 
             return {
                 'response': response,
@@ -1651,7 +1703,7 @@ def process_chat_with_rag(message: str, db: Session,
     """Main entry point for chatbot with RAG."""
     # UI selector takes priority; fallback to auto-detect
     print(f"[language] received='{language}'")
-    if language and language.startswith('tl'):
+    if language and (language.startswith('tl') or language.startswith('fil')):
         forced_lang = 'tl'
     elif language and language.startswith('en'):
         forced_lang = 'en'
