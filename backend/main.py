@@ -153,8 +153,10 @@ app.add_middleware(
         "https://benevolent-mooncake-20bd4d.netlify.app",
         "https://sparta-beryl.vercel.app",
         "https://sparta-nvlgrokuk-joeviebuno1-creates-projects.vercel.app",
+        "https://sparta-git-main-joeviebuno1-creates-projects.vercel.app",
+        "https://sparta-tvi4okccr-joeviebuno1-creates-projects.vercel.app",
     ],
-    allow_origin_regex="https://.*(devtunnels\\.ms|trycloudflare\\.com|ngrok-free\\.app|ngrok\\.io)",
+    allow_origin_regex="https://.*(devtunnels\\.ms|trycloudflare\\.com|ngrok-free\\.app|ngrok\\.io|vercel\\.app)",
     allow_credentials=True,   # Required for cookies to work
     allow_methods=["*"],
     allow_headers=["*"],
