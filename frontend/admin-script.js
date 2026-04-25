@@ -4,8 +4,10 @@
    =================================== */
 
 // ========== CONFIGURATION ==========
-const API_BASE = 'https://sparta-production-0acb.up.railway.app/api/admin';
-
+const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? '/api/admin'
+    : 'https://sparta-production-0acb.up.railway.app/api/admin';
+    
 // Global state
 let allLocations = [];
 let allPaths = [];
@@ -192,7 +194,8 @@ function initScrollReveal() {
         });
     }, { threshold: 0.1 });
     
-    document.querySelectorAll('.card, .tab-btn').forEach(el => {
+    // Only animate .tab-btn, NOT .tab-content (hiding tab-content breaks active tab display)
+    document.querySelectorAll('.tab-btn').forEach(el => {
         el.style.opacity = '0';
         el.style.transform = 'translateY(20px)';
         el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
@@ -245,7 +248,16 @@ document.head.appendChild(fadeOutStyle);
 
 // ========== INITIALIZATION ==========
 window.onload = function() {
-    loadData('authorities');
+    // Default to Statistics tab on load
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    const statsTab = document.getElementById('statistics');
+    if (statsTab) statsTab.classList.add('active');
+    const statsBtn = document.querySelector('.tab-btn[onclick*="statistics"]');
+    if (statsBtn) statsBtn.classList.add('active');
+
+    loadStatistics();
+    loadNavigationStatistics();
     setupEventListeners();
 };
 
@@ -335,14 +347,21 @@ function displayAuthorities(authorities) {
     const tbody = document.querySelector('#authoritiesTable tbody');
     tbody.innerHTML = '';
     authorities.forEach(auth => {
+        const photoCell = auth.photo
+            ? `<img src="${auth.photo}" alt="${auth.name}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid #c41e3a;">`
+            : `<div style="width:44px;height:44px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:1.3rem;">&#128100;</div>`;
         const row = document.createElement('tr');
         row.innerHTML = `
+            <td style="text-align:center;">${photoCell}</td>
             <td><strong>${auth.name}</strong></td>
             <td>${auth.position}</td>
             <td>${auth.department}</td>
             <td>${auth.email || '-'}</td>
             <td>${auth.phone || '-'}</td>
-            <td><button class="btn btn-small btn-danger" onclick="deleteItem('authorities', ${auth.id})">Delete</button></td>
+            <td>
+            <button class="btn btn-small btn-secondary" onclick="editAuthority(${auth.id})" style="margin-right:4px;">✏️ Edit</button>
+            <button class="btn btn-small btn-danger" onclick="deleteItem('authorities', ${auth.id})">Delete</button>
+            </td>
         `;
         tbody.appendChild(row);
     });
@@ -353,11 +372,18 @@ function displayHistory(history) {
     tbody.innerHTML = '';
     history.forEach(item => {
         const row = document.createElement('tr');
+        const tlTitle = item.title_tl
+            ? `<span style="color:#166534;">${item.title_tl}</span>`
+            : `<span style="color:#94a3b8;font-size:0.8rem;">—</span>`;
         row.innerHTML = `
             <td><strong>${item.year}</strong></td>
             <td>${item.title}</td>
-            <td>${item.description.substring(0, 100)}...</td>
-            <td><button class="btn btn-small btn-danger" onclick="deleteItem('history', ${item.id})">Delete</button></td>
+            <td>${tlTitle}</td>
+            <td>${item.description.substring(0, 80)}...</td>
+            <td>
+                <button class="btn btn-small btn-secondary" onclick="editHistory(${item.id})" style="margin-right:4px;">✏️ Edit</button>
+                <button class="btn btn-small btn-danger" onclick="deleteItem('history', ${item.id})">Delete</button>
+            </td>
         `;
         tbody.appendChild(row);
     });
@@ -369,12 +395,19 @@ function displayAnnouncements(announcements) {
     announcements.forEach(ann => {
         const row = document.createElement('tr');
         const date = new Date(ann.date_posted).toLocaleDateString();
+        const tlTitle = ann.title_tl
+            ? `<span style="color:#166534;">${ann.title_tl}</span>`
+            : `<span style="color:#94a3b8;font-size:0.8rem;">—</span>`;
         row.innerHTML = `
             <td><strong>${ann.title}</strong></td>
-            <td>${ann.content.substring(0, 100)}...</td>
+            <td>${tlTitle}</td>
+            <td>${ann.content.substring(0, 80)}...</td>
             <td>${ann.category}</td>
             <td>${date}</td>
-            <td><button class="btn btn-small btn-danger" onclick="deleteItem('announcements', ${ann.id})">Delete</button></td>
+            <td>
+                <button class="btn btn-small btn-secondary" onclick="editAnnouncement(${ann.id})" style="margin-right:4px;">✏️ Edit</button>
+                <button class="btn btn-small btn-danger" onclick="deleteItem('announcements', ${ann.id})">Delete</button>
+            </td>
         `;
         tbody.appendChild(row);
     });
@@ -385,11 +418,18 @@ function displayIntents(intents) {
     tbody.innerHTML = '';
     intents.forEach(intent => {
         const row = document.createElement('tr');
+        const tlResponse = intent.response_template_tl
+            ? `<span style="color:#166534;">${intent.response_template_tl.substring(0, 80)}...</span>`
+            : `<span style="color:#94a3b8;font-size:0.8rem;">—</span>`;
         row.innerHTML = `
             <td><strong>${intent.intent_type}</strong></td>
             <td>${intent.keywords}</td>
-            <td>${intent.response_template.substring(0, 100)}...</td>
-            <td><button class="btn btn-small btn-danger" onclick="deleteItem('intents', ${intent.id})">Delete</button></td>
+            <td>${intent.response_template.substring(0, 80)}...</td>
+            <td>${tlResponse}</td>
+            <td>
+                <button class="btn btn-small btn-secondary" onclick="editIntent(${intent.id})" style="margin-right:4px;">✏️ Edit</button>
+                <button class="btn btn-small btn-danger" onclick="deleteItem('intents', ${intent.id})">Delete</button>
+            </td>
         `;
         tbody.appendChild(row);
     });
@@ -406,9 +446,272 @@ async function deleteItem(type, id) {
             showAlert(type + 'Alert', '✅ Item deleted successfully!', 'success');
             loadData(type);
         }
+        
     } catch (error) {
         showAlert(type + 'Alert', '❌ Error deleting item', 'error');
     }
+
+}
+
+async function editAuthority(id) {
+    const response = await apiFetch('/authorities');
+    if (!response || !response.ok) return;
+    const authorities = await response.json();
+    const auth = authorities.find(a => a.id === id);
+    if (!auth) return;
+
+    document.getElementById('auth_name').value = auth.name || '';
+    document.getElementById('auth_position').value = auth.position || '';
+    document.getElementById('auth_department').value = auth.department || '';
+    document.getElementById('auth_email').value = auth.email || '';
+    document.getElementById('auth_phone').value = auth.phone || '';
+    document.getElementById('auth_office').value = auth.office_location || '';
+    document.getElementById('auth_bio').value = auth.bio || '';
+
+    if (auth.photo) {
+        document.getElementById('auth_photo_img').src = auth.photo;
+        document.getElementById('auth_photo_preview').style.display = 'block';
+    } else {
+        document.getElementById('auth_photo_preview').style.display = 'none';
+    }
+
+    document.getElementById('authorityForm').dataset.editingId = id;
+    document.querySelector('#authorityForm [type=submit]').textContent = '✏️ Update Authority';
+    // Scroll to form
+    document.getElementById('authorityForm').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function editHistory(id) {
+    const response = await apiFetch('/history');
+    if (!response || !response.ok) return;
+    const items = await response.json();
+    const item = items.find(h => h.id === id);
+    if (!item) return;
+
+    document.getElementById('hist_year').value = item.year || '';
+    document.getElementById('hist_title').value = item.title || '';
+    document.getElementById('hist_description').value = item.description || '';
+    document.getElementById('hist_title_tl').value = item.title_tl || '';
+    document.getElementById('hist_description_tl').value = item.description_tl || '';
+
+    document.getElementById('historyForm').dataset.editingId = id;
+    document.querySelector('#historyForm [type=submit]').textContent = '✏️ Update Historical Event';
+    document.getElementById('historyForm').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function editAnnouncement(id) {
+    const response = await apiFetch('/announcements');
+    if (!response || !response.ok) return;
+    const items = await response.json();
+    const item = items.find(a => a.id === id);
+    if (!item) return;
+
+    document.getElementById('ann_title').value = item.title || '';
+    document.getElementById('ann_content').value = item.content || '';
+    document.getElementById('ann_category').value = item.category || 'General';
+    document.getElementById('ann_title_tl').value = item.title_tl || '';
+    document.getElementById('ann_content_tl').value = item.content_tl || '';
+
+    document.getElementById('announcementForm').dataset.editingId = id;
+    document.querySelector('#announcementForm [type=submit]').textContent = '✏️ Update Announcement';
+    document.getElementById('announcementForm').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function editIntent(id) {
+    const response = await apiFetch('/intents');
+    if (!response || !response.ok) return;
+    const items = await response.json();
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+
+    // Fill the intent form fields (adapt field IDs to match your intents form)
+    const typeEl = document.getElementById('intent_type');
+    const keywordsEl = document.getElementById('intent_keywords');
+    const responseEl = document.getElementById('intent_response');
+    const responseTlEl = document.getElementById('intent_response_tl');
+
+    if (typeEl) typeEl.value = item.intent_type || '';
+    if (keywordsEl) keywordsEl.value = item.keywords || '';
+    if (responseEl) responseEl.value = item.response_template || '';
+    if (responseTlEl) responseTlEl.value = item.response_template_tl || '';
+
+    document.getElementById('intentsForm') && (document.getElementById('intentsForm').dataset.editingId = id);
+    const submitBtn = document.querySelector('#intentsForm [type=submit]');
+    if (submitBtn) submitBtn.textContent = '✏️ Update Response';
+    document.getElementById('intentsForm')?.scrollIntoView({ behavior: 'smooth' });
+}
+
+// ========== NAVIGATION STATISTICS ==========
+async function loadNavigationStatistics() {
+    try {
+        // Try the dedicated nav-statistics endpoint first, fall back to locations data
+        let navData = null;
+        const navStatResp = await apiFetch('/nav-statistics');
+        if (navStatResp && navStatResp.ok) {
+            navData = await navStatResp.json();
+        } else {
+            // Fallback: build stats from locations search log if available
+            const locResp = await apiFetch('/locations');
+            if (locResp && locResp.ok) {
+                const locs = await locResp.json();
+                // Build a synthetic stats object from location data
+                navData = buildNavStatsFromLocations(locs);
+            }
+        }
+
+        if (!navData) {
+            document.getElementById('recentNavBody').innerHTML =
+                '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:2rem;">Navigation statistics endpoint not available yet.</td></tr>';
+            return;
+        }
+
+        // Summary cards
+        document.getElementById('navStatTotalSearches').textContent = navData.total_searches ?? locs?.length ?? '—';
+        document.getElementById('navStatUniqueLocations').textContent = navData.unique_locations ?? '—';
+        document.getElementById('navStatTopLocation').textContent = navData.top_location ?? '—';
+        document.getElementById('navStatTodaySearches').textContent = navData.today_searches ?? '—';
+
+        // Most searched locations bar chart
+        const locDiv = document.getElementById('navLocationChart');
+        if (navData.top_locations && navData.top_locations.length) {
+            const maxL = Math.max(...navData.top_locations.map(l => l.count));
+            locDiv.innerHTML = navData.top_locations.map(item => {
+                const pct = maxL > 0 ? (item.count / maxL * 100).toFixed(0) : 0;
+                return `<div style="margin-bottom:10px;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:#475569;margin-bottom:3px;">
+                        <span>📍 ${escapeHtml(item.name)}</span><span><strong>${item.count}</strong></span>
+                    </div>
+                    <div style="background:#e2e8f0;border-radius:99px;height:10px;overflow:hidden;">
+                        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#7c3aed,#5b21b6);border-radius:99px;transition:width 0.6s ease;"></div>
+                    </div>
+                </div>`;
+            }).join('');
+        } else {
+            locDiv.innerHTML = '<p style="color:#94a3b8;font-size:0.85rem;">No search data yet.</p>';
+        }
+
+        // Searches by type chart
+        const typeDiv = document.getElementById('navTypeChart');
+        if (navData.type_breakdown && navData.type_breakdown.length) {
+            const maxT = Math.max(...navData.type_breakdown.map(t => t.count));
+            const typeColors = {
+                classroom: '#3b82f6', laboratory: '#10b981', office: '#f59e0b',
+                library: '#8b5cf6', cafeteria: '#ef4444', auditorium: '#ec4899',
+                gym: '#14b8a6', restroom: '#64748b', parking: '#6366f1',
+                entrance: '#c41e3a', evacuation: '#dc2626', other: '#94a3b8'
+            };
+            typeDiv.innerHTML = navData.type_breakdown.map(item => {
+                const pct = maxT > 0 ? (item.count / maxT * 100).toFixed(0) : 0;
+                const color = typeColors[item.type] || '#94a3b8';
+                const icon = ICON_MAP[item.type] || '📌';
+                return `<div style="margin-bottom:10px;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:#475569;margin-bottom:3px;">
+                        <span>${icon} ${item.type.charAt(0).toUpperCase() + item.type.slice(1)}</span><span><strong>${item.count}</strong></span>
+                    </div>
+                    <div style="background:#e2e8f0;border-radius:99px;height:10px;overflow:hidden;">
+                        <div style="height:100%;width:${pct}%;background:${color};border-radius:99px;transition:width 0.6s ease;"></div>
+                    </div>
+                </div>`;
+            }).join('');
+        } else {
+            typeDiv.innerHTML = '<p style="color:#94a3b8;font-size:0.85rem;">No type data yet.</p>';
+        }
+
+        // Recent nav searches table
+        const tbody = document.getElementById('recentNavBody');
+        if (navData.recent_searches && navData.recent_searches.length) {
+            tbody.innerHTML = navData.recent_searches.map(s => {
+                const dt = s.searched_at ? new Date(s.searched_at).toLocaleString('en-PH', {
+                    month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '—';
+                return `<tr>
+                    <td><strong>${escapeHtml(s.name || s.location_name || '—')}</strong></td>
+                    <td>${ICON_MAP[s.type] || '📌'} ${s.type || '—'}</td>
+                    <td>${s.floor != null ? 'Floor ' + s.floor : '—'}</td>
+                    <td>${escapeHtml(s.building || '—')}</td>
+                    <td style="color:#64748b;font-size:0.82rem;">${dt}</td>
+                </tr>`;
+            }).join('');
+        } else {
+            // Fallback: show all locations as inventory
+            const locResp2 = await apiFetch('/locations');
+            if (locResp2 && locResp2.ok) {
+                const locs2 = await locResp2.json();
+                document.getElementById('navStatTotalSearches').textContent = locs2.length;
+                document.getElementById('navStatUniqueLocations').textContent = [...new Set(locs2.map(l => l.name))].length;
+                document.getElementById('navStatTopLocation').textContent = locs2[0]?.name ?? '—';
+                document.getElementById('navStatTodaySearches').textContent = '—';
+                tbody.innerHTML = locs2.slice(0, 20).map(s => `<tr>
+                    <td><strong>${escapeHtml(s.name)}</strong></td>
+                    <td>${ICON_MAP[s.type] || '📌'} ${s.type || '—'}</td>
+                    <td>${s.floor != null ? 'Floor ' + s.floor : '—'}</td>
+                    <td>${escapeHtml(s.building || '—')}</td>
+                    <td style="color:#64748b;font-size:0.82rem;">—</td>
+                </tr>`).join('');
+
+                // Build type breakdown from locations list
+                const typeCounts = {};
+                locs2.forEach(l => { typeCounts[l.type] = (typeCounts[l.type] || 0) + 1; });
+                const typeArr = Object.entries(typeCounts).map(([type, count]) => ({ type, count }))
+                    .sort((a, b) => b.count - a.count);
+                const maxT2 = Math.max(...typeArr.map(t => t.count));
+                const typeColors2 = {
+                    classroom: '#3b82f6', laboratory: '#10b981', office: '#f59e0b',
+                    library: '#8b5cf6', cafeteria: '#ef4444', auditorium: '#ec4899',
+                    gym: '#14b8a6', restroom: '#64748b', parking: '#6366f1',
+                    entrance: '#c41e3a', evacuation: '#dc2626', other: '#94a3b8'
+                };
+                document.getElementById('navTypeChart').innerHTML = typeArr.map(item => {
+                    const pct = maxT2 > 0 ? (item.count / maxT2 * 100).toFixed(0) : 0;
+                    const color = typeColors2[item.type] || '#94a3b8';
+                    const icon = ICON_MAP[item.type] || '📌';
+                    return `<div style="margin-bottom:10px;">
+                        <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:#475569;margin-bottom:3px;">
+                            <span>${icon} ${item.type.charAt(0).toUpperCase() + item.type.slice(1)}</span><span><strong>${item.count}</strong></span>
+                        </div>
+                        <div style="background:#e2e8f0;border-radius:99px;height:10px;overflow:hidden;">
+                            <div style="height:100%;width:${pct}%;background:${color};border-radius:99px;transition:width 0.6s ease;"></div>
+                        </div>
+                    </div>`;
+                }).join('');
+
+                // Top locations list
+                const nameCounts = {};
+                locs2.forEach(l => { nameCounts[l.name] = (nameCounts[l.name] || 0) + 1; });
+                const topLocs = Object.entries(nameCounts).map(([name, count]) => ({ name, count }))
+                    .sort((a, b) => b.count - a.count).slice(0, 8);
+                const maxL2 = Math.max(...topLocs.map(l => l.count));
+                document.getElementById('navLocationChart').innerHTML = topLocs.map(item => {
+                    const pct = maxL2 > 0 ? (item.count / maxL2 * 100).toFixed(0) : 0;
+                    return `<div style="margin-bottom:10px;">
+                        <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:#475569;margin-bottom:3px;">
+                            <span>📍 ${escapeHtml(item.name)}</span><span><strong>${item.count}</strong></span>
+                        </div>
+                        <div style="background:#e2e8f0;border-radius:99px;height:10px;overflow:hidden;">
+                            <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#7c3aed,#5b21b6);border-radius:99px;transition:width 0.6s ease;"></div>
+                        </div>
+                    </div>`;
+                }).join('');
+            } else {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:2rem;">No navigation search data yet.</td></tr>';
+            }
+        }
+    } catch (err) {
+        console.error('Nav statistics error:', err);
+    }
+}
+window.loadNavigationStatistics = loadNavigationStatistics;
+
+function buildNavStatsFromLocations(locs) {
+    if (!locs || !locs.length) return null;
+    return {
+        total_searches: locs.length,
+        unique_locations: [...new Set(locs.map(l => l.name))].length,
+        top_location: locs[0]?.name ?? '—',
+        today_searches: '—',
+        top_locations: [],
+        type_breakdown: [],
+        recent_searches: []
+    };
 }
 
 // Show alert
@@ -707,7 +1010,7 @@ function addWaypointFromClick(coords) {
 function drawPathBetweenWaypoints() {
     // Clear existing path lines
     pathLines.forEach(line => scene.remove(line));
-    pathLines = [];
+pathLines = [];
     
     // Create path line geometry - STRAIGHT LINES
     const points = pathWaypoints.map(wp => new THREE.Vector3(wp.x, wp.y, wp.z));
@@ -1497,100 +1800,172 @@ async function handleLocationFormSubmit(e) {
 // ========== EVENT LISTENERS ==========
 
 function setupEventListeners() {
-    // Authority Form
-    document.getElementById('authorityForm')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const authorityData = {
-            name: document.getElementById('auth_name').value,
-            position: document.getElementById('auth_position').value,
-            department: document.getElementById('auth_department').value,
-            email: document.getElementById('auth_email')?.value || null,
-            phone: document.getElementById('auth_phone')?.value || null,
-            office_location: document.getElementById('auth_office')?.value || null,
-            bio: document.getElementById('auth_bio')?.value || null
-        };
-        
-        try {
-            const response = await apiFetch('/authorities', { method: 'POST', body: JSON.stringify(authorityData) });
-            
-            if (response.ok) {
-                showAlert('authoritiesAlert', '✅ Authority added successfully!', 'success');
-                document.getElementById('authorityForm').reset();
-                loadData('authorities');
-            }
-        } catch (error) {
-            showAlert('authoritiesAlert', '❌ Error adding authority', 'error');
+    // Authority Form — multipart/form-data so photo file uploads correctly
+document.getElementById('authorityForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const photoFile = document.getElementById('auth_photo')?.files[0];
+    const submitBtn = e.target.querySelector('[type=submit]');
+    submitBtn.disabled = true;
+    submitBtn.textContent = '⏳ Saving...';
+    try {
+        const fd = new FormData();
+        fd.append('name', document.getElementById('auth_name').value);
+        fd.append('position', document.getElementById('auth_position').value);
+        fd.append('department', document.getElementById('auth_department').value);
+        fd.append('email', document.getElementById('auth_email')?.value || '');
+        fd.append('phone', document.getElementById('auth_phone')?.value || '');
+        fd.append('office_location', document.getElementById('auth_office')?.value || '');
+        fd.append('bio', document.getElementById('auth_bio')?.value || '');
+        if (photoFile) fd.append('photo', photoFile);
+
+        const editingId = document.getElementById('authorityForm').dataset.editingId;
+        const url = editingId ? `/authorities/${editingId}` : '/authorities';
+        const method = editingId ? 'PUT' : 'POST';
+        if (editingId) fd.append('keep_existing_photo', 'true');
+
+        const response = await apiFetchForm(url, { method, body: fd });
+        if (response && response.ok) {
+            showAlert('authoritiesAlert', editingId ? '✅ Authority updated!' : '✅ Authority added!', 'success');
+            document.getElementById('authorityForm').reset();
+            document.getElementById('authorityForm').removeAttribute('data-editing-id');
+            document.getElementById('auth_photo_preview').style.display = 'none';
+            submitBtn.textContent = '✓ Add Authority';
+            loadData('authorities');
+        } else if (response) {
+            const err = await response.json().catch(() => ({}));
+            showAlert('authoritiesAlert', `❌ ${err.detail || 'Error saving authority'}`, 'error');
+        }
+    } catch (error) {
+        showAlert('authoritiesAlert', '❌ Error: ' + error.message, 'error');
+    } finally {
+        submitBtn.disabled = false;
+    }
+});
+    // Authority photo preview
+    document.getElementById('auth_photo')?.addEventListener('change', function() {
+        const file = this.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById('auth_photo_img').src = e.target.result;
+                document.getElementById('auth_photo_preview').style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        } else {
+            document.getElementById('auth_photo_preview').style.display = 'none';
         }
     });
     
     // History Form
     document.getElementById('historyForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const submitBtn = e.target.querySelector('[type=submit]');
+        submitBtn.disabled = true;
+        const editingId = document.getElementById('historyForm').dataset.editingId;
         
         const historyData = {
             year: parseInt(document.getElementById('hist_year').value),
             title: document.getElementById('hist_title').value,
-            description: document.getElementById('hist_description').value
+            description: document.getElementById('hist_description').value,
+            title_tl: document.getElementById('hist_title_tl').value.trim() || null,
+            description_tl: document.getElementById('hist_description_tl').value.trim() || null
         };
         
         try {
-            const response = await apiFetch('/history', { method: 'POST', body: JSON.stringify(historyData) });
+            const url = editingId ? `/history/${editingId}` : '/history';
+            const method = editingId ? 'PUT' : 'POST';
+            const response = await apiFetch(url, { method, body: JSON.stringify(historyData) });
             
-            if (response.ok) {
-                showAlert('historyAlert', '✅ Historical event added!', 'success');
+            if (response && response.ok) {
+                showAlert('historyAlert', editingId ? '✅ Historical event updated!' : '✅ Historical event added!', 'success');
                 document.getElementById('historyForm').reset();
+                document.getElementById('historyForm').removeAttribute('data-editing-id');
+                submitBtn.textContent = '✓ Add Historical Event';
                 loadData('history');
+            } else if (response) {
+                const err = await response.json().catch(() => ({}));
+                showAlert('historyAlert', `❌ ${err.detail || 'Error saving event'}`, 'error');
             }
         } catch (error) {
-            showAlert('historyAlert', '❌ Error adding event', 'error');
+            showAlert('historyAlert', '❌ Error: ' + error.message, 'error');
+        } finally {
+            submitBtn.disabled = false;
         }
     });
     
     // Announcement Form
     document.getElementById('announcementForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const submitBtn = e.target.querySelector('[type=submit]');
+        submitBtn.disabled = true;
+        const editingId = document.getElementById('announcementForm').dataset.editingId;
         
         const announcementData = {
             title: document.getElementById('ann_title').value,
             content: document.getElementById('ann_content').value,
             category: document.getElementById('ann_category').value,
-            date_posted: new Date().toISOString()
+            date_posted: new Date().toISOString(),
+            title_tl: document.getElementById('ann_title_tl').value.trim() || null,
+            content_tl: document.getElementById('ann_content_tl').value.trim() || null
         };
         
         try {
-            const response = await apiFetch('/announcements', { method: 'POST', body: JSON.stringify(announcementData) });
+            const url = editingId ? `/announcements/${editingId}` : '/announcements';
+            const method = editingId ? 'PUT' : 'POST';
+            const response = await apiFetch(url, { method, body: JSON.stringify(announcementData) });
             
-            if (response.ok) {
-                showAlert('announcementsAlert', '✅ Announcement posted!', 'success');
+            if (response && response.ok) {
+                showAlert('announcementsAlert', editingId ? '✅ Announcement updated!' : '✅ Announcement posted!', 'success');
                 document.getElementById('announcementForm').reset();
+                document.getElementById('announcementForm').removeAttribute('data-editing-id');
+                submitBtn.textContent = '✓ Post Announcement';
                 loadData('announcements');
+            } else if (response) {
+                const err = await response.json().catch(() => ({}));
+                showAlert('announcementsAlert', `❌ ${err.detail || 'Error saving announcement'}`, 'error');
             }
         } catch (error) {
-            showAlert('announcementsAlert', '❌ Error posting', 'error');
+            showAlert('announcementsAlert', '❌ Error: ' + error.message, 'error');
+        } finally {
+            submitBtn.disabled = false;
         }
     });
     
     // Intent Form
     document.getElementById('intentForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const submitBtn = e.target.querySelector('[type=submit]');
+        submitBtn.disabled = true;
+        const editingId = document.getElementById('intentsForm')?.dataset.editingId;
         
         const intentData = {
             intent_type: document.getElementById('intent_type').value,
             keywords: document.getElementById('intent_keywords').value,
-            response_template: document.getElementById('intent_response').value
+            response_template: document.getElementById('intent_response').value,
+            response_template_tl: document.getElementById('intent_response_tl').value.trim() || null
         };
         
         try {
-            const response = await apiFetch('/intents', { method: 'POST', body: JSON.stringify(intentData) });
+            const url = editingId ? `/intents/${editingId}` : '/intents';
+            const method = editingId ? 'PUT' : 'POST';
+            const response = await apiFetch(url, { method, body: JSON.stringify(intentData) });
             
-            if (response.ok) {
-                showAlert('intentsAlert', '✅ Intent added!', 'success');
+            if (response && response.ok) {
+                showAlert('intentsAlert', editingId ? '✅ Response updated!' : '✅ Intent added!', 'success');
                 document.getElementById('intentForm').reset();
+                if (document.getElementById('intentsForm')) {
+                    document.getElementById('intentsForm').removeAttribute('data-editing-id');
+                }
+                submitBtn.textContent = '✓ Add Custom Response';
                 loadData('intents');
+            } else if (response) {
+                const err = await response.json().catch(() => ({}));
+                showAlert('intentsAlert', `❌ ${err.detail || 'Error saving intent'}`, 'error');
             }
         } catch (error) {
-            showAlert('intentsAlert', '❌ Error adding intent', 'error');
+            showAlert('intentsAlert', '❌ Error: ' + error.message, 'error');
+        } finally {
+            submitBtn.disabled = false;
         }
     });
     
@@ -1904,6 +2279,7 @@ function displayOrganizations(organizations) {
             <td>${createdDate}</td>
             <td>
                 <button class="btn btn-small" onclick="selectOrganization(${org.id}, '${org.name.replace(/'/g, "\\'")}')">➕ Add Members</button>
+                <button class="btn btn-small btn-edit" onclick="openEditOrgModal(${org.id}, '${org.name.replace(/'/g, "\\'")}', '${(org.description || '').replace(/'/g, "\\'").replace(/\n/g, ' ')}')">✏️ Edit</button>
                 <button class="btn btn-small btn-danger" onclick="deleteOrganization(${org.id})">🗑️ Delete</button>
             </td>
         `;
@@ -1961,6 +2337,7 @@ function displayMembers(members) {
             <td><strong>${member.name}</strong></td>
             <td>${member.position}</td>
             <td>
+                <button class="btn btn-small btn-edit" onclick="openEditMemberModal(${member.id}, '${member.name.replace(/'/g, "\\'")}', '${member.position.replace(/'/g, "\\'")}')">✏️ Edit</button>
                 <button class="btn btn-small btn-danger" onclick="deleteMember(${member.id}, ${selectedOrgId})">🗑️ Delete</button>
             </td>
         `;
@@ -2146,7 +2523,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!overlay) return;
     try {
         const response = await fetch(`${API_BASE}/credentials`, { credentials: 'include' });
-        if (response.ok) { overlay.style.display = 'none'; }
+        if (response.ok) {
+            overlay.style.display = 'none';
+            loadStatistics(); 
+        }
     } catch (e) { /* network error — show login */ }
 });
 
@@ -2376,3 +2756,281 @@ document.addEventListener('DOMContentLoaded', function () {
     const popupForm = document.getElementById('popupForm');
     if (popupForm) popupForm.addEventListener('submit', submitPopupForm);
 });
+// ========== AUTHORITY PHOTO HELPER ==========
+function clearAuthorityPhoto() {
+    document.getElementById('auth_photo').value = '';
+    document.getElementById('auth_photo_preview').style.display = 'none';
+}
+window.clearAuthorityPhoto = clearAuthorityPhoto;
+
+// ========== STATISTICS ==========
+async function loadStatistics() {
+    try {
+        const response = await apiFetch('/statistics');
+        if (!response || !response.ok) {
+            showAlert('statsAlert', '❌ Could not load statistics. Make sure the /api/admin/statistics endpoint exists.', 'error');
+            return;
+        }
+        const data = await response.json();
+
+        // Summary cards
+        document.getElementById('statTotalQueries').textContent = data.total_queries ?? '—';
+        document.getElementById('statTodayQueries').textContent = data.today_queries ?? '—';
+        const avgConf = data.avg_confidence != null ? (data.avg_confidence * 100).toFixed(0) + '%' : '—';
+        document.getElementById('statAvgConf').textContent = avgConf;
+        document.getElementById('statTopIntent').textContent =
+            data.top_intent ? data.top_intent.replace('_query', '').replace('_', ' ') : '—';
+
+        // Intent chart (horizontal bars)
+        const intentDiv = document.getElementById('intentChart');
+        if (data.intent_breakdown && data.intent_breakdown.length) {
+            const max = Math.max(...data.intent_breakdown.map(i => i.count));
+            intentDiv.innerHTML = data.intent_breakdown.map(item => {
+                const pct = max > 0 ? (item.count / max * 100).toFixed(0) : 0;
+                const label = item.intent.replace('_query','').replace(/_/g,' ');
+                return `<div style="margin-bottom:10px;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:#475569;margin-bottom:3px;">
+                        <span style="text-transform:capitalize;">${label}</span><span><strong>${item.count}</strong></span>
+                    </div>
+                    <div style="background:#e2e8f0;border-radius:99px;height:10px;overflow:hidden;">
+                        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#c41e3a,#9b1530);border-radius:99px;transition:width 0.6s ease;"></div>
+                    </div>
+                </div>`;
+            }).join('');
+        } else {
+            intentDiv.innerHTML = '<p style="color:#94a3b8;font-size:0.85rem;">No data yet.</p>';
+        }
+
+        // Top entities chart
+        const entityDiv = document.getElementById('entityChart');
+        if (data.top_entities && data.top_entities.length) {
+            const maxE = Math.max(...data.top_entities.map(e => e.count));
+            entityDiv.innerHTML = data.top_entities.map(item => {
+                const pct = maxE > 0 ? (item.count / maxE * 100).toFixed(0) : 0;
+                return `<div style="margin-bottom:10px;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:#475569;margin-bottom:3px;">
+                        <span>${item.entity}</span><span><strong>${item.count}</strong></span>
+                    </div>
+                    <div style="background:#e2e8f0;border-radius:99px;height:10px;overflow:hidden;">
+                        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#3b82f6,#1d4ed8);border-radius:99px;transition:width 0.6s ease;"></div>
+                    </div>
+                </div>`;
+            }).join('');
+        } else {
+            entityDiv.innerHTML = '<p style="color:#94a3b8;font-size:0.85rem;">No data yet.</p>';
+        }
+
+        // Recent queries table
+        const tbody = document.getElementById('recentQueriesBody');
+        if (data.recent_queries && data.recent_queries.length) {
+            tbody.innerHTML = data.recent_queries.map(q => {
+                const conf = q.confidence != null ? (q.confidence * 100).toFixed(0) + '%' : '—';
+                const confColor = q.confidence > 0.7 ? '#10b981' : q.confidence > 0.4 ? '#f59e0b' : '#ef4444';
+                const intent = (q.intent || '—').replace('_query','').replace(/_/g,' ');
+                const dt = q.searched_at ? new Date(q.searched_at).toLocaleString('en-PH', {
+                    month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '—';
+                return `<tr>
+                    <td>${escapeHtml(q.query)}</td>
+                    <td style="text-transform:capitalize;">${intent}</td>
+                    <td style="color:${confColor};font-weight:600;">${conf}</td>
+                    <td>${q.language === 'tl' ? '🇵🇭 Filipino' : '🇺🇸 English'}</td>
+                    <td style="color:#64748b;font-size:0.82rem;">${dt}</td>
+                </tr>`;
+            }).join('');
+        } else {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:2rem;">No queries logged yet.</td></tr>';
+        }
+    } catch (err) {
+        console.error('Statistics error:', err);
+        showAlert('statsAlert', '❌ Error loading statistics: ' + err.message, 'error');
+    }
+}
+window.loadStatistics = loadStatistics;
+
+// Load stats automatically when statistics tab is opened
+const _origSwitchTab = window.switchTab;
+window.switchTab = function(tabName, event) {
+    if (_origSwitchTab) _origSwitchTab(tabName, event);
+    if (tabName === 'statistics') {
+        loadStatistics();
+        loadNavigationStatistics();
+    }
+};
+// ========== EDIT ORGANIZATION MODAL ==========
+
+function openEditOrgModal(orgId, orgName, orgDescription) {
+    // Remove existing modal if any
+    const existing = document.getElementById('editOrgModal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'editOrgModal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;background:rgba(15,20,40,0.65);backdrop-filter:blur(5px);font-family:Poppins,sans-serif;';
+    modal.innerHTML = `
+        <div style="background:#fff;border-radius:20px;width:100%;max-width:500px;margin:1rem;box-shadow:0 20px 60px rgba(0,0,0,0.25);overflow:hidden;animation:cardSlideUp 0.35s cubic-bezier(0.22,1,0.36,1) both;">
+            <!-- Header -->
+            <div style="background:linear-gradient(135deg,#c93030 0%,#a32020 100%);padding:1.5rem 2rem;position:relative;overflow:hidden;">
+                <div style="position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,0.04) 10px,rgba(255,255,255,0.04) 20px);animation:headerPattern 20s linear infinite;"></div>
+                <div style="position:relative;z-index:1;display:flex;align-items:center;gap:1rem;">
+                    <div style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.15);border:2px solid rgba(255,255,255,0.3);display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;">✏️</div>
+                    <div style="flex:1;">
+                        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:#fff;">Edit Organization</div>
+                        <div style="font-size:0.8rem;color:rgba(255,255,255,0.8);">Update name and description</div>
+                    </div>
+                    <button onclick="closeEditOrgModal()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);border-radius:50%;width:34px;height:34px;color:#fff;cursor:pointer;font-size:0.9rem;display:flex;align-items:center;justify-content:center;transition:all 0.2s;flex-shrink:0;" onmouseover="this.style.background='rgba(255,255,255,0.25)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'">✕</button>
+                </div>
+            </div>
+            <!-- Body -->
+            <div style="padding:2rem;">
+                <div id="editOrgAlert" style="display:none;margin-bottom:1rem;padding:0.9rem 1.2rem;border-radius:10px;font-size:0.875rem;font-weight:500;"></div>
+                <div style="margin-bottom:1.2rem;">
+                    <label style="display:block;font-weight:600;font-size:0.875rem;color:#1a202c;margin-bottom:0.5rem;">Organization Name *</label>
+                    <input id="editOrgName" type="text" value="${orgName.replace(/"/g, '&quot;')}" style="width:100%;padding:0.85rem 1.1rem;border:2px solid #e2e8f0;border-radius:12px;font-size:0.95rem;font-family:Poppins,sans-serif;color:#1a202c;outline:none;transition:all 0.3s;box-sizing:border-box;" onfocus="this.style.borderColor='#c93030';this.style.boxShadow='0 0 0 4px rgba(201,48,48,0.1)'" onblur="this.style.borderColor='#e2e8f0';this.style.boxShadow='none'">
+                </div>
+                <div style="margin-bottom:1.5rem;">
+                    <label style="display:block;font-weight:600;font-size:0.875rem;color:#1a202c;margin-bottom:0.5rem;">Description</label>
+                    <textarea id="editOrgDescription" rows="3" style="width:100%;padding:0.85rem 1.1rem;border:2px solid #e2e8f0;border-radius:12px;font-size:0.95rem;font-family:Poppins,sans-serif;color:#1a202c;outline:none;resize:vertical;transition:all 0.3s;box-sizing:border-box;" onfocus="this.style.borderColor='#c93030';this.style.boxShadow='0 0 0 4px rgba(201,48,48,0.1)'" onblur="this.style.borderColor='#e2e8f0';this.style.boxShadow='none'">${orgDescription}</textarea>
+                </div>
+                <div style="display:flex;gap:1rem;">
+                    <button onclick="submitEditOrg(${orgId})" style="flex:1;padding:0.9rem;background:linear-gradient(135deg,#c93030,#a32020);color:#fff;border:none;border-radius:12px;font-size:0.95rem;font-weight:700;font-family:Poppins,sans-serif;cursor:pointer;box-shadow:0 4px 15px rgba(201,48,48,0.35);transition:all 0.3s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">✓ Save Changes</button>
+                    <button onclick="closeEditOrgModal()" style="flex:1;padding:0.9rem;background:#f1f5f9;color:#475569;border:2px solid #e2e8f0;border-radius:12px;font-size:0.95rem;font-weight:600;font-family:Poppins,sans-serif;cursor:pointer;transition:all 0.3s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">Cancel</button>
+                </div>
+            </div>
+        </div>`;
+    modal.addEventListener('click', e => { if (e.target === modal) closeEditOrgModal(); });
+    document.body.appendChild(modal);
+}
+
+function closeEditOrgModal() {
+    const m = document.getElementById('editOrgModal');
+    if (m) m.remove();
+}
+
+async function submitEditOrg(orgId) {
+    const name = document.getElementById('editOrgName').value.trim();
+    const description = document.getElementById('editOrgDescription').value.trim();
+    const alertEl = document.getElementById('editOrgAlert');
+
+    if (!name) {
+        alertEl.textContent = '❌ Organization name is required.';
+        alertEl.style.display = 'block';
+        alertEl.style.background = 'rgba(201,48,48,0.08)';
+        alertEl.style.border = '1px solid rgba(201,48,48,0.25)';
+        alertEl.style.color = '#a32020';
+        return;
+    }
+
+    try {
+        const response = await apiFetch(`/organizations/${orgId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ name, description: description || null })
+        });
+
+        if (response && response.ok) {
+            closeEditOrgModal();
+            showAlert('orgchartAlert', '✅ Organization updated successfully!', 'success');
+            loadOrganizations();
+            // Refresh member section header if open
+            if (selectedOrgId === orgId) {
+                document.getElementById('selectedOrgName').textContent = name;
+                document.getElementById('selectedOrgNameMembers').textContent = name;
+            }
+        } else {
+            const err = response ? await response.json() : {};
+            alertEl.textContent = '❌ ' + (err.detail || 'Error updating organization');
+            alertEl.style.display = 'block';
+            alertEl.style.background = 'rgba(201,48,48,0.08)';
+            alertEl.style.border = '1px solid rgba(201,48,48,0.25)';
+            alertEl.style.color = '#a32020';
+        }
+    } catch (e) {
+        alertEl.textContent = '❌ Error updating organization';
+        alertEl.style.display = 'block';
+    }
+}
+
+// ========== EDIT MEMBER MODAL ==========
+
+function openEditMemberModal(memberId, memberName, memberPosition) {
+    const existing = document.getElementById('editMemberModal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'editMemberModal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;background:rgba(15,20,40,0.65);backdrop-filter:blur(5px);font-family:Poppins,sans-serif;';
+    modal.innerHTML = `
+        <div style="background:#fff;border-radius:20px;width:100%;max-width:460px;margin:1rem;box-shadow:0 20px 60px rgba(0,0,0,0.25);overflow:hidden;animation:cardSlideUp 0.35s cubic-bezier(0.22,1,0.36,1) both;">
+            <div style="background:linear-gradient(135deg,#c93030 0%,#a32020 100%);padding:1.4rem 2rem;position:relative;overflow:hidden;">
+                <div style="position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,0.04) 10px,rgba(255,255,255,0.04) 20px);animation:headerPattern 20s linear infinite;"></div>
+                <div style="position:relative;z-index:1;display:flex;align-items:center;gap:1rem;">
+                    <div style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.15);border:2px solid rgba(255,255,255,0.3);display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;">👤</div>
+                    <div style="flex:1;">
+                        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:#fff;">Edit Member</div>
+                        <div style="font-size:0.8rem;color:rgba(255,255,255,0.8);">Update name and position</div>
+                    </div>
+                    <button onclick="closeEditMemberModal()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);border-radius:50%;width:34px;height:34px;color:#fff;cursor:pointer;font-size:0.9rem;display:flex;align-items:center;justify-content:center;transition:all 0.2s;flex-shrink:0;" onmouseover="this.style.background='rgba(255,255,255,0.25)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'">✕</button>
+                </div>
+            </div>
+            <div style="padding:2rem;">
+                <div id="editMemberAlert" style="display:none;margin-bottom:1rem;padding:0.9rem 1.2rem;border-radius:10px;font-size:0.875rem;font-weight:500;"></div>
+                <div style="margin-bottom:1.2rem;">
+                    <label style="display:block;font-weight:600;font-size:0.875rem;color:#1a202c;margin-bottom:0.5rem;">Member Name *</label>
+                    <input id="editMemberName" type="text" value="${memberName.replace(/"/g, '&quot;')}" style="width:100%;padding:0.85rem 1.1rem;border:2px solid #e2e8f0;border-radius:12px;font-size:0.95rem;font-family:Poppins,sans-serif;color:#1a202c;outline:none;transition:all 0.3s;box-sizing:border-box;" onfocus="this.style.borderColor='#c93030';this.style.boxShadow='0 0 0 4px rgba(201,48,48,0.1)'" onblur="this.style.borderColor='#e2e8f0';this.style.boxShadow='none'">
+                </div>
+                <div style="margin-bottom:1.5rem;">
+                    <label style="display:block;font-weight:600;font-size:0.875rem;color:#1a202c;margin-bottom:0.5rem;">Position *</label>
+                    <input id="editMemberPosition" type="text" value="${memberPosition.replace(/"/g, '&quot;')}" style="width:100%;padding:0.85rem 1.1rem;border:2px solid #e2e8f0;border-radius:12px;font-size:0.95rem;font-family:Poppins,sans-serif;color:#1a202c;outline:none;transition:all 0.3s;box-sizing:border-box;" onfocus="this.style.borderColor='#c93030';this.style.boxShadow='0 0 0 4px rgba(201,48,48,0.1)'" onblur="this.style.borderColor='#e2e8f0';this.style.boxShadow='none'">
+                </div>
+                <div style="display:flex;gap:1rem;">
+                    <button onclick="submitEditMember(${memberId})" style="flex:1;padding:0.9rem;background:linear-gradient(135deg,#c93030,#a32020);color:#fff;border:none;border-radius:12px;font-size:0.95rem;font-weight:700;font-family:Poppins,sans-serif;cursor:pointer;box-shadow:0 4px 15px rgba(201,48,48,0.35);transition:all 0.3s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">✓ Save Changes</button>
+                    <button onclick="closeEditMemberModal()" style="flex:1;padding:0.9rem;background:#f1f5f9;color:#475569;border:2px solid #e2e8f0;border-radius:12px;font-size:0.95rem;font-weight:600;font-family:Poppins,sans-serif;cursor:pointer;transition:all 0.3s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">Cancel</button>
+                </div>
+            </div>
+        </div>`;
+    modal.addEventListener('click', e => { if (e.target === modal) closeEditMemberModal(); });
+    document.body.appendChild(modal);
+}
+
+function closeEditMemberModal() {
+    const m = document.getElementById('editMemberModal');
+    if (m) m.remove();
+}
+
+async function submitEditMember(memberId) {
+    const name = document.getElementById('editMemberName').value.trim();
+    const position = document.getElementById('editMemberPosition').value.trim();
+    const alertEl = document.getElementById('editMemberAlert');
+
+    if (!name || !position) {
+        alertEl.textContent = '❌ Name and position are required.';
+        alertEl.style.display = 'block';
+        alertEl.style.background = 'rgba(201,48,48,0.08)';
+        alertEl.style.border = '1px solid rgba(201,48,48,0.25)';
+        alertEl.style.color = '#a32020';
+        return;
+    }
+
+    try {
+        const response = await apiFetch(`/members/${memberId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ name, position })
+        });
+
+        if (response && response.ok) {
+            closeEditMemberModal();
+            showAlert('memberAlert', '✅ Member updated successfully!', 'success');
+            loadMembers(selectedOrgId);
+            loadOrganizations();
+        } else {
+            const err = response ? await response.json() : {};
+            alertEl.textContent = '❌ ' + (err.detail || 'Error updating member');
+            alertEl.style.display = 'block';
+            alertEl.style.background = 'rgba(201,48,48,0.08)';
+            alertEl.style.border = '1px solid rgba(201,48,48,0.25)';
+            alertEl.style.color = '#a32020';
+        }
+    } catch (e) {
+        alertEl.textContent = '❌ Error updating member';
+        alertEl.style.display = 'block';
+    }
+}

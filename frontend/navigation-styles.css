@@ -403,6 +403,13 @@ input, textarea, .info-content, .loc-panel-inner, .evac-panel-inner {
 .action-btn.primary:hover { box-shadow:0 3px 10px rgba(201,48,48,.3); transform:translateY(-1px); }
 .chatbot-nav-btn { text-decoration:none; background:linear-gradient(135deg,#1a1a2e,#16213e); color:#fff; border:none; }
 .chatbot-nav-btn:hover { background:linear-gradient(135deg,#16213e,#0f3460); box-shadow:0 3px 10px rgba(0,0,0,.3); transform:translateY(-1px); color:#fff; }
+/* Announcement bell button in nav */
+#navAnnouncementBtn {
+    background:linear-gradient(135deg,#c41e3a,#9b1530); color:#fff;
+    border:none; align-items:center; gap:4px; animation: navBellPop 0.4s ease;
+}
+#navAnnouncementBtn:hover { background:linear-gradient(135deg,#9b1530,#7a1025); transform:translateY(-1px); box-shadow:0 3px 10px rgba(196,30,58,.3); }
+@keyframes navBellPop { from{transform:scale(0.7);opacity:0} to{transform:scale(1);opacity:1} }
 
 /* Map Controls */
 .map-controls {

@@ -1,7 +1,7 @@
 // ============ GLOBAL API HOST ============
-const isDevTunnel = window.location.hostname.includes('devtunnels.ms') || window.location.hostname.includes('localhost');
-const CHAT_API_URL = isDevTunnel
-    ? `${window.location.protocol}//${window.location.hostname}/api/chat`
+const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const CHAT_API_URL = isLocal
+    ? `http://localhost:8000/api/chat`
     : `https://sparta-production-0acb.up.railway.app/api/chat`;
 
 
@@ -215,17 +215,219 @@ const chatMessages = document.getElementById('chatMessages');
         sendMessage();
     }
 
+    // ── Typo / spelling corrector ─────────────────────────────────────────────
+    const TYPO_MAP = {
+        // Common misspellings & shorthand
+        'wher': 'where', 'wehre': 'where', 'whre': 'where', 'wher is': 'where is',
+        'waht': 'what', 'whta': 'what', 'wath': 'what',
+        'hos': 'who is', 'hwo': 'who', 'woh': 'who',
+        'teh': 'the', 'hte': 'the', 'tthe': 'the',
+        'is teh': 'is the', 'of teh': 'of the',
+        'dena': 'dean', 'deam': 'dean', 'den': 'dean',
+        'chanclor': 'chancellor', 'chancelor': 'chancellor', 'chncellor': 'chancellor',
+        'presiednt': 'president', 'prsident': 'president', 'presedent': 'president',
+        'universtiy': 'university', 'univeristy': 'university', 'univerisity': 'university',
+        'buldng': 'building', 'buldging': 'building', 'bilding': 'building',
+        'locaton': 'location', 'loction': 'location', 'lcation': 'location',
+        'anouncement': 'announcement', 'announcment': 'announcement', 'announcemnt': 'announcement',
+        'histroy': 'history', 'hisory': 'history', 'hsitory': 'history',
+        'organizaton': 'organization', 'oragnization': 'organization', 'organziation': 'organization',
+        'labratory': 'laboratory', 'labrotary': 'laboratory', 'labortory': 'laboratory',
+        'libray': 'library', 'libraary': 'library', 'liberry': 'library',
+        'clasroom': 'classroom', 'classroon': 'classroom', 'claassroom': 'classroom',
+        'ofice': 'office', 'offce': 'office', 'offise': 'office',
+        'teachr': 'teacher', 'teahcer': 'teacher', 'taecher': 'teacher',
+        'studennt': 'student', 'stduent': 'student', 'studnt': 'student',
+        'colege': 'college', 'collge': 'college', 'colleje': 'college',
+        'departmnt': 'department', 'departement': 'department', 'deparment': 'department',
+        'faculy': 'faculty', 'facuty': 'faculty', 'faculity': 'faculty',
+        'adminstration': 'administration', 'adminitration': 'administration',
+        'evnt': 'event', 'eevnt': 'event',
+        'schedul': 'schedule', 'shedule': 'schedule', 'scheudle': 'schedule',
+        'abt': 'about', 'abut': 'about',
+        'pls': 'please', 'plss': 'please', 'plz': 'please',
+        'wat': 'what', 'wen': 'when', 'hw': 'how', 'cud': 'could', 'wud': 'would',
+        'ur': 'your', 'u': 'you', 'r': 'are', 'n': 'and', 'nd': 'and',
+        'gud': 'good', 'gd': 'good', 'gr8': 'great',
+        'spceh': 'speech', 'sepeach': 'speech',
+        'cancellor': 'chancellor', 'chacellor': 'chancellor',
+        'founed': 'founded', 'fouded': 'founded', 'fonded': 'founded',
+        'bsu lipa': 'BSU Lipa', 'bsu': 'BSU',
+        'sparta': 'SPARTA',
+        // Additional common typos
+        'wen is': 'when is', 'hwen': 'when', 'whn': 'when',
+        'annoucement': 'announcement', 'annoncement': 'announcement',
+        'loacation': 'location', 'loaction': 'location',
+        'builidng': 'building', 'biulding': 'building',
+        'stuednt': 'student', 'stundet': 'student',
+        'taecher': 'teacher', 'techer': 'teacher',
+        'proffessor': 'professor', 'professer': 'professor', 'proffesor': 'professor',
+        'oraganization': 'organization', 'organisaton': 'organization',
+        'hisotry': 'history', 'hitory': 'history',
+        'loabatory': 'laboratory', 'laborartory': 'laboratory',
+        'cahncel': 'chancellor', 'cahncellor': 'chancellor',
+        'adminsitration': 'administration', 'admistration': 'administration',
+        'infomation': 'information', 'informaton': 'information', 'inforamtion': 'information',
+        'campous': 'campus', 'camups': 'campus',
+        'universtiy': 'university', 'uniiversity': 'university',
+        'speach': 'speech', 'speecht': 'speech',
+        'navigaton': 'navigation', 'naviagtion': 'navigation',
+        'dpartment': 'department', 'deparment': 'department',
+    };
+
+    function correctTypos(text) {
+        if (!text || text.length < 2) return text;
+        let corrected = text;
+
+        // Apply word-level replacements (case-insensitive, whole word)
+        for (const [typo, fix] of Object.entries(TYPO_MAP)) {
+            const regex = new RegExp(`(?<![\\w])${typo}(?![\\w])`, 'gi');
+            corrected = corrected.replace(regex, (match) => {
+                // Preserve original casing style
+                if (match === match.toUpperCase()) return fix.toUpperCase();
+                if (match[0] === match[0].toUpperCase()) return fix.charAt(0).toUpperCase() + fix.slice(1);
+                return fix;
+            });
+        }
+        return corrected;
+    }
+
+    // ── Out-of-scope / nonsense detector ─────────────────────────────────────
+    // Keywords that signal a query is campus-related
+    const CAMPUS_KEYWORDS = [
+        // People & roles
+        'dean', 'chancellor', 'president', 'faculty', 'staff', 'professor',
+        'teacher', 'instructor', 'official', 'admin', 'registrar', 'cashier',
+        'who is', 'sino', 'pangalan',
+        // Locations
+        'where', 'location', 'building', 'room', 'office', 'lab', 'library',
+        'laboratory', 'classroom', 'floor', 'campus', 'canteen', 'gym', 'chapel',
+        'nasaan', 'saan',
+        // Academic
+        'college', 'department', 'cet', 'cics', 'cas', 'cabe', 'cte',
+        'enrollment', 'schedule', 'curriculum', 'course',
+        // Events & info
+        'announcement', 'event', 'news', 'update', 'history', 'founded',
+        'organization', 'org', 'club', 'bsu', 'sparta', 'batangas state',
+        'anunsyo', 'kasaysayan', 'organisasyon',
+        // Navigation
+        'navigate', 'direction', 'map', 'find', 'go to', 'paano pumunta',
+    ];
+
+    // Greetings that are always OK
+    const GREETING_PATTERNS = [
+        /^(hi|hello|hey|good morning|good afternoon|good evening|kumusta|magandang)/i,
+        /^(thanks|thank you|salamat|ok|okay|sure|got it|noted)/i,
+        /^(help|tulong|ano ang magagawa mo|what can you do)/i,
+    ];
+
+    // Patterns that are clearly off-topic / nonsense
+    const NONSENSE_PATTERNS = [
+        /^[^a-zA-Z0-9\u00C0-\u024F\s.,!?'-]{3,}$/,   // Only symbols/emoji spam
+        /^(.)\1{4,}$/,                                   // Repeated character: aaaaa
+        /^[a-z]{1,2}(\s[a-z]{1,2}){3,}$/i,             // Short random word soup
+    ];
+
+    function isOutOfScope(text) {
+        const lower = text.toLowerCase().trim();
+        const wordCount = lower.split(/\s+/).length;
+
+        // Always allow greetings
+        if (GREETING_PATTERNS.some(p => p.test(lower))) return false;
+
+        // Flag obvious nonsense patterns
+        if (NONSENSE_PATTERNS.some(p => p.test(lower))) return true;
+
+        // Very short (1-2 chars) that aren't meaningful
+        if (lower.length <= 2) return true;
+
+        // Check if it contains any campus-relevant keyword
+        const hasCampusKeyword = CAMPUS_KEYWORDS.some(kw => lower.includes(kw));
+        if (hasCampusKeyword) return false;
+
+        // If it's a longer sentence (5+ words) with NO campus keywords, flag as out-of-scope
+        // but only if it looks like a real question (not just a name being searched)
+        if (wordCount >= 5 && !hasCampusKeyword) {
+            // Allow if it could be a name/entity search (no verb-like question words)
+            const hasQuestionWord = /\b(what|how|why|when|where|who|is|are|can|do|does|tell me|explain|give|show|list|find|please)\b/i.test(lower);
+            if (hasQuestionWord) return true;
+        }
+
+        return false;
+    }
+
+    function getOutOfScopeResponse(text) {
+        // Always respect the UI language selector, not text-based detection
+        const isTagalog = langSelect && langSelect.value === 'tl-PH';
+
+        // Check if it looks like gibberish/spam
+        const isGibberish = NONSENSE_PATTERNS.some(p => p.test(text.trim()));
+
+        if (isGibberish) {
+            return isTagalog
+                ? "Hindi ko naintindihan ang iyong mensahe. 🤔 Pakisubukan ulit na magtanong tungkol sa BSU Lipa campus!"
+                : "I didn't quite understand that. 🤔 Please try asking a question about BSU Lipa campus — like people, locations, events, or organizations!";
+        }
+
+        return isTagalog
+            ? "⚠️ **Walang impormasyon sa database para sa query na iyon.**\n\nAko ay SPARTA, isang campus assistant para sa **BSU Lipa** lamang. Kaya kong sagutin ang tungkol sa:\n\n**👥 Mga Tao** - Mga guro, kawani, opisyal\n**📍 Mga Lokasyon** - Mga gusali at silid\n**📅 Mga Anunsyo** - Pinakabagong balita\n**🏛️ Kasaysayan** - BSU Lipa na nakaraan\n**🎓 Mga Organisasyon** - Mga estudyanteng grupo\n\nAno ang gusto mong malaman tungkol sa campus?"
+            : "⚠️ **No information found in the database for that query.**\n\nI'm SPARTA, a campus assistant for **BSU Lipa** only. I can help with:\n\n**👥 People** - Faculty, staff, and officials\n**📍 Locations** - Buildings and rooms\n**📅 Announcements** - Latest campus news\n**🏛️ History** - BSU Lipa background\n**🎓 Organizations** - Student groups\n\nWhat would you like to know about the campus?";
+    }
+
+    // ── Chat lock — prevents sending while a response is pending ──────────
+    let isChatLocked = false;
+
+    function setChatLock(locked) {
+        isChatLocked = locked;
+        userInput.disabled = locked;
+        sendBtn.disabled = locked;
+        micBtn.disabled = locked;
+        sendBtn.style.opacity = locked ? '0.5' : '1';
+        userInput.placeholder = locked
+            ? '⏳ Waiting for response...'
+            : 'Type your question or click the mic to speak...';
+        // Disable quick question buttons too
+        document.querySelectorAll('.quick-question-btn').forEach(b => {
+            b.disabled = locked;
+            b.style.opacity = locked ? '0.5' : '1';
+            b.style.pointerEvents = locked ? 'none' : 'auto';
+        });
+    }
+
     // Main send message function - ENHANCED
     async function sendMessage() {
-        const message = userInput.value.trim();
-        if (!message) return;
+        const rawMessage = userInput.value.trim();
+        if (!rawMessage || isChatLocked) return;
 
-        // Add user message
+        // Apply typo correction
+        const message = correctTypos(rawMessage);
+
+        // Add user message (show corrected version)
         addMessage(message, 'user');
         userInput.value = '';
 
+        // ── Out-of-scope / nonsense guard ──────────────────────────────────
+        if (isOutOfScope(message)) {
+            conversationHistory.push({ role: 'user', content: message });
+            const oosReply = getOutOfScopeResponse(message);
+            // Brief typing delay for natural feel
+            typingIndicator.style.display = 'block';
+            scrollToBottom();
+            await new Promise(r => setTimeout(r, 700));
+            typingIndicator.style.display = 'none';
+            addMessage(oosReply, 'bot', false, 0.0, 'general_info');
+            conversationHistory.push({ role: 'assistant', content: oosReply, intent: 'general_info' });
+            updateQuickQuestions('general_info');
+            speak(oosReply);
+            return;
+        }
+        // ───────────────────────────────────────────────────────────────────
+
         // Add to conversation history
         conversationHistory.push({ role: 'user', content: message });
+
+        // Lock chat while waiting
+        setChatLock(true);
 
         // Show typing indicator
         typingIndicator.style.display = 'block';
@@ -235,7 +437,7 @@ const chatMessages = document.getElementById('chatMessages');
         const response = await fetch(CHAT_API_URL, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
                     message: message,
@@ -282,6 +484,9 @@ const chatMessages = document.getElementById('chatMessages');
             
             // Reset to default questions on error
             updateQuickQuestions('general_info');
+        } finally {
+            // Always unlock chat after response (or error)
+            setChatLock(false);
         }
     }
 
@@ -292,98 +497,67 @@ const chatMessages = document.getElementById('chatMessages');
 
         const content = document.createElement('div');
         content.className = `message-content${isError ? ' error-message' : ''}`;
-        
+
         // Format text with basic markdown support
         const formattedText = formatMarkdown(text);
 
-        // Helper — builds and appends timestamp + TTS + badges after typing
-        const appendExtras = () => {
-            // Timestamp
-            const time = document.createElement('span');
-            time.className = 'message-time';
-            time.textContent = new Date().toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-            content.appendChild(time);
+        // Step 1 — Set message text
+        content.innerHTML = formattedText;
 
-            // TTS button
-            if (sender === 'bot' && !isError) {
-                const ttsBtn = document.createElement('button');
-                ttsBtn.className = 'tts-msg-btn';
-                ttsBtn.title = 'Read aloud';
-                ttsBtn.innerHTML = `
-                    <span class="tts-msg-icon">🔊</span>
-                    <div class="tts-msg-wave">
-                        <div class="tts-msg-wave-bar"></div>
-                        <div class="tts-msg-wave-bar"></div>
-                        <div class="tts-msg-wave-bar"></div>
-                        <div class="tts-msg-wave-bar"></div>
-                    </div>
-                    <span class="tts-msg-label">Read aloud</span>`;
-                ttsBtn.addEventListener('click', () => {
-                    if (ttsBtn.classList.contains('speaking')) {
-                        stopSpeaking();
-                    } else {
-                        speak(text, ttsBtn);
-                    }
-                });
-                content.appendChild(ttsBtn);
-            }
-        };
+        // Step 2 — Intent query type badge only
+        if (sender === 'bot' && !isError && intent && intent !== 'unknown') {
+            const container = document.createElement('div');
+            container.className = 'confidence-container';
 
+            const row = document.createElement('div');
+            row.className = 'confidence-row';
+
+            const intentBadge = document.createElement('span');
+            intentBadge.className = 'intent-badge';
+            intentBadge.textContent = `🎯 ${intent.replace(/_/g, ' ')}`;
+            row.appendChild(intentBadge);
+
+            container.appendChild(row);
+            content.appendChild(container);
+        }
+
+        // Step 3 — Timestamp
+        const time = document.createElement('span');
+        time.className = 'message-time';
+        time.textContent = new Date().toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        content.appendChild(time);
+
+        // Step 4 — TTS button (bot messages only)
         if (sender === 'bot' && !isError) {
-            content.innerHTML = ''; // typewriter fills this
-        } else {
-            content.innerHTML = formattedText;
-            appendExtras(); // instant for user/error messages
+            const ttsBtn = document.createElement('button');
+            ttsBtn.className = 'tts-msg-btn';
+            ttsBtn.title = 'Read aloud';
+            ttsBtn.innerHTML = `
+                <span class="tts-msg-icon">🔊</span>
+                <div class="tts-msg-wave">
+                    <div class="tts-msg-wave-bar"></div>
+                    <div class="tts-msg-wave-bar"></div>
+                    <div class="tts-msg-wave-bar"></div>
+                    <div class="tts-msg-wave-bar"></div>
+                </div>
+                <span class="tts-msg-label">Read aloud</span>`;
+            ttsBtn.addEventListener('click', () => {
+                if (ttsBtn.classList.contains('speaking')) {
+                    stopSpeaking();
+                } else {
+                    speak(text, ttsBtn);
+                }
+            });
+            content.appendChild(ttsBtn);
         }
 
-        // Add confidence and intent badges for bot messages
-        if (sender === 'bot' && confidence !== null) {
-            const confidenceContainer = document.createElement('div');
-            confidenceContainer.className = 'confidence-container';
-            
-            // Confidence badge
-            const confidenceBadge = document.createElement('span');
-            confidenceBadge.className = 'confidence-badge';
-            
-            let confidenceClass = 'confidence-low';
-            let confidenceText = 'Low';
-            
-            if (confidence > 0.7) {
-                confidenceClass = 'confidence-high';
-                confidenceText = 'High';
-            } else if (confidence > 0.4) {
-                confidenceClass = 'confidence-medium';
-                confidenceText = 'Medium';
-            }
-            
-            confidenceBadge.className += ' ' + confidenceClass;
-            confidenceBadge.textContent = `${confidenceText} (${(confidence * 100).toFixed(0)}%)`;
-            confidenceContainer.appendChild(confidenceBadge);
-
-            // Intent badge
-            if (intent && intent !== 'unknown') {
-                const intentBadge = document.createElement('span');
-                intentBadge.className = 'intent-badge';
-                intentBadge.textContent = intent.replace('_', ' ');
-                confidenceContainer.appendChild(intentBadge);
-            }
-
-            content.appendChild(confidenceContainer);
-        }
-
+        // Step 5 — Mount and scroll
         msg.appendChild(content);
         chatMessages.insertBefore(msg, typingIndicator);
         scrollToBottom();
-
-        // Trigger typewriter for bot messages — append extras after typing done
-        if (sender === 'bot' && !isError) {
-            typewriterEffect(content, formattedText, 25, () => {
-                appendExtras();
-            });
-        }
     }
 
 
@@ -422,6 +596,11 @@ const chatMessages = document.getElementById('chatMessages');
 
     // Format markdown-style text
     function formatMarkdown(text) {
+        // Authority photo tag: [PHOTO:data:image/...base64...]
+        text = text.replace(/\[PHOTO:([^\]]+)\]/g, (_, src) => {
+            return `<div style="display:flex;flex-direction:column;align-items:center;margin:8px 0 12px 0;gap:8px;"><img src="${src}" alt="Authority Photo" style="width:110px;height:130px;object-fit:cover;object-position:center top;border-radius:10px;border:3px solid #c41e3a;box-shadow:0 4px 12px rgba(196,30,58,0.25);background:#f5f5f5;display:block;cursor:pointer;" onclick="openPhotoModal('${src}')" title="Click to view full photo"><button onclick="openPhotoModal('${src}')" style="display:flex;align-items:center;gap:5px;padding:5px 14px;background:linear-gradient(135deg,#c41e3a,#8b0000);color:white;border:none;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(196,30,58,0.3);font-family:inherit;">🔍 View Full Photo</button></div>`;
+        });
+
         // Bold: **text**
         text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
         
@@ -542,6 +721,7 @@ const chatMessages = document.getElementById('chatMessages');
 
     function cleanTextForSpeech(text) {
         return text
+            .replace(/\[PHOTO:[^\]]+\]/g, '')        // remove photo tags
             .replace(/\*\*(.+?)\*\*/g, '$1')       // bold
             .replace(/\*(.+?)\*/g, '$1')              // italic
             .replace(/#{1,6}\s/g, '')                  // headers
@@ -647,6 +827,28 @@ const chatMessages = document.getElementById('chatMessages');
     setTimeout(() => {
         quickQuestionsContainer.style.transition = 'all 0.3s ease';
     }, 100);
+
+
+
+// ============ PHOTO MODAL ============
+    function openPhotoModal(src) {
+        // Remove existing modal if any
+        const existing = document.getElementById('photoModal');
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'photoModal';
+        modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);animation:fadeInModal 0.2s ease;';
+        modal.innerHTML = `
+            <div style="position:relative;max-width:90vw;max-height:90vh;display:flex;flex-direction:column;align-items:center;gap:12px;">
+                <img src="${src}" alt="Full Photo" style="max-width:90vw;max-height:80vh;object-fit:contain;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,0.6);border:3px solid #c41e3a;">
+                <button onclick="document.getElementById('photoModal').remove()" style="padding:8px 24px;background:linear-gradient(135deg,#c41e3a,#8b0000);color:white;border:none;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 4px 12px rgba(196,30,58,0.4);">✕ Close</button>
+            </div>`;
+        // Close on backdrop click
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+        document.body.appendChild(modal);
+    }
+    window.openPhotoModal = openPhotoModal;
 
 // ============ EXPOSE GLOBAL FUNCTIONS ============
 // Required because onclick= in HTML needs global scope

@@ -1115,3 +1115,11 @@ body::after {
     opacity: 1;
     color: #f97316;
 }
+/* ===== EDIT BUTTON ===== */
+.btn-edit {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+}
+
+.btn-edit:hover {
+    box-shadow: 0 8px 25px rgba(59,130,246,0.4);
+}
