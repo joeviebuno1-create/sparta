@@ -524,7 +524,7 @@ async function editIntent(id) {
     const item = items.find(i => i.id === id);
     if (!item) return;
 
-    // Fill the intent form fields (adapt field IDs to match your intents form)
+    // Fill the intent form fields
     const typeEl = document.getElementById('intent_type');
     const keywordsEl = document.getElementById('intent_keywords');
     const responseEl = document.getElementById('intent_response');
@@ -535,10 +535,13 @@ async function editIntent(id) {
     if (responseEl) responseEl.value = item.response_template || '';
     if (responseTlEl) responseTlEl.value = item.response_template_tl || '';
 
-    document.getElementById('intentsForm') && (document.getElementById('intentsForm').dataset.editingId = id);
-    const submitBtn = document.querySelector('#intentsForm [type=submit]');
+    // ✅ Use the correct form ID: intentForm (not intentsForm)
+    const form = document.getElementById('intentForm');
+    if (form) form.dataset.editingId = id;
+
+    const submitBtn = document.querySelector('#intentForm [type=submit]');
     if (submitBtn) submitBtn.textContent = '✏️ Update Response';
-    document.getElementById('intentsForm')?.scrollIntoView({ behavior: 'smooth' });
+    form?.scrollIntoView({ behavior: 'smooth' });
 }
 
 // ========== NAVIGATION STATISTICS ==========
@@ -1982,7 +1985,7 @@ document.getElementById('authorityForm')?.addEventListener('submit', async (e) =
         e.preventDefault();
         const submitBtn = e.target.querySelector('[type=submit]');
         submitBtn.disabled = true;
-        const editingId = document.getElementById('intentsForm')?.dataset.editingId;
+        const editingId = document.getElementById('intentForm')?.dataset.editingId;
         
         const intentData = {
             intent_type: document.getElementById('intent_type').value,
@@ -1999,8 +2002,8 @@ document.getElementById('authorityForm')?.addEventListener('submit', async (e) =
             if (response && response.ok) {
                 showAlert('intentsAlert', editingId ? '✅ Response updated!' : '✅ Intent added!', 'success');
                 document.getElementById('intentForm').reset();
-                if (document.getElementById('intentsForm')) {
-                    document.getElementById('intentsForm').removeAttribute('data-editing-id');
+                if (document.getElementById('intentForm')) {
+                    document.getElementById('intentForm').removeAttribute('data-editing-id');
                 }
                 submitBtn.textContent = '✓ Add Custom Response';
                 loadData('intents');

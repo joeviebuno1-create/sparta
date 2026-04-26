@@ -174,6 +174,61 @@
             background: linear-gradient(135deg, #c41e3a, #9b1530);
             color: #fff; border: none; border-radius: 50px;
             padding: 8px 14px 8px 10px; font-size: 0.82rem; font-weight: 600;
+
+        /* ── Toast notification ─────────────────────────────────────── */
+        #spToast {
+            position: fixed;
+            bottom: 90px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            opacity: 0;
+            z-index: 9990;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.07), 0 12px 40px rgba(0,0,0,0.18);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px 12px 12px;
+            max-width: min(360px, calc(100vw - 32px));
+            width: max-content;
+            cursor: pointer;
+            border-left: 4px solid var(--primary-red);
+            transition: opacity 0.35s ease, transform 0.35s cubic-bezier(0.175,0.885,0.32,1.275);
+        }
+        #spToast.sp-toast-in {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        #spToast.sp-toast-out {
+            opacity: 0;
+            transform: translateX(-50%) translateY(12px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .sp-toast-icon {
+            width: 40px; height: 40px; border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.3rem; flex-shrink: 0;
+            background: #fff0f3;
+        }
+        .sp-toast-text { flex: 1; min-width: 0; }
+        .sp-toast-label {
+            font-size: 0.68rem; font-weight: 800;
+            text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--primary-red); margin-bottom: 2px;
+        }
+        .sp-toast-title {
+            font-size: 0.88rem; font-weight: 700; color: #0f172a;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            max-width: 220px;
+        }
+        .sp-toast-close {
+            background: none; border: none; cursor: pointer;
+            color: #94a3b8; font-size: 0.8rem; padding: 4px;
+            flex-shrink: 0; line-height: 1;
+            transition: color 0.2s;
+        }
+        .sp-toast-close:hover { color: var(--primary-red); }
             cursor: grab; box-shadow: 0 4px 14px rgba(196,30,58,0.35);
             align-items: center; gap: 6px; transition: transform 0.2s;
             user-select: none; touch-action: none;
@@ -409,10 +464,93 @@
             document.getElementById('spBellCount').textContent = popups.length;
             document.getElementById('spNotifBell').classList.add('visible');
 
+            // Track which announcement IDs have already been seen
+            seenIds = new Set(popups.map(p => p.id));
+
             setTimeout(openPopup, 800);
+
+            // ── Poll every 30 seconds for new announcements ──────────────
+            setInterval(pollForNew, 30_000);
         } catch (e) {
             console.log('[SPARTA popup] Could not load announcements:', e.message);
         }
+    }
+
+    // IDs seen so far — populated after first load
+    let seenIds = new Set();
+
+    async function pollForNew() {
+        try {
+            const res = await fetch(`${API_BASE}/api/announcement-popups?_t=${Date.now()}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            const fresh = (data || []).filter(p => p.is_active !== false);
+
+            // Find announcements we haven't seen yet
+            const newOnes = fresh.filter(p => !seenIds.has(p.id));
+            if (!newOnes.length) return;
+
+            // Merge into popups list (highest priority first)
+            newOnes.forEach(p => {
+                popups.unshift(p);
+                seenIds.add(p.id);
+            });
+
+            // Update bell badge
+            const bell = document.getElementById('spNotifBell');
+            const badge = document.getElementById('spBellCount');
+            if (bell && badge) {
+                badge.textContent = popups.length;
+                bell.classList.add('visible');
+            }
+
+            // Show toast notification for each new announcement
+            newOnes.forEach((p, i) => {
+                setTimeout(() => showToast(p), i * 600);
+            });
+        } catch (e) {
+            // Silent fail — polling errors shouldn't disrupt the user
+        }
+    }
+
+    function showToast(ann) {
+        // Remove any existing toast first
+        const existing = document.getElementById('spToast');
+        if (existing) existing.remove();
+
+        const icon = getCategoryIcon(ann.category);
+        const catClass = getCategoryClass(ann.category);
+
+        const toast = document.createElement('div');
+        toast.id = 'spToast';
+        toast.innerHTML = `
+            <div class="sp-toast-icon ${catClass}">${icon}</div>
+            <div class="sp-toast-text">
+                <div class="sp-toast-label">New Announcement</div>
+                <div class="sp-toast-title">${escText(ann.title)}</div>
+            </div>
+            <button class="sp-toast-close" onclick="this.parentElement.remove()">✕</button>`;
+
+        // Click anywhere on toast (except close) opens popup
+        toast.addEventListener('click', (e) => {
+            if (e.target.classList.contains('sp-toast-close')) return;
+            currentIndex = popups.indexOf(ann);
+            if (currentIndex < 0) currentIndex = 0;
+            openPopup();
+            toast.remove();
+        });
+
+        document.body.appendChild(toast);
+
+        // Animate in
+        requestAnimationFrame(() => toast.classList.add('sp-toast-in'));
+
+        // Auto-dismiss after 6 seconds
+        setTimeout(() => {
+            toast.classList.remove('sp-toast-in');
+            toast.classList.add('sp-toast-out');
+            setTimeout(() => toast.remove(), 400);
+        }, 6000);
     }
 
     if (document.readyState === 'loading') {

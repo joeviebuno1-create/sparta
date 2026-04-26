@@ -108,6 +108,109 @@ async function loadRoutesFromAPI() {
     }
 }
 
+// ============ FORMAT DESCRIPTION ============
+function formatDescription(text) {
+    if (!text) return '';
+
+    // Detect org-chart style: "Role: Name" pairs separated by colons
+    const hasRolePairs = /(?<![A-Za-z]\.):\s*(?:Dr|Mr|Ms|Engr|Asst|Assoc|Prof|Atty|Arch)\./.test(text);
+
+    if (!hasRolePairs) {
+        // Plain text — split into sentences
+        const sentences = text.match(/[^.!?]+[.!?]?/g)?.map(s => s.trim()).filter(Boolean) || [text];
+        if (sentences.length <= 1) return `<span>${text}</span>`;
+        return sentences.map(s => `<div class="desc-sentence">${s}</div>`).join('');
+    }
+
+    // ── Org-chart mode ──────────────────────────────────────────────────────
+    // Split on ':' that immediately precede a name-prefix abbreviation,
+    // but NOT when the character before ':' is itself an abbreviation dot.
+    // Each chunk after split = "Name [NextRoleLabel]"
+    const SPLIT_RE = /(?<![A-Za-z]\.):\s*(?=(?:Dr|Mr|Ms|Engr|Asst|Assoc|Prof|Atty|Arch)\.)/g;
+    const SECTION_HEADERS = ['Top Administration', 'College Leadership', 'Coordinators'];
+
+    // Extract a person's name from the START of a chunk.
+    // Name = [Title(s)] [FirstName] [SecondFirstName?] [MiddleInitial?] [Particle?] [LastName]
+    function extractName(chunk) {
+        const tokens = chunk.split(/\s+/);
+        let i = 0, nameTokens = [];
+
+        // Title abbreviations (end with '.')
+        while (i < tokens.length && /^(?:Asst|Assoc|Prof|Engr|Dr|Mr|Ms|Atty|Arch|Sr|Jr)\.$/.test(tokens[i])) {
+            nameTokens.push(tokens[i++]);
+        }
+
+        // First name(s): up to 2 purely capitalized words (e.g. "Rey Anthony")
+        let firstNames = 0;
+        while (i < tokens.length && firstNames < 2) {
+            if (/^[A-Z][a-z]+$/.test(tokens[i])) { nameTokens.push(tokens[i++]); firstNames++; }
+            else break;
+        }
+        if (firstNames === 0) return { name: nameTokens.join(' '), rest: tokens.slice(i).join(' ') };
+
+        // Middle initial (single capital + dot, e.g. "A.")
+        if (i < tokens.length && /^[A-Z]\.$/.test(tokens[i])) {
+            nameTokens.push(tokens[i++]);
+        }
+
+        // Name particle (de, van, del, la, etc.)
+        if (i < tokens.length && /^(?:de|van|del|der|den|la|le)$/i.test(tokens[i])) {
+            nameTokens.push(tokens[i++]);
+        }
+
+        // Last name (capitalized, possibly hyphenated like "Ramirez-Latade")
+        if (i < tokens.length && /^[A-Z][a-zA-Z']+(-[A-Z][a-zA-Z]+)?$/.test(tokens[i])) {
+            nameTokens.push(tokens[i++]);
+        }
+
+        return { name: nameTokens.join(' '), rest: tokens.slice(i).join(' ') };
+    }
+
+    const parts = text.split(SPLIT_RE);
+
+    // part[0] = intro sentences + first role label
+    let p0 = parts[0], introText = p0, firstRole = null;
+    for (const hdr of SECTION_HEADERS) {
+        const idx = p0.indexOf(hdr);
+        if (idx >= 0) {
+            introText = p0.substring(0, idx).trim().replace(/\.$/, '');
+            firstRole = p0.substring(idx).trim();
+            break;
+        }
+    }
+    if (!firstRole) {
+        const lp = p0.lastIndexOf('. ');
+        if (lp > 0) {
+            introText = p0.substring(0, lp + 1).trim();
+            firstRole = p0.substring(lp + 2).trim();
+        } else {
+            introText = '';
+            firstRole = p0.trim();
+        }
+    }
+
+    const entries = [];
+    if (introText) entries.push({ type: 'intro', text: introText });
+
+    let pendingRole = firstRole;
+    for (let i = 1; i < parts.length; i++) {
+        const { name, rest } = extractName(parts[i].trim());
+        entries.push({ type: 'entry', role: pendingRole || '', name });
+        pendingRole = rest || null;
+    }
+    if (pendingRole) entries.push({ type: 'entry', role: pendingRole, name: '' });
+
+    return entries.map(e => {
+        if (e.type === 'intro') {
+            return e.text ? `<div class="desc-sentence">${e.text}</div>` : '';
+        }
+        return `<div class="desc-role-row">
+            <span class="desc-role-label">${e.role}</span>
+            <span class="desc-role-name">${e.name}</span>
+        </div>`;
+    }).join('');
+}
+
 // ============ FILTER PILLS ============
 function buildFilterPills() {
     const types = [...new Set(locations.map(l => l.type))].sort();
@@ -352,7 +455,7 @@ function selectLocation(idOrObj, clickedEl) {
         <div class="info-row"><span class="info-row-icon">🏷️</span><div><div class="info-label">Type</div><div class="info-value">${location.type.charAt(0).toUpperCase()+location.type.slice(1)}</div></div></div>
         ${location.capacity?`<div class="info-row"><span class="info-row-icon">👥</span><div><div class="info-label">Capacity</div><div class="info-value">${location.capacity} people</div></div></div>`:''}
         ${location.accessible?`<div class="info-row"><span class="info-row-icon">♿</span><div><div class="info-label">Accessibility</div><div class="info-value" style="color:#16a34a;font-weight:600;">Wheelchair Accessible</div></div></div>`:''}
-        ${location.description?`<div class="info-row"><span class="info-row-icon">📝</span><div><div class="info-label">Description</div><div class="info-value">${location.description}</div></div></div>`:''}
+        ${location.description?`<div class="info-row"><span class="info-row-icon">📝</span><div style="flex:1;"><div class="info-label">Description</div><div class="info-value desc-formatted">${formatDescription(location.description)}</div></div></div>`:''}
         <div class="info-row"><span class="info-row-icon">🗺️</span><div><div class="info-label">Coordinates</div><div class="info-value">X:${location.coordinates.x} Y:${location.coordinates.y} Z:${location.coordinates.z}</div></div></div>
         ${dirHtml}
     `;

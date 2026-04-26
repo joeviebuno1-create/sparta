@@ -345,8 +345,8 @@ const chatMessages = document.getElementById('chatMessages');
         }
 
         return isTagalog
-            ? "⚠️ **Walang impormasyon sa database para sa query na iyon.**\n\nAko ay SPARTA, isang campus assistant para sa **BSU Lipa** lamang. Kaya kong sagutin ang tungkol sa:\n\n**👥 Mga Tao** - Mga guro, kawani, opisyal\n**📍 Mga Lokasyon** - Mga gusali at silid\n**📅 Mga Anunsyo** - Pinakabagong balita\n**🏛️ Kasaysayan** - BSU Lipa na nakaraan\n**🎓 Mga Organisasyon** - Mga estudyanteng grupo\n\nAno ang gusto mong malaman tungkol sa campus?"
-            : "⚠️ **No information found in the database for that query.**\n\nI'm SPARTA, a campus assistant for **BSU Lipa** only. I can help with:\n\n**👥 People** - Faculty, staff, and officials\n**📍 Locations** - Buildings and rooms\n**📅 Announcements** - Latest campus news\n**🏛️ History** - BSU Lipa background\n**🎓 Organizations** - Student groups\n\nWhat would you like to know about the campus?";
+            ? "⚠️ **Walang impormasyon sa database para sa query na iyon.**\n\nAko ay SPARTA, isang campus assistant para sa **BSU Lipa** lamang. Kaya kong sagutin ang tungkol sa:\n\n**👥 Mga Tao** - Mga itinalagang opisyal\n**📍 Mga Lokasyon** - Mga gusali at silid\n**🏛️ Kasaysayan** - BSU Lipa na nakaraan\n**🎓 Mga Organisasyon** - Mga estudyanteng organisasyon\n\nAno ang gusto mong malaman tungkol sa campus?"
+            : "⚠️ **No information found in the database for that query.**\n\nI'm SPARTA, a campus assistant for **BSU Lipa** only. I can help with:\n\n**👥 People** - Designated officials\n**📍 Locations** - Buildings and rooms\n**🏛️ History** - BSU Lipa background\n**🎓 Organizations** - Student organization\n\nWhat would you like to know about the campus?";
     }
 
     // ── Chat lock — prevents sending while a response is pending ──────────

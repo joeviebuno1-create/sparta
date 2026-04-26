@@ -23,20 +23,6 @@ import json
 import numpy as np
 from difflib import SequenceMatcher
 
-# ── Module-level embedding cache ──────────────────────────────────────────────
-# Stores { doc_text: tensor } so each unique document is encoded only once
-_EMBEDDING_CACHE: dict = {}
-
-def _cached_encode(model, text: str):
-    """Encode text with the model, returning a cached tensor if available."""
-    if text in _EMBEDDING_CACHE:
-        return _EMBEDDING_CACHE[text]
-    if len(_EMBEDDING_CACHE) >= 2000:
-        _EMBEDDING_CACHE.clear()   # flush when too large — no global needed
-    tensor = model.encode(text, convert_to_tensor=True)
-    _EMBEDDING_CACHE[text] = tensor
-    return tensor
-
 
 # ─── College / department constants (module-level so always available) ─────────
 
@@ -270,8 +256,13 @@ class EnhancedDatabaseRAG:
                 'keywords': ['history', 'when', 'founded', 'established', 'year', 'past',
                              'historical', 'timeline', 'milestone', 'origin', 'began',
                              'started', 'created', 'inception', 'background', 'heritage',
-                             'legacy', 'tradition', 'evolution'],
-                'question_words': ['when', 'what year', 'how long'],
+                             'legacy', 'tradition', 'evolution',
+                             # Tagalog / Filipino
+                             'kasaysayan', 'naitatag', 'itinatag', 'nagsimula', 'taon',
+                             'nagtatag', 'pagkakatatag', 'nakaraan', 'milestones',
+                             'major milestone', 'major milestones', 'achievements',
+                             'republic act', 'batas'],
+                'question_words': ['when', 'what year', 'how long', 'ano ang', 'kailan'],
                 'retrieval_strategy': 'temporal_ordered',
                 'max_results': 5,
                 'similarity_threshold': 0.28
@@ -347,11 +338,27 @@ class EnhancedDatabaseRAG:
             # Tagalog / Filipino
             r'\bsino ang\b': 'who is',
             r'\bsino na ang\b': 'who is',
+            r'\bsino si\b': 'who is',
             r'\bsaan ang\b': 'where is',
             r'\bano ang\b': 'what is',
             r'\bipaalam\b': 'tell me about',
             r'\bkung sino\b': 'who is',
             r'\bkung saan\b': 'where is',
+            # History-specific Tagalog
+            r'\bkasaysayan\b': 'history',
+            r'\bnaitatag\b': 'founded',
+            r'\bitinatag\b': 'founded',
+            r'\bnagtatag\b': 'established',
+            r'\bnagsimula\b': 'started',
+            r'\bpagkakatatag\b': 'founding',
+            r'\bnakaraan\b': 'history',
+            r'\bmajor milestone\b': 'milestone',
+            r'\bmajor milestones\b': 'milestones',
+            r'\bkailan\b': 'when',
+            r'\bng bsu\b': 'of bsu',
+            # Honorific normalizations
+            r"\bma'am\b": 'maam',
+            r'\bma am\b': 'maam',
         }
 
     def normalize_query(self, query: str) -> str:
@@ -685,7 +692,9 @@ class EnhancedDatabaseRAG:
         use_embeddings = (self.embedding_model is not None) and (not strong_entity_query)
         if use_embeddings:
             try:
-                query_embedding = _cached_encode(self.embedding_model, original_query)
+                query_embedding = self.embedding_model.encode(
+                    original_query, convert_to_tensor=True
+                )
             except Exception as e:
                 print(f"Embedding error: {e}")
                 use_embeddings = False
@@ -698,7 +707,7 @@ class EnhancedDatabaseRAG:
             semantic_score = 0.0
             if use_embeddings:
                 try:
-                    doc_emb = _cached_encode(self.embedding_model, doc_text)
+                    doc_emb = self.embedding_model.encode(doc_text, convert_to_tensor=True)
                     semantic_score = float(util.cos_sim(query_embedding, doc_emb)[0][0])
                 except Exception:
                     semantic_score = 0.0
@@ -912,7 +921,35 @@ class EnhancedDatabaseRAG:
                 return results
 
             elif intent == 'history_query':
-                return db.query(models.History).order_by(models.History.year).all()
+                all_history = db.query(models.History).order_by(models.History.year).all()
+
+                # ── Try to narrow by keywords in title/description ─────────
+                # Extract meaningful words from query (strip stop words + Filipino particles)
+                stop = {'ano', 'ang', 'ng', 'sa', 'mga', 'na', 'at', 'the', 'is',
+                        'of', 'a', 'an', 'in', 'on', 'about', 'what', 'tell',
+                        'me', 'bsu', 'lipa', 'university', 'history', 'when'}
+                raw_words = [
+                    w for w in re.sub(r'[^\w\s]', '', original_query.lower()).split()
+                    if w not in stop and len(w) > 2
+                ]
+
+                if raw_words:
+                    # Score each history record by how many query words appear
+                    def history_score(h):
+                        text = (h.title + ' ' + h.description).lower()
+                        return sum(1 for w in raw_words if w in text)
+
+                    scored = [(h, history_score(h)) for h in all_history]
+                    best_score = max(s for _, s in scored) if scored else 0
+
+                    if best_score > 0:
+                        # Return records that matched at least one keyword, best first
+                        matched = [(h, s) for h, s in scored if s > 0]
+                        matched.sort(key=lambda x: x[1], reverse=True)
+                        return [h for h, _ in matched]
+
+                # Fallback — return all records so scorer can rank them
+                return all_history
 
             elif intent == 'announcement_query':
                 query = db.query(models.Announcement).order_by(
@@ -1207,6 +1244,15 @@ class EnhancedDatabaseRAG:
         elif intent == 'location_query':
             return self.format_location_response(doc, original_query, score, lang)
         elif intent == 'history_query':
+            # Show list when query implies multiple records (milestones, timeline, history)
+            PLURAL_TRIGGERS = ['milestone', 'milestones', 'timeline', 'all', 'list',
+                               'history', 'kasaysayan', 'nakaraan', 'achievements']
+            wants_list = (
+                len(context) > 1 and
+                any(t in original_query.lower() for t in PLURAL_TRIGGERS)
+            )
+            if wants_list:
+                return self.format_history_list(context, lang)
             return self.format_history_response(doc, original_query, score, lang)
         elif intent == 'announcement_query':
             if is_list and len(context) > 1:
@@ -1382,6 +1428,24 @@ class EnhancedDatabaseRAG:
             f"{description}\n\n"
             f"Would you like to know more about the university's history or milestones?"
         )
+
+    def format_history_list(self, context: List[Tuple[Any, float]], lang: str = 'en') -> str:
+        """Show multiple history records (e.g. when user asks for milestones/timeline)."""
+        if lang == 'tl':
+            response = f"Narito ang mga pangunahing kasaysayan ng BSU Lipa! 🏛️\n\n"
+            for doc, _ in context:
+                _title_tl = (getattr(doc, 'title_tl', None) or '').strip()
+                _desc_tl  = (getattr(doc, 'description_tl', None) or '').strip()
+                title = _title_tl or doc.title
+                desc  = _desc_tl  or doc.description
+                response += f"**{doc.year} — {title}**\n{desc}\n\n"
+            response += "Gusto mo bang malaman ang higit pa tungkol sa kasaysayan ng unibersidad?"
+            return response.strip()
+        response = f"Here are BSU Lipa's key historical milestones! 🏛️\n\n"
+        for doc, _ in context:
+            response += f"**{doc.year} — {doc.title}**\n{doc.description}\n\n"
+        response += "Would you like to know more about any specific milestone?"
+        return response.strip()
 
     def format_announcement_response(self, doc: Any, query: str, score: float, lang: str = 'en') -> str:
         date_str = doc.date_posted.strftime('%B %d, %Y') if doc.date_posted else ('Kamakailan' if lang == 'tl' else 'Recently')
