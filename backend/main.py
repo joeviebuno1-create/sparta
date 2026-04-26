@@ -551,89 +551,103 @@ async def get_active_popups(db: Session = Depends(get_db)):
 @app.get("/api/quick-questions")
 async def get_quick_questions(intent: str = "general_info", db: Session = Depends(get_db)):
     """
-    Returns dynamic quick questions built from real database content.
-    intent param lets frontend request intent-specific suggestions.
+    Returns dynamic quick questions built entirely from real database content.
+    Response: { "primary": [...], "explore": [...] }
+
+    Two intents are handled by the frontend with hardcoded sets and never hit this endpoint:
+      - startup               (fixed 5-button welcome row)
+      - authority_query_college_select  (fixed 5-college-picker row)
+
+    All other intents are served from DB data here.
     """
     import random
-    questions = []
+
+    def sample(lst, n):
+        return random.sample(lst, min(n, len(lst)))
+
+    def truncate(s, n=32):
+        return s if len(s) <= n else s[:n - 1] + "…"
 
     try:
-        # ── Intent-specific dynamic questions ─────────────────────────
-        if intent == 'authority_query':
-            # Pick 3 random authorities
-            authorities = db.query(models.Authority).all()
-            picks = random.sample(authorities, min(3, len(authorities)))
-            for auth in picks:
-                questions.append({
-                    "text": f"👤 Who is {auth.name}?",
-                    "query": f"Who is {auth.name}?",
-                    "category": "authority"
-                })
-            questions.append({"text": "🏛️ Who is the Chancellor?", "query": "Who is the chancellor of BSU Lipa?", "category": "authority"})
-            questions.append({"text": "👥 All university officials", "query": "Who are all the university officials?", "category": "authority"})
+        # ── Load DB data ───────────────────────────────────────────────
+        authorities   = db.query(models.Authority).all()
+        locations     = db.query(models.RoomLocation).filter(
+                            ~models.RoomLocation.name.ilike('%emergency%')).all()
+        orgs          = db.query(models.Organization).all()
+        announcements = db.query(models.Announcement).order_by(
+                            models.Announcement.date_posted.desc()).limit(20).all()
+        histories     = db.query(models.History).order_by(
+                            models.History.year.asc()).all()
 
-        elif intent == 'location_query':
-            # Pick 3 random locations
-            locations = db.query(models.RoomLocation).filter(
-                ~models.RoomLocation.name.ilike('%emergency%')
-            ).all()
-            picks = random.sample(locations, min(3, len(locations)))
-            for loc in picks:
-                questions.append({
-                    "text": f"📍 Where is {loc.name}?",
-                    "query": f"Where is the {loc.name}?",
-                    "category": "location"
-                })
-            questions.append({"text": "🗺️ Open Campus Navigator", "query": "Show me the campus map", "category": "location"})
+        # ── Per-category question builders ─────────────────────────────
+        def authority_qs(n=3):
+            return [{"text": f"👤 {truncate(a.name)}", "query": f"Who is {a.name}?", "category": "authority"}
+                    for a in sample(authorities, n)]
 
-        elif intent == 'organization_query':
-            # Show all orgs as quick questions
-            orgs = db.query(models.Organization).all()
-            picks = random.sample(orgs, min(4, len(orgs)))
-            for org in picks:
-                # Auto-generate acronym
+        def location_qs(n=3):
+            return [{"text": f"📍 {truncate(loc.name)}", "query": f"Where is the {loc.name}?", "category": "location"}
+                    for loc in sample(locations, n)]
+
+        def org_qs(n=3):
+            qs = []
+            for org in sample(orgs, n):
                 words = org.name.split()
-                acronym = ''.join(w[0].upper() for w in words if w)
-                label = acronym if len(acronym) <= 6 else org.name[:20]
-                questions.append({
-                    "text": f"🎓 {label}",
-                    "query": f"Tell me about {org.name} organization",
-                    "category": "organization"
-                })
-            questions.append({"text": "📋 List all organizations", "query": "List all organizations", "category": "organization"})
+                label = ''.join(w[0].upper() for w in words if w)
+                label = label if len(label) <= 8 else truncate(org.name, 20)
+                qs.append({"text": f"🏆 {label}", "query": f"Tell me about {org.name} organization", "category": "organization"})
+            return qs
 
-        elif intent == 'announcement_query':
-            # Show latest 4 announcements
-            announcements = db.query(models.Announcement).order_by(
-                models.Announcement.date_posted.desc()
-            ).limit(4).all()
-            for ann in announcements:
-                title = ann.title if len(ann.title) <= 30 else ann.title[:27] + "..."
-                questions.append({
-                    "text": f"📢 {title}",
-                    "query": f"Tell me about the announcement: {ann.title}",
-                    "category": "announcement"
-                })
+        def announcement_qs(n=3):
+            return [{"text": f"📢 {truncate(ann.title)}", "query": f"Tell me about the announcement: {ann.title}", "category": "announcement"}
+                    for ann in sample(announcements, n)]
 
-        # ── Fallback — general or empty DB ────────────────────────────
-        if not questions:
-            questions = [
-                {"text": "🎓 Who is the dean?", "query": "Who is the dean?", "category": "authority"},
-                {"text": "📍 Where is the library?", "query": "Where is the library?", "category": "location"},
-                {"text": "🏛️ BSU Lipa history", "query": "Tell me about BSU Lipa history", "category": "history"},
-                {"text": "📢 Latest announcements", "query": "What are the latest announcements?", "category": "announcement"},
-            ]
+        def history_qs(n=2):
+            return [{"text": f"🏛️ {truncate(h.title)}", "query": f"Tell me about {h.title}", "category": "history"}
+                    for h in sample(histories, n)]
 
-        return questions
+        # ── Build primary + explore per intent ─────────────────────────
+
+        if intent == "authority_query":
+            primary = authority_qs(4)
+            explore = location_qs(2) + announcement_qs(1) + org_qs(1) + history_qs(1)
+
+        elif intent in ("location_query", "navigation_query"):
+            primary = location_qs(4)
+            explore = authority_qs(2) + announcement_qs(1) + org_qs(1) + history_qs(1)
+
+        elif intent == "organization_query":
+            primary = org_qs(4)
+            if orgs:
+                primary.append({"text": "📋 All organizations", "query": "List all student organizations", "category": "organization"})
+            explore = authority_qs(1) + location_qs(2) + announcement_qs(1) + history_qs(1)
+
+        elif intent == "announcement_query":
+            primary = announcement_qs(4)
+            explore = authority_qs(2) + location_qs(1) + org_qs(1) + history_qs(1)
+
+        elif intent == "history_query":
+            primary = history_qs(min(4, len(histories)))
+            explore = authority_qs(2) + location_qs(1) + org_qs(1) + announcement_qs(1)
+
+        else:  # general_info / fallback
+            primary = authority_qs(1) + location_qs(1) + org_qs(1) + announcement_qs(1) + history_qs(1)
+            random.shuffle(primary)
+            explore = []
+
+        random.shuffle(explore)
+        return {"primary": primary, "explore": explore[:4]}
 
     except Exception as e:
-        # Return safe fallback on any error
-        return [
-            {"text": "🎓 Who is the dean?", "query": "Who is the dean?", "category": "authority"},
-            {"text": "📍 Where is the library?", "query": "Where is the library?", "category": "location"},
-            {"text": "🏛️ BSU Lipa history", "query": "Tell me about BSU Lipa history", "category": "history"},
-            {"text": "📢 Latest announcements", "query": "What are the latest announcements?", "category": "announcement"},
-        ]
+        print(f"[quick-questions] Error: {e}")
+        return {
+            "primary": [
+                {"text": "🎓 Who is the dean?",       "query": "Who is the dean?",                   "category": "authority"},
+                {"text": "📍 Where is the library?",  "query": "Where is the library?",              "category": "location"},
+                {"text": "🏛️ BSU Lipa history",       "query": "Tell me about BSU Lipa history",     "category": "history"},
+                {"text": "📢 Latest announcements",    "query": "What are the latest announcements?", "category": "announcement"},
+            ],
+            "explore": []
+        }
 
 # ============================================
 # ADMIN AUTH ENDPOINTS (PUBLIC - no cookie needed)

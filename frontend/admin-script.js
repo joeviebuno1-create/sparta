@@ -782,6 +782,7 @@ function displayLocations(locations) {
             <td>${relatedPaths.length} path(s)</td>
             <td>
                 <button class="btn btn-small" onclick="viewLocationOn3D(${loc.id})">👁️ View</button>
+                <button class="btn btn-small" style="background:#f59e0b;color:#fff;" onclick="editLocation(${loc.id})">✏️ Edit</button>
                 <button class="btn btn-small btn-danger" onclick="deleteLocation(${loc.id})">🗑️</button>
             </td>
         `;
@@ -811,6 +812,45 @@ function populateLocationDropdowns() {
 function filterLocations(type) {
     currentFilter = type;
     displayLocations(allLocations);
+}
+
+async function editLocation(locationId) {
+    const loc = allLocations.find(l => l.id === locationId);
+    if (!loc) return;
+
+    // Set currentLocationId so the form knows it's an edit
+    currentLocationId = locationId;
+
+    // Populate form fields
+    document.getElementById('loc_name').value = loc.name || '';
+    document.getElementById('loc_building').value = loc.building || '';
+    document.getElementById('loc_floor').value = loc.floor ?? 0;
+    document.getElementById('loc_type').value = loc.type || 'room';
+    document.getElementById('loc_icon').value = loc.icon || '';
+    document.getElementById('loc_capacity').value = loc.capacity || '';
+    document.getElementById('loc_description').value = loc.description || '';
+
+    // Populate coordinates
+    const coords = loc.coordinates || {};
+    document.getElementById('loc_coord_x').value = coords.x ?? loc.coord_x ?? 0;
+    document.getElementById('loc_coord_y').value = coords.y ?? loc.coord_y ?? 0;
+    document.getElementById('loc_coord_z').value = coords.z ?? loc.coord_z ?? 0;
+
+    // Scroll to the form and highlight it
+    const form = document.getElementById('locationForm');
+    if (form) {
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        form.style.border = '2px solid #f59e0b';
+        form.style.borderRadius = '12px';
+        form.style.padding = '1rem';
+        setTimeout(() => { form.style.border = ''; form.style.borderRadius = ''; form.style.padding = ''; }, 3000);
+    }
+
+    // Update submit button text
+    const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
+    if (submitBtn) submitBtn.textContent = '💾 Update Location';
+
+    showAlert('navAlert', `✏️ Editing: ${loc.name} — update the form and click Save.`, 'info');
 }
 
 async function deleteLocation(locationId) {
@@ -1369,8 +1409,8 @@ function initNavigationTab() {
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.minDistance = 20;
-    controls.maxDistance = 400;
+    controls.minDistance = 1;
+    controls.maxDistance = Infinity;
     controls.maxPolarAngle = Math.PI / 2.1;
     
     // Load GLB model
@@ -1691,8 +1731,11 @@ async function handleLocationFormSubmit(e) {
         console.log('=== SAVING LOCATION ===');
         console.log('Location data:', locationData);
         
-        // Save location first
-        const locResponse = await apiFetch('/locations', { method: 'POST', body: JSON.stringify(locationData) });
+        // Save location — POST for new, PUT for edit
+        const isEdit = currentLocationId !== null;
+        const locUrl = isEdit ? `/locations/${currentLocationId}` : '/locations';
+        const locMethod = isEdit ? 'PUT' : 'POST';
+        const locResponse = await apiFetch(locUrl, { method: locMethod, body: JSON.stringify(locationData) });
         
         if (!locResponse.ok) {
             const errorData = await locResponse.json().catch(() => ({}));
@@ -1782,6 +1825,9 @@ async function handleLocationFormSubmit(e) {
         
         // Reset form and state
         document.getElementById('locationForm').reset();
+        currentLocationId = null;
+        const submitBtn = document.getElementById('locationForm')?.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.textContent = '📍 Save Location';
         currentPathMode = 'none';
         document.querySelector('input[value="none"]').checked = true;
         changePathMode('none');
@@ -2375,13 +2421,16 @@ async function deleteMember(memberId, orgId) {
         if (response.ok) {
             showAlert('memberAlert', '✅ Member deleted successfully!', 'success');
             loadMembers(orgId);
-            loadOrganizations(); // Refresh to update member count
+            loadOrganizations();
         } else {
-            showAlert('memberAlert', '❌ Error deleting member', 'error');
+            const errData = await response.json().catch(() => ({}));
+            const msg = errData.detail || `HTTP ${response.status}`;
+            console.error('Delete member failed:', msg);
+            showAlert('memberAlert', `❌ Error deleting member: ${msg}`, 'error');
         }
     } catch (error) {
         console.error('Error deleting member:', error);
-        showAlert('memberAlert', '❌ Error deleting member', 'error');
+        showAlert('memberAlert', `❌ Error: ${error.message}`, 'error');
     }
 }
 

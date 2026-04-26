@@ -673,6 +673,21 @@
             transition: all 0.1s ease;
         }
 
+        /* Inline divider label between primary and explore sections */
+        .quick-questions-divider {
+            flex-shrink: 0;
+            align-self: center;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: var(--primary-red);
+            opacity: 0.5;
+            white-space: nowrap;
+            padding: 0 6px;
+            pointer-events: none;
+            user-select: none;
+        }
+
         .typing-indicator {
             display: none;
             padding: 16px 20px;

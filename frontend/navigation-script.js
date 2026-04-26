@@ -459,8 +459,8 @@ function init3DScene() {
     controls=new THREE.OrbitControls(camera,renderer.domElement);
     controls.enableDamping=true; 
     controls.dampingFactor=.05; 
-    controls.minDistance=50; 
-    controls.maxDistance=500;
+    controls.minDistance=1;
+    controls.maxDistance=Infinity;
     
     scene.add(new THREE.AmbientLight(0xffffff,.6));
     const dl=new THREE.DirectionalLight(0xffffff,.8); 

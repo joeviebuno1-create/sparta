@@ -174,10 +174,12 @@
             background: linear-gradient(135deg, #c41e3a, #9b1530);
             color: #fff; border: none; border-radius: 50px;
             padding: 8px 14px 8px 10px; font-size: 0.82rem; font-weight: 600;
-            cursor: pointer; box-shadow: 0 4px 14px rgba(196,30,58,0.35);
+            cursor: grab; box-shadow: 0 4px 14px rgba(196,30,58,0.35);
             align-items: center; gap: 6px; transition: transform 0.2s;
+            user-select: none; touch-action: none;
         }
         #spNotifBell:hover { transform: scale(1.05); }
+        #spNotifBell.dragging { cursor: grabbing; transform: scale(1.08); opacity: 0.9; }
         #spNotifBell.visible { display: flex; }
         .sp-bell-badge {
             background: rgba(255,255,255,0.3); border-radius: 99px;
@@ -229,7 +231,52 @@
         bell.innerHTML = `🔔 <span class="sp-bell-badge" id="spBellCount">0</span>`;
         document.body.appendChild(bell);
 
-        // Overlay
+        // Make bell draggable
+        let isDragging = false, dragStartX, dragStartY, bellStartX, bellStartY, didDrag = false;
+        bell.addEventListener('mousedown', (e) => {
+            isDragging = true; didDrag = false;
+            const rect = bell.getBoundingClientRect();
+            dragStartX = e.clientX; dragStartY = e.clientY;
+            bellStartX = rect.left; bellStartY = rect.top;
+            bell.classList.add('dragging');
+            e.preventDefault();
+        });
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const dx = e.clientX - dragStartX, dy = e.clientY - dragStartY;
+            if (Math.abs(dx) > 4 || Math.abs(dy) > 4) didDrag = true;
+            const newLeft = Math.max(0, Math.min(window.innerWidth - bell.offsetWidth, bellStartX + dx));
+            const newTop = Math.max(0, Math.min(window.innerHeight - bell.offsetHeight, bellStartY + dy));
+            bell.style.left = newLeft + 'px'; bell.style.top = newTop + 'px';
+            bell.style.right = 'auto';
+        });
+        document.addEventListener('mouseup', () => {
+            if (isDragging) { isDragging = false; bell.classList.remove('dragging'); }
+        });
+        // Touch drag support
+        bell.addEventListener('touchstart', (e) => {
+            const t = e.touches[0];
+            const rect = bell.getBoundingClientRect();
+            isDragging = true; didDrag = false;
+            dragStartX = t.clientX; dragStartY = t.clientY;
+            bellStartX = rect.left; bellStartY = rect.top;
+            bell.classList.add('dragging');
+        }, { passive: true });
+        document.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            const t = e.touches[0];
+            const dx = t.clientX - dragStartX, dy = t.clientY - dragStartY;
+            if (Math.abs(dx) > 4 || Math.abs(dy) > 4) didDrag = true;
+            const newLeft = Math.max(0, Math.min(window.innerWidth - bell.offsetWidth, bellStartX + dx));
+            const newTop = Math.max(0, Math.min(window.innerHeight - bell.offsetHeight, bellStartY + dy));
+            bell.style.left = newLeft + 'px'; bell.style.top = newTop + 'px';
+            bell.style.right = 'auto';
+        }, { passive: true });
+        document.addEventListener('touchend', () => {
+            if (isDragging) { isDragging = false; bell.classList.remove('dragging'); }
+        });
+        // Only open popup if it wasn't a drag
+        bell.onclick = (e) => { if (!didDrag) openPopup(); };
         const overlay = document.createElement('div');
         overlay.id = 'spPopupOverlay';
         overlay.onclick = (e) => { if (e.target === overlay) closePopup(); };

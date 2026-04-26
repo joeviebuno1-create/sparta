@@ -48,89 +48,45 @@ const chatMessages = document.getElementById('chatMessages');
         });
     }
 
-    // DYNAMIC QUICK QUESTIONS BASED ON CONTEXT
-    const contextualQuestions = {
-        'authority_query': [
-            { text: '🎓 College Deans', query: 'Who is the dean?' },
-            { text: '🏛️ Who is the Chancellor?', query: 'Who is the chancellor of BSU Lipa?' },
-            { text: '🏫 Who is the President?', query: 'Who is the university president?' },
-            { text: '👥 All university officials', query: 'Who are all the university officials?' },
-        ],
-        'authority_query_college_select': [
-            { text: '🏗️ CET Dean', query: 'Who is the dean of College of Engineering Technology?' },
-            { text: '💻 CICS Dean', query: 'Who is the dean of College of Informatics and Computing Sciences?' },
-            { text: '🎨 CAS Dean', query: 'Who is the dean of College of Arts and Sciences?' },
-            { text: '💼 CABE Dean', query: 'Who is the dean of College of Accountancy Business and Economics?' },
-            { text: '👨‍🏫 CTE Dean', query: 'Who is the dean of College of Teacher Education?' }
-        ],
-        'announcement_query': [
-            { text: '📢 More announcements', query: 'Show me more recent announcements' },
-            { text: '🎓 Academic announcements', query: 'Any academic announcements?' },
-            { text: '🎉 Campus events', query: 'What campus events are happening?' }
-        ],
-        'history_query': [
-            { text: '📜 More history', query: 'Tell me more about BSU history' },
-            { text: '🏛️ Major milestones', query: 'What are the major milestones of BSU?' },
-            { text: '🎓 Founding story', query: 'How was BSU founded?' }
-        ],
-        'organization_query': [
-            { text: '📋 All organizations', query: 'List all organizations' },
-            { text: '🏆 Tell me about CABE org', query: 'Tell me about CABE organization' },
-            { text: '🏆 Tell me about JME org', query: 'Tell me about JME organization' },
-            { text: '🏆 Tell me about SSC org', query: 'Tell me about SSC organization' },
-        ],  
-        'location_query': [
-            { text: '📍 Where is the computer lab 1?', query: 'Where is the computer lab 1?' },
-            { text: '📍 Where is the computer lab 2?', query: 'Where is the computer lab 2?' }
-        ],
-        'general_info': [
-            { text: '🎓 College deans', query: 'Who is the dean?' },
-            { text: '📍 Where is the speech lab?', query: 'Where is the speech lab?' },
-            { text: '📢 Announcements', query: 'What are the latest announcements?' },
-            { text: '🏛️ BSU history', query: 'Tell me about BSU Lipa history' }
-        ],
-        'navigation_query': [
-            { text: '📍 Where is the computer lab 1?', query: 'Where is the computer lab 1?' }
-        ]
-    };
+    // ── Two hardcoded sets that never change ──────────────────────────────────
 
-    // Default questions — used as fallback before DB loads
-    let defaultQuestions = [
-        { text: '🎓 Who is the dean?', query: 'Who is the dean?' },
-        { text: '🏛️ Who is the Chancellor?', query: 'Who is the chancellor of BSU Lipa?' },
-        { text: '📍 Where is the speech lab?', query: 'Where is the speech lab?' },
-        { text: '🏆 Tell me about SETS org', query: 'Tell me about SETS organization' },
-        { text: '🏛️ University history', query: 'Tell me about BSU Lipa history' }
+    // 1) Startup — always shown on first load (Image 1)
+    const STARTUP_QUESTIONS = [
+        { text: '🎓 Who is the dean?',          query: 'Who is the dean?' },
+        { text: '🏛️ Who is the Chancellor?',    query: 'Who is the chancellor of BSU Lipa?' },
+        { text: '📍 Where is the speech lab?',  query: 'Where is the speech lab?' },
+        { text: '🏆 Tell me about SETS org',    query: 'Tell me about SETS organization' },
+        { text: '🏛️ University history',        query: 'Tell me about BSU Lipa history' }
     ];
 
-    // Fetch dynamic quick questions from database based on intent
-    async function loadDynamicQuestions(intent = 'general_info') {
-        try {
-            const isDevTunnel = (window.location.hostname.includes('devtunnels.ms') ||
-                window.location.hostname.includes('app.github.dev') ||
-                window.location.hostname.includes('trycloudflare.com') ||
-                window.location.hostname.includes('ngrok-free.app') ||
-                window.location.hostname.includes('ngrok.io'));
-            const BASE = isDevTunnel
-                ? `${window.location.protocol}//${window.location.hostname}`
-                : `${window.location.protocol}//${window.location.hostname}:8000`;
+    // 2) College dean picker — shown when chatbot asks which college (Image 2)
+    const COLLEGE_PICKER_QUESTIONS = [
+        { text: '🏗️ CET Dean',   query: 'Who is the dean of College of Engineering Technology?' },
+        { text: '💻 CICS Dean',  query: 'Who is the dean of College of Informatics and Computing Sciences?' },
+        { text: '🎨 CAS Dean',   query: 'Who is the dean of College of Arts and Sciences?' },
+        { text: '💼 CABE Dean',  query: 'Who is the dean of College of Accountancy Business and Economics?' },
+        { text: '👨‍🏫 CTE Dean', query: 'Who is the dean of College of Teacher Education?' }
+    ];
 
-            const response = await fetch(`${BASE}/api/quick-questions?intent=${intent}`);
-            if (!response.ok) return;
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
-            const data = await response.json();
-            if (!data || data.length === 0) return;
-
-            // Render dynamic questions
-            renderQuickQuestions(data.map(q => ({ text: q.text, query: q.query })));
-        } catch (e) {
-            console.log('Using static quick questions:', e.message);
-        }
+    function getApiBase() {
+        const isDevTunnel = (
+            window.location.hostname.includes('devtunnels.ms') ||
+            window.location.hostname.includes('app.github.dev') ||
+            window.location.hostname.includes('trycloudflare.com') ||
+            window.location.hostname.includes('ngrok-free.app') ||
+            window.location.hostname.includes('ngrok.io')
+        );
+        return isDevTunnel
+            ? `${window.location.protocol}//${window.location.hostname}`
+            : `${window.location.protocol}//${window.location.hostname}:8000`;
     }
 
-    // Render a list of questions into the container
+    // Render a list of {text, query} objects into the container
     function renderQuickQuestions(questions) {
         quickQuestionsContainer.innerHTML = '';
+        if (!questions || questions.length === 0) return;
         questions.forEach(q => {
             const btn = document.createElement('button');
             btn.className = 'quick-question-btn';
@@ -140,35 +96,76 @@ const chatMessages = document.getElementById('chatMessages');
         });
     }
 
-    // Update quick questions dynamically based on context
-    function updateQuickQuestions(intent = 'general_info', responseText = '') {
-        // Check if response is asking for college selection (updated detection)
-        const isCollegeSelection = responseText && 
-                                   (responseText.includes('What specific department') ||
-                                    responseText.includes('Which college') ||
-                                    responseText.includes('Which college Dean') ||
-                                    responseText.includes('Which college Head')) &&
-                                   responseText.includes('CET') && 
-                                   responseText.includes('CICS');
-        
-        // If asking for college selection, show college quick questions
-        const effectiveIntent = isCollegeSelection ? 'authority_query_college_select' : intent;
-        const questions = contextualQuestions[effectiveIntent] || defaultQuestions;
-        
+    // Render a small divider label inline between sections
+    function renderSectionDivider(label) {
+        const div = document.createElement('div');
+        div.className = 'quick-questions-divider';
+        div.textContent = label;
+        quickQuestionsContainer.appendChild(div);
+    }
+
+    // Fetch from DB and render; primary questions first, then "Explore more" section
+    async function loadDynamicQuestions(intent) {
+        try {
+            const res = await fetch(`${getApiBase()}/api/quick-questions?intent=${encodeURIComponent(intent)}`);
+            if (!res.ok) return;
+            const data = await res.json();
+
+            // New API shape: { primary: [...], explore: [...] }
+            // Legacy flat-array shape: [...] — handle both
+            const primary = Array.isArray(data) ? data : (data.primary || []);
+            const explore  = Array.isArray(data) ? [] : (data.explore  || []);
+
+            quickQuestionsContainer.innerHTML = '';
+
+            if (primary.length > 0) renderQuickQuestions(primary);
+
+            if (explore.length > 0) {
+                renderSectionDivider('✦ Explore more');
+                // append explore buttons without clearing
+                explore.forEach(q => {
+                    const btn = document.createElement('button');
+                    btn.className = 'quick-question-btn';
+                    btn.textContent = q.text;
+                    btn.onclick = () => sendQuickQuestion(q.query);
+                    quickQuestionsContainer.appendChild(btn);
+                });
+            }
+        } catch (e) {
+            console.warn('[quick-questions] DB fetch failed:', e.message);
+            // Silently fall back to startup questions
+            renderQuickQuestions(STARTUP_QUESTIONS);
+        }
+    }
+
+    // Detect college-picker prompt from bot response text
+    function isCollegePickerResponse(text) {
+        return text &&
+            (text.includes('What specific department') ||
+             text.includes('Which college') ||
+             text.includes('Which college Dean') ||
+             text.includes('Which college Head')) &&
+            text.includes('CET') && text.includes('CICS');
+    }
+
+    // Main entry point — decides which set to show and animates transition
+    function updateQuickQuestions(intent = 'general_info', responseText = '', isStartup = false) {
         // Animate out
         quickQuestionsContainer.style.opacity = '0';
         quickQuestionsContainer.style.transform = 'translateY(10px)';
-        
-        setTimeout(() => {
-            // Clear and rebuild with static contextual questions first
-            renderQuickQuestions(questions);
 
-            // Then enrich with dynamic DB questions (non-blocking)
-            // Only for intents that benefit from DB suggestions
-            const dynamicIntents = ['authority_query', 'location_query',
-                                    'organization_query', 'announcement_query'];
-            if (dynamicIntents.includes(effectiveIntent)) {
-                loadDynamicQuestions(effectiveIntent);
+        setTimeout(async () => {
+            if (isStartup) {
+                // ── Case 1: page load → fixed startup set ─────────────
+                renderQuickQuestions(STARTUP_QUESTIONS);
+
+            } else if (isCollegePickerResponse(responseText)) {
+                // ── Case 2: chatbot asked which college → fixed picker ─
+                renderQuickQuestions(COLLEGE_PICKER_QUESTIONS);
+
+            } else {
+                // ── Case 3: all other responses → fully from DB ────────
+                await loadDynamicQuestions(intent);
             }
 
             // Animate in
@@ -823,10 +820,9 @@ const chatMessages = document.getElementById('chatMessages');
         console.log('Language changed to:', langSelect.value);
     });
 
-    // Initialize with default questions
-    setTimeout(() => {
-        quickQuestionsContainer.style.transition = 'all 0.3s ease';
-    }, 100);
+    // Initialize — show fixed startup questions immediately on page load
+    quickQuestionsContainer.style.transition = 'all 0.3s ease';
+    updateQuickQuestions('general_info', '', true);
 
 
 
@@ -853,8 +849,7 @@ const chatMessages = document.getElementById('chatMessages');
 // ============ EXPOSE GLOBAL FUNCTIONS ============
 // Required because onclick= in HTML needs global scope
 window.sendMessage = sendMessage;
-window.renderQuickQuestions = typeof renderQuickQuestions !== 'undefined' ? renderQuickQuestions : function(){};
-window.loadDynamicQuestions = typeof loadDynamicQuestions !== 'undefined' ? loadDynamicQuestions : function(){};
+window.renderQuickQuestions = renderQuickQuestions;
 window.sendQuickQuestion = sendQuickQuestion;
 window.startVoice = typeof startVoice !== 'undefined' ? startVoice : function(){};
 window.stopSpeaking = typeof stopSpeaking !== 'undefined' ? stopSpeaking : function(){};
