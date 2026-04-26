@@ -25,17 +25,14 @@ from difflib import SequenceMatcher
 
 # ── Module-level embedding cache ──────────────────────────────────────────────
 # Stores { doc_text: tensor } so each unique document is encoded only once
-# across all requests. Cleared automatically if it grows too large.
-_EMBEDDING_CACHE: Dict[str, Any] = {}
-_EMBEDDING_CACHE_MAX = 2000  # max entries before flush
+_EMBEDDING_CACHE: dict = {}
 
 def _cached_encode(model, text: str):
     """Encode text with the model, returning a cached tensor if available."""
     if text in _EMBEDDING_CACHE:
         return _EMBEDDING_CACHE[text]
-    global _EMBEDDING_CACHE
-    if len(_EMBEDDING_CACHE) >= _EMBEDDING_CACHE_MAX:
-        _EMBEDDING_CACHE = {}          # simple flush — avoids unbounded growth
+    if len(_EMBEDDING_CACHE) >= 2000:
+        _EMBEDDING_CACHE.clear()   # flush when too large — no global needed
     tensor = model.encode(text, convert_to_tensor=True)
     _EMBEDDING_CACHE[text] = tensor
     return tensor
