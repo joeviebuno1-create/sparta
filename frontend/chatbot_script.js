@@ -1,8 +1,9 @@
 // ============ GLOBAL API HOST ============
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const CHAT_API_URL = isLocal
-    ? `http://localhost:8000/api/chat`
-    : `https://sparta-production-0acb.up.railway.app/api/chat`;
+const API_BASE = isLocal
+    ? `http://localhost:8000`
+    : `https://sparta-production-0acb.up.railway.app`;
+const CHAT_API_URL = `${API_BASE}/api/chat`;
 
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -50,16 +51,16 @@ const chatMessages = document.getElementById('chatMessages');
 
     // ── Two hardcoded sets that never change ──────────────────────────────────
 
-    // 1) Startup — always shown on first load (Image 1)
+    // 1) Startup — always shown on first load
     const STARTUP_QUESTIONS = [
-        { text: '🎓 Who is the dean?',          query: 'Who is the dean?' },
-        { text: '🏛️ Who is the Chancellor?',    query: 'Who is the chancellor of BSU Lipa?' },
-        { text: '📍 Where is the speech lab?',  query: 'Where is the speech lab?' },
-        { text: '🏆 Tell me about SETS org',    query: 'Tell me about SETS organization' },
-        { text: '🏛️ University history',        query: 'Tell me about BSU Lipa history' }
+        { text: '🎓 Who is the dean?',         query: 'Who is the dean?' },
+        { text: '🏛️ Who is the Chancellor?',   query: 'Who is the chancellor of BSU Lipa?' },
+        { text: '📍 Where is the speech lab?', query: 'Where is the speech lab?' },
+        { text: '🏆 Tell me about SETS org',   query: 'Tell me about SETS organization' },
+        { text: '🏛️ University history',       query: 'Tell me about BSU Lipa history' }
     ];
 
-    // 2) College dean picker — shown when chatbot asks which college (Image 2)
+    // 2) College dean picker — shown when chatbot asks which college
     const COLLEGE_PICKER_QUESTIONS = [
         { text: '🏗️ CET Dean',   query: 'Who is the dean of College of Engineering Technology?' },
         { text: '💻 CICS Dean',  query: 'Who is the dean of College of Informatics and Computing Sciences?' },
@@ -67,21 +68,6 @@ const chatMessages = document.getElementById('chatMessages');
         { text: '💼 CABE Dean',  query: 'Who is the dean of College of Accountancy Business and Economics?' },
         { text: '👨‍🏫 CTE Dean', query: 'Who is the dean of College of Teacher Education?' }
     ];
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    function getApiBase() {
-        const isDevTunnel = (
-            window.location.hostname.includes('devtunnels.ms') ||
-            window.location.hostname.includes('app.github.dev') ||
-            window.location.hostname.includes('trycloudflare.com') ||
-            window.location.hostname.includes('ngrok-free.app') ||
-            window.location.hostname.includes('ngrok.io')
-        );
-        return isDevTunnel
-            ? `${window.location.protocol}//${window.location.hostname}`
-            : `${window.location.protocol}//${window.location.hostname}:8000`;
-    }
 
     // Render a list of {text, query} objects into the container
     function renderQuickQuestions(questions) {
@@ -96,33 +82,33 @@ const chatMessages = document.getElementById('chatMessages');
         });
     }
 
-    // Render a small divider label inline between sections
-    function renderSectionDivider(label) {
-        const div = document.createElement('div');
-        div.className = 'quick-questions-divider';
-        div.textContent = label;
-        quickQuestionsContainer.appendChild(div);
-    }
-
-    // Fetch from DB and render; primary questions first, then "Explore more" section
-    async function loadDynamicQuestions(intent) {
+    // Fetch from DB via Railway and render primary + explore sections
+    async function loadDynamicQuestions(intent = 'general_info') {
         try {
-            const res = await fetch(`${getApiBase()}/api/quick-questions?intent=${encodeURIComponent(intent)}`);
+            const res = await fetch(`${API_BASE}/api/quick-questions?intent=${encodeURIComponent(intent)}`);
             if (!res.ok) return;
             const data = await res.json();
 
-            // New API shape: { primary: [...], explore: [...] }
-            // Legacy flat-array shape: [...] — handle both
+            // Support both new { primary, explore } shape and old flat array
             const primary = Array.isArray(data) ? data : (data.primary || []);
             const explore  = Array.isArray(data) ? [] : (data.explore  || []);
 
             quickQuestionsContainer.innerHTML = '';
 
-            if (primary.length > 0) renderQuickQuestions(primary);
+            primary.forEach(q => {
+                const btn = document.createElement('button');
+                btn.className = 'quick-question-btn';
+                btn.textContent = q.text;
+                btn.onclick = () => sendQuickQuestion(q.query);
+                quickQuestionsContainer.appendChild(btn);
+            });
 
             if (explore.length > 0) {
-                renderSectionDivider('✦ Explore more');
-                // append explore buttons without clearing
+                const divider = document.createElement('div');
+                divider.className = 'quick-questions-divider';
+                divider.textContent = '✦ Explore more';
+                quickQuestionsContainer.appendChild(divider);
+
                 explore.forEach(q => {
                     const btn = document.createElement('button');
                     btn.className = 'quick-question-btn';
@@ -133,46 +119,38 @@ const chatMessages = document.getElementById('chatMessages');
             }
         } catch (e) {
             console.warn('[quick-questions] DB fetch failed:', e.message);
-            // Silently fall back to startup questions
+            // Fall back to startup questions silently
             renderQuickQuestions(STARTUP_QUESTIONS);
         }
     }
 
-    // Detect college-picker prompt from bot response text
-    function isCollegePickerResponse(text) {
-        return text &&
-            (text.includes('What specific department') ||
-             text.includes('Which college') ||
-             text.includes('Which college Dean') ||
-             text.includes('Which college Head')) &&
-            text.includes('CET') && text.includes('CICS');
-    }
+    // Update quick questions after each bot response
+    function updateQuickQuestions(intent = 'general_info', responseText = '') {
+        const isCollegeSelection = responseText &&
+            (responseText.includes('What specific department') ||
+             responseText.includes('Which college') ||
+             responseText.includes('Which college Dean') ||
+             responseText.includes('Which college Head')) &&
+            responseText.includes('CET') && responseText.includes('CICS');
 
-    // Main entry point — decides which set to show and animates transition
-    function updateQuickQuestions(intent = 'general_info', responseText = '', isStartup = false) {
         // Animate out
         quickQuestionsContainer.style.opacity = '0';
         quickQuestionsContainer.style.transform = 'translateY(10px)';
 
         setTimeout(async () => {
-            if (isStartup) {
-                // ── Case 1: page load → fixed startup set ─────────────
-                renderQuickQuestions(STARTUP_QUESTIONS);
-
-            } else if (isCollegePickerResponse(responseText)) {
-                // ── Case 2: chatbot asked which college → fixed picker ─
+            if (isCollegeSelection) {
                 renderQuickQuestions(COLLEGE_PICKER_QUESTIONS);
-
             } else {
-                // ── Case 3: all other responses → fully from DB ────────
                 await loadDynamicQuestions(intent);
             }
-
             // Animate in
             quickQuestionsContainer.style.opacity = '1';
             quickQuestionsContainer.style.transform = 'translateY(0)';
         }, 300);
     }
+
+    // Show startup questions immediately on load (no API call needed)
+    renderQuickQuestions(STARTUP_QUESTIONS);
 
     // Enter key to send
     userInput.addEventListener('keypress', e => {
@@ -820,9 +798,10 @@ const chatMessages = document.getElementById('chatMessages');
         console.log('Language changed to:', langSelect.value);
     });
 
-    // Initialize — show fixed startup questions immediately on page load
-    quickQuestionsContainer.style.transition = 'all 0.3s ease';
-    updateQuickQuestions('general_info', '', true);
+    // Initialize with default questions
+    setTimeout(() => {
+        quickQuestionsContainer.style.transition = 'all 0.3s ease';
+    }, 100);
 
 
 
@@ -847,7 +826,6 @@ const chatMessages = document.getElementById('chatMessages');
     window.openPhotoModal = openPhotoModal;
 
 // ============ EXPOSE GLOBAL FUNCTIONS ============
-// Required because onclick= in HTML needs global scope
 window.sendMessage = sendMessage;
 window.renderQuickQuestions = renderQuickQuestions;
 window.sendQuickQuestion = sendQuickQuestion;
