@@ -145,19 +145,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "http://192.168.1.37:8000",
         "http://localhost:5500",
+        "http://127.0.0.1:8000",
         "http://127.0.0.1:5500",
-        "https://1fz5f30f-8000.asse.devtunnels.ms",
-        "https://benevolent-mooncake-20bd4d.netlify.app",
-        "https://sparta-beryl.vercel.app",
-        "https://sparta-nvlgrokuk-joeviebuno1-creates-projects.vercel.app",
-        "https://sparta-git-main-joeviebuno1-creates-projects.vercel.app",
-        "https://sparta-tvi4okccr-joeviebuno1-creates-projects.vercel.app",
     ],
-    allow_origin_regex="https://.*(devtunnels\\.ms|trycloudflare\\.com|ngrok-free\\.app|ngrok\\.io|vercel\\.app)",
-    allow_credentials=True,   # Required for cookies to work
+    allow_origin_regex=r"https://.*\.(vercel\.app|devtunnels\.ms|trycloudflare\.com|ngrok-free\.app|ngrok\.io)|http://192\.168\.\d+\.\d+:\d+",
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -551,14 +544,11 @@ async def get_active_popups(db: Session = Depends(get_db)):
 @app.get("/api/quick-questions")
 async def get_quick_questions(intent: str = "general_info", db: Session = Depends(get_db)):
     """
-    Returns dynamic quick questions built entirely from real database content.
+    Returns quick questions built entirely from DB content.
     Response: { "primary": [...], "explore": [...] }
 
-    Two intents are handled by the frontend with hardcoded sets and never hit this endpoint:
-      - startup               (fixed 5-button welcome row)
-      - authority_query_college_select  (fixed 5-college-picker row)
-
-    All other intents are served from DB data here.
+    Startup and college-picker sets are handled by the frontend with hardcoded
+    constants and never call this endpoint.
     """
     import random
 
@@ -569,7 +559,6 @@ async def get_quick_questions(intent: str = "general_info", db: Session = Depend
         return s if len(s) <= n else s[:n - 1] + "…"
 
     try:
-        # ── Load DB data ───────────────────────────────────────────────
         authorities   = db.query(models.Authority).all()
         locations     = db.query(models.RoomLocation).filter(
                             ~models.RoomLocation.name.ilike('%emergency%')).all()
@@ -579,7 +568,6 @@ async def get_quick_questions(intent: str = "general_info", db: Session = Depend
         histories     = db.query(models.History).order_by(
                             models.History.year.asc()).all()
 
-        # ── Per-category question builders ─────────────────────────────
         def authority_qs(n=3):
             return [{"text": f"👤 {truncate(a.name)}", "query": f"Who is {a.name}?", "category": "authority"}
                     for a in sample(authorities, n)]
@@ -604,8 +592,6 @@ async def get_quick_questions(intent: str = "general_info", db: Session = Depend
         def history_qs(n=2):
             return [{"text": f"🏛️ {truncate(h.title)}", "query": f"Tell me about {h.title}", "category": "history"}
                     for h in sample(histories, n)]
-
-        # ── Build primary + explore per intent ─────────────────────────
 
         if intent == "authority_query":
             primary = authority_qs(4)
@@ -641,10 +627,10 @@ async def get_quick_questions(intent: str = "general_info", db: Session = Depend
         print(f"[quick-questions] Error: {e}")
         return {
             "primary": [
-                {"text": "🎓 Who is the dean?",       "query": "Who is the dean?",                   "category": "authority"},
-                {"text": "📍 Where is the library?",  "query": "Where is the library?",              "category": "location"},
-                {"text": "🏛️ BSU Lipa history",       "query": "Tell me about BSU Lipa history",     "category": "history"},
-                {"text": "📢 Latest announcements",    "query": "What are the latest announcements?", "category": "announcement"},
+                {"text": "🎓 Who is the dean?",      "query": "Who is the dean?",                   "category": "authority"},
+                {"text": "📍 Where is the library?", "query": "Where is the library?",              "category": "location"},
+                {"text": "🏛️ BSU Lipa history",      "query": "Tell me about BSU Lipa history",     "category": "history"},
+                {"text": "📢 Latest announcements",   "query": "What are the latest announcements?", "category": "announcement"},
             ],
             "explore": []
         }

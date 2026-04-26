@@ -23,6 +23,23 @@ import json
 import numpy as np
 from difflib import SequenceMatcher
 
+# ── Module-level embedding cache ──────────────────────────────────────────────
+# Stores { doc_text: tensor } so each unique document is encoded only once
+# across all requests. Cleared automatically if it grows too large.
+_EMBEDDING_CACHE: Dict[str, Any] = {}
+_EMBEDDING_CACHE_MAX = 2000  # max entries before flush
+
+def _cached_encode(model, text: str):
+    """Encode text with the model, returning a cached tensor if available."""
+    if text in _EMBEDDING_CACHE:
+        return _EMBEDDING_CACHE[text]
+    global _EMBEDDING_CACHE
+    if len(_EMBEDDING_CACHE) >= _EMBEDDING_CACHE_MAX:
+        _EMBEDDING_CACHE = {}          # simple flush — avoids unbounded growth
+    tensor = model.encode(text, convert_to_tensor=True)
+    _EMBEDDING_CACHE[text] = tensor
+    return tensor
+
 
 # ─── College / department constants (module-level so always available) ─────────
 
@@ -671,9 +688,7 @@ class EnhancedDatabaseRAG:
         use_embeddings = (self.embedding_model is not None) and (not strong_entity_query)
         if use_embeddings:
             try:
-                query_embedding = self.embedding_model.encode(
-                    original_query, convert_to_tensor=True
-                )
+                query_embedding = _cached_encode(self.embedding_model, original_query)
             except Exception as e:
                 print(f"Embedding error: {e}")
                 use_embeddings = False
@@ -686,7 +701,7 @@ class EnhancedDatabaseRAG:
             semantic_score = 0.0
             if use_embeddings:
                 try:
-                    doc_emb = self.embedding_model.encode(doc_text, convert_to_tensor=True)
+                    doc_emb = _cached_encode(self.embedding_model, doc_text)
                     semantic_score = float(util.cos_sim(query_embedding, doc_emb)[0][0])
                 except Exception:
                     semantic_score = 0.0
