@@ -215,6 +215,12 @@ class EnhancedDatabaseRAG:
         self.use_embeddings = embedding_model is not None
         self.context_window_size = 5
 
+        # ── Pre-computed doc embedding cache ──────────────────────────────────
+        # key: (table, doc_id) → tensor
+        # Populated once at startup via warm_up_cache(), never re-computed per query
+        self._embedding_cache: Dict[tuple, Any] = {}
+        self._cache_ready = False
+
         if self.use_embeddings:
             try:
                 self.embedding_model.encode("test", convert_to_tensor=False)
@@ -360,6 +366,65 @@ class EnhancedDatabaseRAG:
             r"\bma'am\b": 'maam',
             r'\bma am\b': 'maam',
         }
+
+    def warm_up_cache(self, db: Session) -> None:
+        """
+        Pre-compute and cache embeddings for ALL documents at startup.
+        Called once when the server starts — never runs during a user query.
+        """
+        if not self.embedding_model:
+            return
+
+        print("[cache] Warming up embedding cache...")
+        total = 0
+
+        table_intent_map = [
+            (models.Authority,     'authority_query'),
+            (models.RoomLocation,  'location_query'),
+            (models.History,       'history_query'),
+            (models.Announcement,  'announcement_query'),
+            (models.Organization,  'organization_query'),
+        ]
+
+        for model_class, intent in table_intent_map:
+            try:
+                docs = db.query(model_class).all()
+                if not docs:
+                    continue
+
+                texts = [self._doc_to_text(doc, intent) for doc in docs]
+                embeddings = self.embedding_model.encode(
+                    texts,
+                    convert_to_tensor=True,
+                    batch_size=32,
+                    show_progress_bar=False
+                )
+                table_name = model_class.__tablename__
+
+                for doc, emb in zip(docs, embeddings):
+                    key = (table_name, doc.id)
+                    self._embedding_cache[key] = emb
+                    total += 1
+
+                print(f"[cache] ✓ {table_name}: {len(docs)} docs cached")
+
+            except Exception as e:
+                print(f"[cache] ✗ Failed to cache {model_class.__name__}: {e}")
+
+        self._cache_ready = True
+        print(f"[cache] ✓ Done — {total} embeddings cached")
+
+    def invalidate_cache(self, table_name: str, doc_id: int = None) -> None:
+        """
+        Call this after any admin add/edit/delete so the cache stays fresh.
+        Pass doc_id to remove one entry, or omit to clear the whole table.
+        """
+        if doc_id is not None:
+            self._embedding_cache.pop((table_name, doc_id), None)
+        else:
+            keys = [k for k in self._embedding_cache if k[0] == table_name]
+            for k in keys:
+                del self._embedding_cache[k]
 
     def normalize_query(self, query: str) -> str:
         query = query.strip()
@@ -690,25 +755,56 @@ class EnhancedDatabaseRAG:
         strong_entity_query = has_specific_role or has_first_name
 
         use_embeddings = (self.embedding_model is not None) and (not strong_entity_query)
+
+        # ── Use pre-computed cache if ready, otherwise batch encode ──────────
+        query_embedding = None
+        doc_embeddings_list = None
         if use_embeddings:
             try:
                 query_embedding = self.embedding_model.encode(
                     original_query, convert_to_tensor=True
                 )
+
+                if self._cache_ready:
+                    # Fast path: look up pre-computed embeddings from cache
+                    doc_embeddings_list = []
+                    for doc in documents:
+                        table_name = doc.__class__.__tablename__
+                        cached = self._embedding_cache.get((table_name, doc.id))
+                        if cached is not None:
+                            doc_embeddings_list.append(cached)
+                        else:
+                            # Doc added after startup — encode on the fly and cache it
+                            text = self._doc_to_text(doc, intent)
+                            emb = self.embedding_model.encode(text, convert_to_tensor=True)
+                            self._embedding_cache[(table_name, doc.id)] = emb
+                            doc_embeddings_list.append(emb)
+                else:
+                    # Cache not ready — fall back to batch encode
+                    doc_texts = [self._doc_to_text(doc, intent) for doc in documents]
+                    import torch
+                    doc_embeddings_list = list(self.embedding_model.encode(
+                        doc_texts, convert_to_tensor=True,
+                        batch_size=32, show_progress_bar=False
+                    ))
+
+                import torch
+                doc_embeddings_tensor = torch.stack(doc_embeddings_list)
+                similarities = util.cos_sim(query_embedding, doc_embeddings_tensor)[0]
+
             except Exception as e:
                 print(f"Embedding error: {e}")
                 use_embeddings = False
 
         scored_docs = []
 
-        for doc in documents:
+        for i, doc in enumerate(documents):
             doc_text = self._doc_to_text(doc, intent)
 
             semantic_score = 0.0
-            if use_embeddings:
+            if use_embeddings and doc_embeddings_list is not None:
                 try:
-                    doc_emb = self.embedding_model.encode(doc_text, convert_to_tensor=True)
-                    semantic_score = float(util.cos_sim(query_embedding, doc_emb)[0][0])
+                    semantic_score = float(similarities[i])
                 except Exception:
                     semantic_score = 0.0
 
@@ -1209,13 +1305,15 @@ class EnhancedDatabaseRAG:
     def generate_response(self, original_query: str,
                           context: List[Tuple[Any, float]],
                           intent: str, intent_confidence: float,
-                          lang: str = 'en') -> str:
+                          lang: str = 'en',
+                          entities: Dict = None) -> str:
         """
         Generate response. Always uses original_query for entity re-extraction
         so department info is not lost.
         """
-        # Always extract entities from the ORIGINAL query
-        entities = self.extract_entities(original_query)
+        # Re-use entities passed in from process_query — avoids double extraction
+        if entities is None:
+            entities = self.extract_entities(original_query)
 
         # Clarification check
         if intent == 'authority_query' and self.needs_department_clarification(
@@ -1693,8 +1791,23 @@ class EnhancedDatabaseRAG:
             # Step 4: Context Retrieval (pass original query for scoring)
             context = self.retrieve_context(db, original_query, intent, entities)
 
-            # Step 5: Response Generation (pass original query)
-            response = self.generate_response(original_query, context, intent, intent_confidence, lang)
+            # ── Early exit: no results found — skip generate_response entirely ──
+            if not context:
+                response = self.generate_fallback_response(intent, original_query, lang)
+                return {
+                    'response': response,
+                    'confidence': intent_confidence * 0.35,
+                    'intent': intent,
+                    'suggestions': [],
+                    'context_used': 0,
+                    'entities_found': entities
+                }
+
+            # Step 5: Response Generation (pass original query + already-extracted entities)
+            response = self.generate_response(
+                original_query, context, intent, intent_confidence, lang,
+                entities=entities
+            )
 
             # Step 6: Confidence
             if context:
@@ -1809,5 +1922,37 @@ def process_chat_with_rag(message: str, db: Session,
                        "Please ask me something about BSU Lipa campus!")
         return {'response': off_msg, 'confidence': 1.0, 'intent': 'off_topic', 'suggestions': []}
 
-    rag = EnhancedDatabaseRAG(embedding_model)
+    # ── Reuse the singleton RAG instance (preserves embedding cache) ──────────
+    rag = _get_rag_instance(embedding_model, db)
     return rag.process_query(message, db, forced_lang=forced_lang)
+
+
+# ── Singleton RAG instance — created once, reused on every request ────────────
+_rag_instance: "EnhancedDatabaseRAG" = None
+
+def _get_rag_instance(embedding_model: SentenceTransformer, db: Session) -> "EnhancedDatabaseRAG":
+    """
+    Return the shared RAG instance, creating and warming it up on first call.
+    This ensures the embedding cache is built once at startup and reused forever.
+    """
+    global _rag_instance
+    if _rag_instance is None:
+        print("[rag] Creating singleton RAG instance...")
+        _rag_instance = EnhancedDatabaseRAG(embedding_model)
+        _rag_instance.warm_up_cache(db)
+        print("[rag] Singleton ready.")
+    return _rag_instance
+
+
+def invalidate_rag_cache(table_name: str, doc_id: int = None) -> None:
+    """
+    Call this from main.py after any admin add/edit/delete endpoint
+    so the embedding cache stays in sync with the database.
+
+    Example in main.py:
+        from rag_chatbot import invalidate_rag_cache
+        invalidate_rag_cache('authority', authority_id)
+    """
+    global _rag_instance
+    if _rag_instance is not None:
+        _rag_instance.invalidate_cache(table_name, doc_id)

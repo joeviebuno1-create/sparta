@@ -24,7 +24,7 @@ from sentence_transformers import SentenceTransformer, util
 import numpy as np
 
 # Import RAG-based chatbot
-from rag_chatbot import process_chat_with_rag
+from rag_chatbot import process_chat_with_rag, invalidate_rag_cache
 
 # Import auth helpers
 from auth import verify_session, create_session, clear_session
@@ -722,6 +722,7 @@ async def create_authority(
     db.add(db_authority)
     db.commit()
     db.refresh(db_authority)
+    invalidate_rag_cache('authority', db_authority.id)
     return {"id": db_authority.id, "name": db_authority.name, "photo": db_authority.photo}
 
 @admin_router.put("/authorities/{authority_id}")
@@ -757,6 +758,7 @@ async def update_authority(
     # else: no new file + keep_existing_photo=true → leave photo unchanged
     db.commit()
     db.refresh(db_authority)
+    invalidate_rag_cache('authority', db_authority.id)
     return {"id": db_authority.id, "name": db_authority.name, "photo": db_authority.photo}
 
 @admin_router.delete("/authorities/{authority_id}")
@@ -766,6 +768,7 @@ async def delete_authority(authority_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Authority not found")
     db.delete(db_authority)
     db.commit()
+    invalidate_rag_cache('authority', authority_id)
     return {"message": "Authority deleted successfully"}
 
 # --- HISTORIES ---
@@ -797,6 +800,7 @@ async def create_history(history: HistoryCreate, db: Session = Depends(get_db)):
     db.add(db_history)
     db.commit()
     db.refresh(db_history)
+    invalidate_rag_cache('history', db_history.id)
     return db_history
 
 @admin_router.post("/history")
@@ -812,6 +816,7 @@ async def update_history(history_id: int, history: HistoryCreate, db: Session = 
         setattr(db_history, key, value)
     db.commit()
     db.refresh(db_history)
+    invalidate_rag_cache('history', db_history.id)
     return db_history
 
 @admin_router.put("/history/{history_id}")
@@ -825,6 +830,7 @@ async def delete_history(history_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="History not found")
     db.delete(db_history)
     db.commit()
+    invalidate_rag_cache('history', history_id)
     return {"message": "History deleted successfully"}
 
 @admin_router.delete("/history/{history_id}")
@@ -846,6 +852,7 @@ async def create_announcement(announcement: AnnouncementCreate, db: Session = De
     db.add(db_announcement)
     db.commit()
     db.refresh(db_announcement)
+    invalidate_rag_cache('announcement', db_announcement.id)
     return db_announcement
 
 @admin_router.put("/announcements/{announcement_id}")
@@ -857,6 +864,7 @@ async def update_announcement(announcement_id: int, announcement: AnnouncementCr
         setattr(db_announcement, key, value)
     db.commit()
     db.refresh(db_announcement)
+    invalidate_rag_cache('announcement', db_announcement.id)
     return db_announcement
 
 @admin_router.delete("/announcements/{announcement_id}")
@@ -866,6 +874,7 @@ async def delete_announcement(announcement_id: int, db: Session = Depends(get_db
         raise HTTPException(status_code=404, detail="Announcement not found")
     db.delete(db_announcement)
     db.commit()
+    invalidate_rag_cache('announcement', announcement_id)
     return {"message": "Announcement deleted successfully"}
 
 # --- LOCATIONS ---
@@ -885,6 +894,7 @@ async def create_location(location: RoomLocationCreate, db: Session = Depends(ge
     db.add(db_location)
     db.commit()
     db.refresh(db_location)
+    invalidate_rag_cache('room_location', db_location.id)
     return db_location
 
 @admin_router.put("/locations/{location_id}")
@@ -901,6 +911,7 @@ async def update_location(location_id: int, location: RoomLocationCreate, db: Se
         setattr(db_location, key, value)
     db.commit()
     db.refresh(db_location)
+    invalidate_rag_cache('room_location', db_location.id)
     return db_location
 
 @admin_router.delete("/locations/{location_id}")
@@ -914,6 +925,7 @@ async def delete_location(location_id: int, db: Session = Depends(get_db)):
     ).delete(synchronize_session=False)
     db.delete(db_location)
     db.commit()
+    invalidate_rag_cache('room_location', location_id)
     return {"message": "Location deleted successfully"}
 
 # --- ORGANIZATIONS ---
@@ -975,6 +987,7 @@ async def create_organization(org: OrganizationCreate, db: Session = Depends(get
     db.add(db_org)
     db.commit()
     db.refresh(db_org)
+    invalidate_rag_cache('organization', db_org.id)
     return db_org
 
 @admin_router.put("/organizations/{org_id}")
@@ -987,6 +1000,7 @@ async def update_organization(org_id: int, org: OrganizationCreate, db: Session 
     db_org.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(db_org)
+    invalidate_rag_cache('organization', db_org.id)
     return db_org
 
 @admin_router.post("/organization-members")
@@ -1141,6 +1155,7 @@ async def delete_organization(org_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Organization not found")
     db.delete(db_org)
     db.commit()
+    invalidate_rag_cache('organization', org_id)
     return {"message": "Organization deleted successfully"}
 
 # --- INTENTS ---
