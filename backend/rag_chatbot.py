@@ -1020,7 +1020,6 @@ class EnhancedDatabaseRAG:
                 all_history = db.query(models.History).order_by(models.History.year).all()
 
                 # ── Try to narrow by keywords in title/description ─────────
-                # Extract meaningful words from query (strip stop words + Filipino particles)
                 stop = {'ano', 'ang', 'ng', 'sa', 'mga', 'na', 'at', 'the', 'is',
                         'of', 'a', 'an', 'in', 'on', 'about', 'what', 'tell',
                         'me', 'bsu', 'lipa', 'university', 'history', 'when'}
@@ -1030,16 +1029,30 @@ class EnhancedDatabaseRAG:
                 ]
 
                 if raw_words:
-                    # Score each history record by how many query words appear
                     def history_score(h):
-                        text = (h.title + ' ' + h.description).lower()
-                        return sum(1 for w in raw_words if w in text)
+                        # Combine title + description into searchable text
+                        text = (
+                            (h.title or '') + ' ' +
+                            (h.description or '') + ' ' +
+                            str(h.year or '')
+                        ).lower()
+
+                        score = 0
+                        for w in raw_words:
+                            if w in text:
+                                score += 2          # exact word match
+                            else:
+                                # partial match — e.g. "strengthen" matches "strengthening"
+                                if any(w in token or token in w
+                                       for token in text.split()
+                                       if len(token) > 3):
+                                    score += 1
+                        return score
 
                     scored = [(h, history_score(h)) for h in all_history]
                     best_score = max(s for _, s in scored) if scored else 0
 
                     if best_score > 0:
-                        # Return records that matched at least one keyword, best first
                         matched = [(h, s) for h, s in scored if s > 0]
                         matched.sort(key=lambda x: x[1], reverse=True)
                         return [h for h, _ in matched]
@@ -1784,6 +1797,33 @@ class EnhancedDatabaseRAG:
 
             # Step 2: Intent Detection (on normalized query)
             intent, intent_confidence = self.detect_intent(normalized_query)
+
+            # Step 2.5: If intent is general_info, check if query matches a
+            # history title directly — handles "Tell me about <history title>"
+            if intent == 'general_info' or intent_confidence < 0.4:
+                query_lower = original_query.lower()
+                try:
+                    all_histories = db.query(models.History).all()
+                    for h in all_histories:
+                        title_lower = (h.title or '').lower()
+                        if not title_lower:
+                            continue
+                        # Check if title words appear in query or query words in title
+                        title_words = [w for w in title_lower.split() if len(w) > 3]
+                        query_words = [w for w in query_lower.split() if len(w) > 3]
+                        matches = sum(1 for w in title_words if w in query_lower)
+                        if matches >= max(1, len(title_words) * 0.5):
+                            intent = 'history_query'
+                            intent_confidence = 0.75
+                            break
+                        # Also check reverse: query words in title
+                        rev_matches = sum(1 for w in query_words if w in title_lower)
+                        if rev_matches >= max(1, len(query_words) * 0.5):
+                            intent = 'history_query'
+                            intent_confidence = 0.75
+                            break
+                except Exception as e:
+                    print(f"[intent] history title check failed: {e}")
 
             # Step 3: Entity Extraction (on ORIGINAL query — preserves abbreviations)
             entities = self.extract_entities(original_query)

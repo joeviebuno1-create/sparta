@@ -24,7 +24,7 @@ from sentence_transformers import SentenceTransformer, util
 import numpy as np
 
 # Import RAG-based chatbot
-from rag_chatbot import process_chat_with_rag, invalidate_rag_cache
+from rag_chatbot import process_chat_with_rag
 
 # Import auth helpers
 from auth import verify_session, create_session, clear_session
@@ -567,6 +567,13 @@ async def get_quick_questions(intent: str = "general_info", db: Session = Depend
                             models.Announcement.date_posted.desc()).limit(20).all()
         histories     = db.query(models.History).order_by(
                             models.History.year.asc()).all()
+        # ── Custom intents from DB ────────────────────────────────────────────
+        custom_intents = db.query(models.Intent).filter(
+                            models.Intent.keywords != None,
+                            models.Intent.keywords != '',
+                            models.Intent.response_template != None,
+                            models.Intent.response_template != ''
+                        ).all()
 
         def authority_qs(n=3):
             return [{"text": f"👤 {truncate(a.name)}", "query": f"Who is {a.name}?", "category": "authority"}
@@ -593,30 +600,57 @@ async def get_quick_questions(intent: str = "general_info", db: Session = Depend
             return [{"text": f"🏛️ {truncate(h.title)}", "query": f"Tell me about {h.title}", "category": "history"}
                     for h in sample(histories, n)]
 
+        def custom_intent_qs(n=2):
+            """Build quick question buttons from custom intents in DB."""
+            qs = []
+            for ci in sample(custom_intents, n):
+                # Use first keyword as the query trigger
+                first_keyword = ci.keywords.split(',')[0].strip() if ci.keywords else ci.intent_type
+                # Label: use intent_type formatted nicely
+                label = ci.intent_type.replace('_', ' ').title() if ci.intent_type else first_keyword
+                qs.append({
+                    "text": f"💬 {truncate(label, 28)}",
+                    "query": first_keyword,
+                    "category": "custom"
+                })
+            return qs
+
         if intent == "authority_query":
             primary = authority_qs(4)
             explore = location_qs(2) + announcement_qs(1) + org_qs(1) + history_qs(1)
+            if custom_intents:
+                explore += custom_intent_qs(1)
 
         elif intent in ("location_query", "navigation_query"):
             primary = location_qs(4)
             explore = authority_qs(2) + announcement_qs(1) + org_qs(1) + history_qs(1)
+            if custom_intents:
+                explore += custom_intent_qs(1)
 
         elif intent == "organization_query":
             primary = org_qs(4)
             if orgs:
                 primary.append({"text": "📋 All organizations", "query": "List all student organizations", "category": "organization"})
             explore = authority_qs(1) + location_qs(2) + announcement_qs(1) + history_qs(1)
+            if custom_intents:
+                explore += custom_intent_qs(1)
 
         elif intent == "announcement_query":
             primary = announcement_qs(4)
             explore = authority_qs(2) + location_qs(1) + org_qs(1) + history_qs(1)
+            if custom_intents:
+                explore += custom_intent_qs(1)
 
         elif intent == "history_query":
             primary = history_qs(min(4, len(histories)))
             explore = authority_qs(2) + location_qs(1) + org_qs(1) + announcement_qs(1)
+            if custom_intents:
+                explore += custom_intent_qs(1)
 
         else:  # general_info / fallback
             primary = authority_qs(1) + location_qs(1) + org_qs(1) + announcement_qs(1) + history_qs(1)
+            if custom_intents:
+                primary += custom_intent_qs(min(2, len(custom_intents)))
             random.shuffle(primary)
             explore = []
 
@@ -722,7 +756,6 @@ async def create_authority(
     db.add(db_authority)
     db.commit()
     db.refresh(db_authority)
-    invalidate_rag_cache('authority', db_authority.id)
     return {"id": db_authority.id, "name": db_authority.name, "photo": db_authority.photo}
 
 @admin_router.put("/authorities/{authority_id}")
@@ -758,7 +791,6 @@ async def update_authority(
     # else: no new file + keep_existing_photo=true → leave photo unchanged
     db.commit()
     db.refresh(db_authority)
-    invalidate_rag_cache('authority', db_authority.id)
     return {"id": db_authority.id, "name": db_authority.name, "photo": db_authority.photo}
 
 @admin_router.delete("/authorities/{authority_id}")
@@ -768,7 +800,6 @@ async def delete_authority(authority_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Authority not found")
     db.delete(db_authority)
     db.commit()
-    invalidate_rag_cache('authority', authority_id)
     return {"message": "Authority deleted successfully"}
 
 # --- HISTORIES ---
@@ -800,7 +831,6 @@ async def create_history(history: HistoryCreate, db: Session = Depends(get_db)):
     db.add(db_history)
     db.commit()
     db.refresh(db_history)
-    invalidate_rag_cache('history', db_history.id)
     return db_history
 
 @admin_router.post("/history")
@@ -816,7 +846,6 @@ async def update_history(history_id: int, history: HistoryCreate, db: Session = 
         setattr(db_history, key, value)
     db.commit()
     db.refresh(db_history)
-    invalidate_rag_cache('history', db_history.id)
     return db_history
 
 @admin_router.put("/history/{history_id}")
@@ -830,7 +859,6 @@ async def delete_history(history_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="History not found")
     db.delete(db_history)
     db.commit()
-    invalidate_rag_cache('history', history_id)
     return {"message": "History deleted successfully"}
 
 @admin_router.delete("/history/{history_id}")
@@ -852,7 +880,6 @@ async def create_announcement(announcement: AnnouncementCreate, db: Session = De
     db.add(db_announcement)
     db.commit()
     db.refresh(db_announcement)
-    invalidate_rag_cache('announcement', db_announcement.id)
     return db_announcement
 
 @admin_router.put("/announcements/{announcement_id}")
@@ -864,7 +891,6 @@ async def update_announcement(announcement_id: int, announcement: AnnouncementCr
         setattr(db_announcement, key, value)
     db.commit()
     db.refresh(db_announcement)
-    invalidate_rag_cache('announcement', db_announcement.id)
     return db_announcement
 
 @admin_router.delete("/announcements/{announcement_id}")
@@ -874,7 +900,6 @@ async def delete_announcement(announcement_id: int, db: Session = Depends(get_db
         raise HTTPException(status_code=404, detail="Announcement not found")
     db.delete(db_announcement)
     db.commit()
-    invalidate_rag_cache('announcement', announcement_id)
     return {"message": "Announcement deleted successfully"}
 
 # --- LOCATIONS ---
@@ -894,7 +919,6 @@ async def create_location(location: RoomLocationCreate, db: Session = Depends(ge
     db.add(db_location)
     db.commit()
     db.refresh(db_location)
-    invalidate_rag_cache('room_location', db_location.id)
     return db_location
 
 @admin_router.put("/locations/{location_id}")
@@ -911,7 +935,6 @@ async def update_location(location_id: int, location: RoomLocationCreate, db: Se
         setattr(db_location, key, value)
     db.commit()
     db.refresh(db_location)
-    invalidate_rag_cache('room_location', db_location.id)
     return db_location
 
 @admin_router.delete("/locations/{location_id}")
@@ -925,7 +948,6 @@ async def delete_location(location_id: int, db: Session = Depends(get_db)):
     ).delete(synchronize_session=False)
     db.delete(db_location)
     db.commit()
-    invalidate_rag_cache('room_location', location_id)
     return {"message": "Location deleted successfully"}
 
 # --- ORGANIZATIONS ---
@@ -987,7 +1009,6 @@ async def create_organization(org: OrganizationCreate, db: Session = Depends(get
     db.add(db_org)
     db.commit()
     db.refresh(db_org)
-    invalidate_rag_cache('organization', db_org.id)
     return db_org
 
 @admin_router.put("/organizations/{org_id}")
@@ -1000,7 +1021,6 @@ async def update_organization(org_id: int, org: OrganizationCreate, db: Session 
     db_org.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(db_org)
-    invalidate_rag_cache('organization', db_org.id)
     return db_org
 
 @admin_router.post("/organization-members")
@@ -1155,7 +1175,6 @@ async def delete_organization(org_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Organization not found")
     db.delete(db_org)
     db.commit()
-    invalidate_rag_cache('organization', org_id)
     return {"message": "Organization deleted successfully"}
 
 # --- INTENTS ---
