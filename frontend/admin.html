@@ -20,6 +20,11 @@
     
     <style>
         /* 3D Map Container Styles - Matching Campus Navigator */
+        /* FAQ status badges */
+        .status-badge { display:inline-block;padding:3px 10px;border-radius:20px;font-size:0.8rem;font-weight:600; }
+        .status-badge.active   { background:#dcfce7;color:#166534; }
+        .status-badge.inactive { background:#fee2e2;color:#991b1b; }
+        /* End FAQ status badges */
         #map3DPicker {
             position: relative;
             width: 100%;
@@ -701,6 +706,7 @@
             <button class="tab-btn" onclick="switchTab('navigation', event)">🗺️ Campus Navigation</button>
             <button class="tab-btn" onclick="switchTab('model3d', event)">🏗️ 3D Campus Model</button>
             <button class="tab-btn" onclick="switchTab('orgchart', event)">🏢 Organizations</button>
+            <button class="tab-btn" onclick="switchTab('faqDocs', event)">📄 FAQ Documents</button>
         </div>
 
         <!-- Authorities Tab -->
@@ -1262,6 +1268,21 @@
             <!-- Current Locations -->
             <div class="card">
                 <h2>📍 Campus Locations</h2>
+
+                <!-- Search Bar -->
+                <div class="location-search-bar">
+                    <span class="location-search-icon">🔍</span>
+                    <input
+                        type="text"
+                        id="locationSearchInput"
+                        class="location-search-input"
+                        placeholder="Search by name, building, or type..."
+                        oninput="searchLocations(this.value)"
+                        autocomplete="off"
+                    >
+                    <button class="location-search-clear" id="locationSearchClear" onclick="clearLocationSearch()" title="Clear search" style="display:none;">✕</button>
+                </div>
+
                 <div class="filter-buttons" style="margin-bottom: 1rem;">
                     <button class="btn btn-secondary" onclick="filterLocations('all')">All Locations</button>
                     <button class="btn btn-small" onclick="filterLocations('entrance')">🚪 Entrances</button>
@@ -1506,6 +1527,65 @@
         </div>
     </div>
 
+    <!-- FAQ Documents Tab -->
+    <div id="faqDocs" class="tab-content">
+        <div class="card">
+            <h2>📄 FAQ Documents</h2>
+            <p style="color:#64748b;margin-bottom:1rem;">
+                Upload PDF files (handbooks, policies, FAQs) so SPARTA's chatbot can answer
+                questions from their content. Text is extracted automatically — no manual entry needed.
+            </p>
+            <div id="faqAlert" style="display:none;padding:10px 16px;border-radius:8px;margin-bottom:1rem;font-weight:500;"></div>
+
+            <!-- Upload Form -->
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:1.5rem;margin-bottom:2rem;">
+                <h3 style="margin-top:0;color:#334155">📤 Upload New PDF</h3>
+                <form id="faqUploadForm" style="display:grid;gap:1rem;">
+                    <div>
+                        <label style="display:block;font-weight:600;margin-bottom:4px;color:#475569">Document Title</label>
+                        <input id="faqTitle" type="text" placeholder="e.g. Student Handbook 2024"
+                            style="width:100%;padding:10px 14px;border:1px solid #cbd5e1;border-radius:8px;font-size:0.95rem;box-sizing:border-box" required />
+                    </div>
+                    <div>
+                        <label style="display:block;font-weight:600;margin-bottom:4px;color:#475569">PDF File <span style="color:#888;font-weight:400">(max 10 MB)</span></label>
+                        <input id="faqFile" type="file" accept=".pdf"
+                            style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;font-size:0.9rem;background:#fff;box-sizing:border-box" required />
+                    </div>
+                    <div>
+                        <button type="submit" class="btn" style="padding:10px 28px;font-size:0.95rem;">
+                            📤 Upload PDF
+                        </button>
+                        <span style="margin-left:12px;font-size:0.85rem;color:#64748b">
+                            Text is extracted server-side. Scanned/image PDFs are not supported.
+                        </span>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Documents Table -->
+            <h3 style="color:#334155;margin-bottom:0.75rem">Uploaded Documents</h3>
+            <table class="data-table" style="width:100%">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Filename</th>
+                        <th style="text-align:center">Pages</th>
+                        <th>Text Preview</th>
+                        <th style="text-align:center">Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="faqTableBody">
+                    <tr><td colspan="6" style="text-align:center;color:#aaa;padding:2rem">Loading…</td></tr>
+                </tbody>
+            </table>
+            <p style="margin-top:1rem;font-size:0.85rem;color:#94a3b8">
+                💡 <strong>Tip:</strong> Disable a document to temporarily exclude it from chatbot answers without deleting it.
+                SPARTA will use active documents as supplemental context when no structured database record matches a question.
+            </p>
+        </div>
+    </div>
+
     <!-- Statistics Tab -->
     <div id="statistics" class="tab-content active">
         <div class="card">
@@ -1644,5 +1724,137 @@
 
     <!-- External JavaScript (all popup logic is included inside admin-script.js) -->
     <script src="admin-script.js"></script>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         FAQ DOCUMENTS TAB — inline script (self-contained, no changes
+         needed to admin-script.js for basic operation)
+    ═══════════════════════════════════════════════════════════════════ -->
+    <script>
+    // ── FAQ Documents Manager ──────────────────────────────────────────────
+    const FAQ_API = `${window.API_BASE || ''}/api/admin/faq-documents`;
+
+    async function faqFetch(url, opts = {}) {
+        const res = await fetch(url, { credentials: 'include', ...opts });
+        if (!res.ok) {
+            const text = await res.text().catch(() => res.statusText);
+            let detail = text;
+            try { detail = JSON.parse(text).detail || text; } catch (_) {}
+            console.error('[faqFetch] Error', res.status, url, detail);
+            throw new Error(detail || 'HTTP ' + res.status);
+        }
+        return res.json();
+    }
+
+    function faqAlert(msg, type = 'success') {
+        const el = document.getElementById('faqAlert');
+        el.className = `alert alert-${type}`;
+        el.textContent = msg;
+        el.style.display = 'block';
+        setTimeout(() => el.style.display = 'none', 4000);
+    }
+
+    async function loadFaqDocs() {
+        const tbody = document.getElementById('faqTableBody');
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888">Loading…</td></tr>';
+        try {
+            const docs = await faqFetch(FAQ_API);
+            if (!docs.length) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#aaa">No FAQ documents uploaded yet.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = docs.map(d => `
+                <tr>
+                    <td><strong>${escHtml(d.title)}</strong></td>
+                    <td style="font-size:0.85em;color:#666">${escHtml(d.filename)}</td>
+                    <td style="text-align:center">${d.page_count ?? '—'}</td>
+                    <td style="font-size:0.8em;color:#555;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(d.text_preview)}">${escHtml(d.text_preview)}</td>
+                    <td style="text-align:center">
+                        <span class="status-badge ${d.is_active ? 'active' : 'inactive'}">
+                            ${d.is_active ? '✓ Active' : '✗ Inactive'}
+                        </span>
+                    </td>
+                    <td style="white-space:nowrap">
+                        <button class="btn btn-sm" onclick="toggleFaqDoc(${d.id},this)" style="background:#f39c12;padding:4px 10px;font-size:0.8em">
+                            ${d.is_active ? '⏸ Disable' : '▶ Enable'}
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteFaqDoc(${d.id},'${escHtml(d.title)}')" style="padding:4px 10px;font-size:0.8em;margin-left:4px">
+                            🗑 Delete
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="6" style="color:red;text-align:center">Error: ${e.message}</td></tr>`;
+        }
+    }
+
+    async function toggleFaqDoc(id, btn) {
+        try {
+            const res = await faqFetch(`${FAQ_API}/${id}/toggle`, { method: 'PATCH' });
+            faqAlert(res.message);
+            loadFaqDocs();
+        } catch (e) { faqAlert(e.message, 'error'); }
+    }
+
+    async function deleteFaqDoc(id, title) {
+        if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+        try {
+            await faqFetch(`${FAQ_API}/${id}`, { method: 'DELETE' });
+            faqAlert('FAQ document deleted.');
+            loadFaqDocs();
+        } catch (e) { faqAlert(e.message, 'error'); }
+    }
+
+    // Upload handler + initial load
+    document.addEventListener('DOMContentLoaded', () => {
+        // Always attempt to load FAQ docs on page ready
+        loadFaqDocs();
+
+        const form = document.getElementById('faqUploadForm');
+        if (!form) return;
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const title = document.getElementById('faqTitle').value.trim();
+            const file  = document.getElementById('faqFile').files[0];
+            if (!title || !file) { faqAlert('Please fill in all fields.', 'error'); return; }
+
+            const submitBtn = form.querySelector('button[type=submit]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⏳ Uploading & Extracting…';
+
+            const fd = new FormData();
+            fd.append('title', title);
+            fd.append('pdf', file);
+
+            try {
+                const res = await faqFetch(FAQ_API, { method: 'POST', body: fd });
+                faqAlert(res.message);
+                form.reset();
+                loadFaqDocs();
+            } catch (e) {
+                faqAlert(e.message, 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '📤 Upload PDF';
+            }
+        });
+    });
+
+    // Load when tab is switched to — hook into window.switchTab chain
+    (function() {
+        const _prevSwitch = window.switchTab;
+        window.switchTab = function(name, evt) {
+            if (_prevSwitch) _prevSwitch(name, evt);
+            if (name === 'faqDocs') loadFaqDocs();
+        };
+    })();
+
+    function escHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    </script>
 </body>
 </html>

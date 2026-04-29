@@ -216,3 +216,23 @@ class AnnouncementPopup(Base):
     priority = Column(Integer, default=0)             # higher number = shown first
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class FAQDocument(Base):
+    """
+    Stores uploaded PDF FAQ documents with their extracted plain text.
+    SPARTA's chatbot uses this text as additional context when answering questions.
+    """
+    __tablename__ = "faq_documents"
+
+    id             = Column(Integer, primary_key=True, index=True)
+    title          = Column(String(255), nullable=False)
+    filename       = Column(String(255), nullable=False)
+    extracted_text = Column(Text, nullable=False)
+    file_size      = Column(Integer, nullable=True)
+    page_count     = Column(Integer, nullable=True)
+    is_active      = Column(Boolean, default=True)
+    uploaded_at    = Column(DateTime, default=datetime.utcnow)
+    updated_at     = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<FAQDocument id={self.id} title='{self.title}' pages={self.page_count}>"

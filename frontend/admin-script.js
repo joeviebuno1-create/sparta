@@ -12,6 +12,7 @@ const API_BASE = (window.location.hostname === 'localhost' || window.location.ho
 let allLocations = [];
 let allPaths = [];
 let currentFilter = 'all';
+let currentSearchQuery = '';
 
 // Path Building State
 let isPathBuilding = false;
@@ -761,10 +762,41 @@ function displayLocations(locations) {
     
     tbody.innerHTML = '';
     
-    const filteredLocations = currentFilter === 'all' 
-        ? locations 
+    // Apply type filter
+    let filteredLocations = currentFilter === 'all'
+        ? locations
         : locations.filter(loc => loc.type === currentFilter);
-    
+
+    // Apply search query filter
+    const q = currentSearchQuery.trim().toLowerCase();
+    if (q) {
+        filteredLocations = filteredLocations.filter(loc =>
+            (loc.name || '').toLowerCase().includes(q) ||
+            (loc.building || '').toLowerCase().includes(q) ||
+            (loc.type || '').toLowerCase().includes(q) ||
+            (loc.description || '').toLowerCase().includes(q)
+        );
+    }
+
+    // Show results info when searching
+    const existingInfo = document.getElementById('locationSearchResultsInfo');
+    if (existingInfo) existingInfo.remove();
+    if (q) {
+        const info = document.createElement('div');
+        info.id = 'locationSearchResultsInfo';
+        info.className = 'location-search-results-info';
+        info.textContent = `Showing ${filteredLocations.length} result${filteredLocations.length !== 1 ? 's' : ''} for "${currentSearchQuery}"`;
+        tbody.parentElement.insertAdjacentElement('beforebegin', info);
+    }
+
+    // Helper: highlight matched text
+    function highlight(text, query) {
+        if (!query || !text) return text || '';
+        const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return String(text).replace(new RegExp(`(${escaped})`, 'gi'),
+            '<span class="search-highlight">$1</span>');
+    }
+
     filteredLocations.forEach(loc => {
         const row = document.createElement('tr');
         const icon = loc.icon || ICON_MAP[loc.type] || '📌';
@@ -774,13 +806,17 @@ function displayLocations(locations) {
         const relatedPaths = allPaths.filter(p => 
             p.start_location_id === loc.id || p.end_location_id === loc.id
         );
-        
+
+        const displayName = q ? highlight(loc.name, currentSearchQuery) : `<strong>${loc.name}</strong>`;
+        const displayBuilding = q ? highlight(loc.building, currentSearchQuery) : loc.building;
+        const displayType = q ? highlight(loc.type, currentSearchQuery) : loc.type;
+
         row.innerHTML = `
             <td style="font-size: 2rem; text-align: center;">${icon}</td>
-            <td><strong>${loc.name}</strong></td>
-            <td>${loc.building}</td>
+            <td><strong>${displayName}</strong></td>
+            <td>${displayBuilding}</td>
             <td>${loc.floor}</td>
-            <td><span class="badge">${loc.type}</span></td>
+            <td><span class="badge">${displayType}</span></td>
             <td><code>${coords}</code></td>
             <td>${relatedPaths.length} path(s)</td>
             <td>
@@ -793,7 +829,9 @@ function displayLocations(locations) {
     });
     
     if (filteredLocations.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem;">No locations found</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #64748b;">
+            ${q ? `🔍 No locations found matching "<strong>${currentSearchQuery}</strong>"` : 'No locations found'}
+        </td></tr>`;
     }
 }
 
@@ -817,6 +855,25 @@ function filterLocations(type) {
     displayLocations(allLocations);
 }
 
+function searchLocations(query) {
+    currentSearchQuery = query;
+    // Show/hide clear button
+    const clearBtn = document.getElementById('locationSearchClear');
+    if (clearBtn) clearBtn.style.display = query.length > 0 ? 'inline-flex' : 'none';
+    displayLocations(allLocations);
+}
+
+function clearLocationSearch() {
+    currentSearchQuery = '';
+    const input = document.getElementById('locationSearchInput');
+    if (input) input.value = '';
+    const clearBtn = document.getElementById('locationSearchClear');
+    if (clearBtn) clearBtn.style.display = 'none';
+    const info = document.getElementById('locationSearchResultsInfo');
+    if (info) info.remove();
+    displayLocations(allLocations);
+}
+
 async function editLocation(locationId) {
     const loc = allLocations.find(l => l.id === locationId);
     if (!loc) return;
@@ -835,13 +892,65 @@ async function editLocation(locationId) {
 
     // Populate coordinates
     const coords = loc.coordinates || {};
-    document.getElementById('loc_coord_x').value = coords.x ?? loc.coord_x ?? 0;
-    document.getElementById('loc_coord_y').value = coords.y ?? loc.coord_y ?? 0;
-    document.getElementById('loc_coord_z').value = coords.z ?? loc.coord_z ?? 0;
+    const cx = coords.x ?? loc.coord_x ?? 0;
+    const cy = coords.y ?? loc.coord_y ?? 0;
+    const cz = coords.z ?? loc.coord_z ?? 0;
+    document.getElementById('loc_coord_x').value = cx;
+    document.getElementById('loc_coord_y').value = cy;
+    document.getElementById('loc_coord_z').value = cz;
+
+    // Update displayed coordinate values
+    document.getElementById('display_coord_x').textContent = parseFloat(cx).toFixed(1);
+    document.getElementById('display_coord_y').textContent = parseFloat(cy).toFixed(1);
+    document.getElementById('display_coord_z').textContent = parseFloat(cz).toFixed(1);
+
+    // Restore existing path/waypoints for this location
+    const relatedPath = allPaths.find(p =>
+        p.start_location_id === locationId || p.end_location_id === locationId
+    );
+    if (relatedPath && relatedPath.waypoints && relatedPath.waypoints.length > 0) {
+        // Determine path mode
+        const mode = relatedPath.end_location_id === locationId ? 'to_location' : 'from_location';
+        document.querySelector(`input[value="${mode}"]`).checked = true;
+        changePathMode(mode);
+
+        // Set path fields
+        const connectedLocId = mode === 'to_location'
+            ? relatedPath.start_location_id
+            : relatedPath.end_location_id;
+        document.getElementById('path_name').value = relatedPath.name || '';
+        document.getElementById('path_color').value = relatedPath.path_color || '#F4D03F';
+        document.getElementById('path_wheelchair').checked = relatedPath.is_wheelchair_accessible || false;
+
+        // Populate color preset button active state
+        document.querySelectorAll('.color-preset-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.color === (relatedPath.path_color || '#F4D03F'));
+        });
+
+        // Restore waypoints into the pathWaypoints array (no 3D markers needed just for display)
+        pathWaypoints = relatedPath.waypoints.map((wp, i) => ({ x: wp.x, y: wp.y, z: wp.z, index: i }));
+
+        // Show the waypoints box with restored data
+        document.getElementById('pathWaypointsBox').style.display = 'block';
+        updateWaypointsList();
+
+        // Set connected location dropdown after a short delay (allows DOM to settle)
+        setTimeout(() => {
+            const sel = document.getElementById('path_connected_location');
+            if (sel) sel.value = connectedLocId;
+        }, 100);
+    }
 
     // Scroll to the form and highlight it
     const form = document.getElementById('locationForm');
     if (form) {
+        // Update the card heading to show "Edit" state
+        const cardHeading = form.closest('.card')?.querySelector('h2');
+        if (cardHeading) {
+            cardHeading.dataset.originalText = cardHeading.textContent;
+            cardHeading.textContent = `✏️ Edit Location: ${loc.name}`;
+        }
+
         form.scrollIntoView({ behavior: 'smooth', block: 'start' });
         form.style.border = '2px solid #f59e0b';
         form.style.borderRadius = '12px';
@@ -849,11 +958,64 @@ async function editLocation(locationId) {
         setTimeout(() => { form.style.border = ''; form.style.borderRadius = ''; form.style.padding = ''; }, 3000);
     }
 
-    // Update submit button text
-    const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
-    if (submitBtn) submitBtn.textContent = '💾 Update Location';
+    // Update submit button text and inject Cancel button if not already there
+    const submitSection = form ? form.querySelector('.submit-section') : null;
+    if (submitSection) {
+        const submitBtn = submitSection.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.textContent = '💾 Update Location';
 
-    showAlert('navAlert', `✏️ Editing: ${loc.name} — update the form and click Save.`, 'info');
+        if (!submitSection.querySelector('#cancelEditLocationBtn')) {
+            const cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button';
+            cancelBtn.id = 'cancelEditLocationBtn';
+            cancelBtn.className = 'btn btn-secondary';
+            cancelBtn.style.cssText = 'margin-left: 0.75rem;';
+            cancelBtn.textContent = '✕ Cancel';
+            cancelBtn.onclick = cancelEditLocation;
+            submitSection.appendChild(cancelBtn);
+        }
+    }
+
+    showAlert('navAlert', `✏️ Editing: ${loc.name} — update the form and click Update Location.`, 'info');
+}
+
+function cancelEditLocation() {
+    currentLocationId = null;
+
+    // Reset form fields
+    document.getElementById('locationForm').reset();
+
+    // Reset coordinate display
+    document.getElementById('display_coord_x').textContent = '0.0';
+    document.getElementById('display_coord_y').textContent = '0.0';
+    document.getElementById('display_coord_z').textContent = '0.0';
+
+    // Reset path mode
+    currentPathMode = 'none';
+    pathWaypoints = [];
+    document.querySelector('input[value="none"]').checked = true;
+    changePathMode('none');
+    clearAllVisuals();
+
+    // Restore submit button text and remove cancel button
+    const form = document.getElementById('locationForm');
+    const submitSection = form ? form.querySelector('.submit-section') : null;
+    if (submitSection) {
+        const submitBtn = submitSection.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.textContent = '✓ Save Location & Paths';
+
+        const cancelBtn = submitSection.querySelector('#cancelEditLocationBtn');
+        if (cancelBtn) cancelBtn.remove();
+    }
+
+    // Restore card heading
+    const cardHeading = form?.closest('.card')?.querySelector('h2');
+    if (cardHeading && cardHeading.dataset.originalText) {
+        cardHeading.textContent = cardHeading.dataset.originalText;
+        delete cardHeading.dataset.originalText;
+    }
+
+    showAlert('navAlert', '↩️ Edit cancelled.', 'info');
 }
 
 async function deleteLocation(locationId) {
@@ -1827,10 +1989,30 @@ async function handleLocationFormSubmit(e) {
         }
         
         // Reset form and state
-        document.getElementById('locationForm').reset();
+        const locForm = document.getElementById('locationForm');
+        locForm.reset();
         currentLocationId = null;
-        const submitBtn = document.getElementById('locationForm')?.querySelector('button[type="submit"]');
-        if (submitBtn) submitBtn.textContent = '📍 Save Location';
+
+        // Reset coordinate display
+        document.getElementById('display_coord_x').textContent = '0.0';
+        document.getElementById('display_coord_y').textContent = '0.0';
+        document.getElementById('display_coord_z').textContent = '0.0';
+
+        const submitSection = locForm?.querySelector('.submit-section');
+        if (submitSection) {
+            const submitBtn = submitSection.querySelector('button[type="submit"]');
+            if (submitBtn) submitBtn.textContent = '✓ Save Location & Paths';
+            const cancelBtn = submitSection.querySelector('#cancelEditLocationBtn');
+            if (cancelBtn) cancelBtn.remove();
+        }
+
+        // Restore card heading if it was changed by edit mode
+        const cardHeading = locForm?.closest('.card')?.querySelector('h2');
+        if (cardHeading && cardHeading.dataset.originalText) {
+            cardHeading.textContent = cardHeading.dataset.originalText;
+            delete cardHeading.dataset.originalText;
+        }
+
         currentPathMode = 'none';
         document.querySelector('input[value="none"]').checked = true;
         changePathMode('none');

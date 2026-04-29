@@ -1,7 +1,7 @@
-fastapi==0.115.0
+fastapi==0.115.14
 uvicorn[standard]==0.32.0
 python-dotenv==1.0.0
-python-multipart==0.0.12
+python-multipart==0.0.20
 starlette==0.38.6
 sqlalchemy==2.0.36
 psycopg2-binary==2.9.10
@@ -18,3 +18,5 @@ tokenizers==0.21.0
 tqdm==4.67.1
 requests==2.32.3
 pillow==11.0.0
+google-genai>=1.7.0
+pypdf==4.3.1

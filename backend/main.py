@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from datetime import datetime
 import models
 from database import engine, get_db
@@ -25,6 +25,10 @@ import numpy as np
 
 # Import RAG-based chatbot
 from rag_chatbot import process_chat_with_rag
+
+# Import FAQ PDF extractor
+from pypdf import PdfReader
+import io
 
 # Import auth helpers
 from auth import verify_session, create_session, clear_session
@@ -132,6 +136,20 @@ def _run_migrations():
             print("[migration] Added announcements.content_tl")
 
         conn.commit()
+
+    # FAQ Documents — created by metadata.create_all, just patch new cols if needed
+    try:
+        if inspector.has_table('faq_documents'):
+            faq_cols = [c['name'] for c in inspector.get_columns('faq_documents')]
+            if 'page_count' not in faq_cols:
+                conn.execute(text("ALTER TABLE faq_documents ADD COLUMN page_count INTEGER"))
+                print("[migration] Added faq_documents.page_count")
+            if 'file_size' not in faq_cols:
+                conn.execute(text("ALTER TABLE faq_documents ADD COLUMN file_size INTEGER"))
+                print("[migration] Added faq_documents.file_size")
+            conn.commit()
+    except Exception as faq_err:
+        print(f"[migration] faq_documents patch: {faq_err}")
 
 try:
     _run_migrations()
@@ -725,7 +743,22 @@ async def admin_logout(request: Request):
 
 @admin_router.get("/authorities")
 async def get_authorities(db: Session = Depends(get_db)):
-    return db.query(models.Authority).all()
+    authorities = db.query(models.Authority).all()
+    return [
+        {
+            "id": a.id,
+            "name": a.name,
+            "position": a.position,
+            "department": a.department,
+            "email": a.email,
+            "phone": a.phone,
+            "office_location": a.office_location,
+            "bio": a.bio,
+            "photo": a.photo,  # explicitly included — base64 string
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        }
+        for a in authorities
+    ]
 
 @admin_router.post("/authorities")
 async def create_authority(
@@ -1627,17 +1660,155 @@ async def delete_popup(popup_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================
+# FAQ DOCUMENTS (ADMIN) — PDF upload & management
+# ============================================
+
+def _extract_text_from_pdf(file_bytes: bytes) -> Tuple[str, int]:
+    """Extract all text from a PDF and return (text, page_count)."""
+    try:
+        reader = PdfReader(io.BytesIO(file_bytes))
+        pages = [page.extract_text() or "" for page in reader.pages]
+        return "\n".join(pages), len(reader.pages)
+    except Exception as exc:
+        raise ValueError(f"PDF text extraction failed: {exc}")
+
+@admin_router.get("/faq-documents")
+async def list_faq_documents(db: Session = Depends(get_db)):
+    """List all FAQ PDF documents stored in the database."""
+    docs = db.query(models.FAQDocument).order_by(
+        models.FAQDocument.uploaded_at.desc()
+    ).all()
+    return [
+        {
+            "id": d.id,
+            "title": d.title,
+            "filename": d.filename,
+            "page_count": d.page_count,
+            "file_size": d.file_size,
+            "is_active": d.is_active,
+            "uploaded_at": d.uploaded_at.isoformat() if d.uploaded_at else None,
+            "text_preview": (d.extracted_text or "")[:300] + "…" if d.extracted_text else "",
+        }
+        for d in docs
+    ]
+
+@admin_router.post("/faq-documents")
+async def upload_faq_document(
+    title: str = Form(...),
+    pdf: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """Upload a PDF and extract its text for use by SPARTA's FAQ chatbot."""
+    if not pdf.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are accepted.")
+
+    raw = await pdf.read()
+    if len(raw) > 10 * 1024 * 1024:  # 10 MB limit
+        raise HTTPException(status_code=400, detail="PDF must be under 10 MB.")
+
+    try:
+        text, page_count = _extract_text_from_pdf(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    if not text.strip():
+        raise HTTPException(status_code=422, detail="Could not extract text from this PDF. Make sure it is not scanned/image-only.")
+
+    doc = models.FAQDocument(
+        title=title.strip(),
+        filename=pdf.filename,
+        extracted_text=text,
+        file_size=len(raw),
+        page_count=page_count,
+        is_active=True,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    # Invalidate RAG cache so new FAQ content is picked up
+    from rag_chatbot import invalidate_rag_cache
+    from faq_retriever import invalidate_faq_cache
+    invalidate_rag_cache('faq_documents', doc.id)
+    invalidate_faq_cache()
+
+    return {
+        "id": doc.id,
+        "message": f"PDF '{pdf.filename}' uploaded successfully ({page_count} pages, {len(text)} characters extracted).",
+    }
+
+@admin_router.put("/faq-documents/{doc_id}")
+async def update_faq_document(
+    doc_id: int,
+    title: str = Form(...),
+    pdf: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+):
+    """Update the title and optionally replace the PDF file."""
+    faq = db.query(models.FAQDocument).filter(models.FAQDocument.id == doc_id).first()
+    if not faq:
+        raise HTTPException(status_code=404, detail="FAQ document not found.")
+
+    faq.title = title.strip()
+    faq.updated_at = datetime.utcnow()
+
+    if pdf and pdf.filename:
+        if not pdf.filename.lower().endswith(".pdf"):
+            raise HTTPException(status_code=400, detail="Only PDF files are accepted.")
+        raw = await pdf.read()
+        try:
+            text, page_count = _extract_text_from_pdf(raw)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        faq.extracted_text = text
+        faq.filename = pdf.filename
+        faq.file_size = len(raw)
+        faq.page_count = page_count
+
+    db.commit()
+    from rag_chatbot import invalidate_rag_cache
+    from faq_retriever import invalidate_faq_cache
+    invalidate_rag_cache('faq_documents', doc_id)
+    invalidate_faq_cache()
+    return {"message": "FAQ document updated successfully."}
+
+@admin_router.patch("/faq-documents/{doc_id}/toggle")
+async def toggle_faq_document(doc_id: int, db: Session = Depends(get_db)):
+    faq = db.query(models.FAQDocument).filter(models.FAQDocument.id == doc_id).first()
+    if not faq:
+        raise HTTPException(status_code=404, detail="FAQ document not found.")
+    faq.is_active = not faq.is_active
+    faq.updated_at = datetime.utcnow()
+    db.commit()
+    return {"is_active": faq.is_active, "message": f"FAQ document {'activated' if faq.is_active else 'deactivated'}."}
+
+@admin_router.delete("/faq-documents/{doc_id}")
+async def delete_faq_document(doc_id: int, db: Session = Depends(get_db)):
+    faq = db.query(models.FAQDocument).filter(models.FAQDocument.id == doc_id).first()
+    if not faq:
+        raise HTTPException(status_code=404, detail="FAQ document not found.")
+    db.delete(faq)
+    db.commit()
+    from rag_chatbot import invalidate_rag_cache
+    from faq_retriever import invalidate_faq_cache
+    invalidate_rag_cache('faq_documents')
+    invalidate_faq_cache()
+    return {"message": "FAQ document deleted."}
+
+# ============================================
 # HEALTH CHECK (PUBLIC)
 # ============================================
 
 @app.get("/health")
 async def health_check():
+    from gemini_handler import GEMINI_ENABLED
     return {
         "status": "healthy",
         "rag_enabled": True,
         "model_loaded": embedding_model is not None,
         "model_name": "all-MiniLM-L6-v2",
-        "version": "2.0-RAG"
+        "gemini_enabled": GEMINI_ENABLED,
+        "version": "3.0-Gemini-RAG"
     }
 
 # ============================================

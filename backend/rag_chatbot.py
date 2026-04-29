@@ -23,6 +23,10 @@ import json
 import numpy as np
 from difflib import SequenceMatcher
 
+# ── Gemini 1.5 Flash + FAQ PDF retriever ─────────────────────────────────────
+from gemini_handler import generate_with_gemini, answer_from_faq_docs, _context_blocks_to_text, GEMINI_ENABLED
+from faq_retriever import retrieve_faq_context
+
 
 # ─── College / department constants (module-level so always available) ─────────
 
@@ -617,37 +621,45 @@ class EnhancedDatabaseRAG:
 
         # KEY RULE: if a role was detected, this is a role query ("who is the dean")
         # Only extract a person name when NO role was detected ("who is Juan")
+        # Honorifics — includes Filipino "maam" / "ma'am" / "sir"
+        HONORIFICS = r"(?:sir|maam|ma[''`]?am|dr\.?|prof\.?|mr\.?|ms\.?|mrs\.?|engr\.?|atty\.?|asst\.?)"
+        skip_lower = {w.lower() for w in skip_words}
+
+        # KEY RULE: if a role was detected, this is a role query ("who is the dean")
+        # Only extract a person name when NO role was detected ("who is Juan")
         if not entities['specific_role']:
-            # Try with honorific: "who is Dr. Santos", "who is sir Juan"
-            title_pat = r"who\s+is\s+(?:sir|dr\.?|prof\.?|mr\.?|ms\.?|mrs\.)\s+([A-Za-z][a-z]{2,}(?:\s+[A-Za-z][a-z]+)*)"
+            # Pattern 1: honorific + name (case-insensitive, includes maam/sir/maam)
+            title_pat = rf"who\s+is\s+{HONORIFICS}\s+([A-Za-z][a-z]{{2,}}(?:\s+[A-Za-z][a-z]+)*)"
             m = re.search(title_pat, original_query, re.IGNORECASE)
             if m:
                 name = m.group(1).strip().title()
-                if name not in skip_words:
+                if name.lower() not in skip_lower:
                     entities['first_names'].append(name)
             else:
-                # Plain capitalized name: "who is Juan Dela Cruz"
-                plain_pat = r"who\s+is\s+(?:the\s+)?([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]+)*)"
-                m = re.search(plain_pat, original_query)
+                # Pattern 2: plain name — case-insensitive
+                # Handles: "who is maam sulit", "who is sulit", "who is juan"
+                plain_pat = r"who\s+is\s+(?:the\s+)?([A-Za-z][a-z]{2,}(?:\s+[A-Za-z][a-z]+)*)"
+                m = re.search(plain_pat, original_query, re.IGNORECASE)
                 if m:
-                    name = m.group(1).strip()
-                    if name not in skip_words:
+                    name = m.group(1).strip().title()
+                    if name.lower() not in skip_lower:
                         entities['first_names'].append(name)
 
         # Other name contexts: contact, find, where is, email, honorific alone
         other_name_pats = [
-            r"contact\s+(?:sir\s+|dr\.?\s+|prof\.?\s+|mr\.?\s+|ms\.?\s+|mrs\.?\s+)?([A-Z][a-z]+)",
-            r"about\s+(?:sir\s+|dr\.?\s+|prof\.?\s+|mr\.?\s+|ms\.?\s+|mrs\.?\s+)?([A-Z][a-z]+)",
-            r"find\s+(?:sir\s+|dr\.?\s+|prof\.?\s+|mr\.?\s+|ms\.?\s+|mrs\.?\s+)?([A-Z][a-z]+)",
-            r"where\s+is\s+(?:sir\s+|dr\.?\s+|prof\.?\s+|mr\.?\s+|ms\.?\s+|mrs\.?\s+)?([A-Z][a-z]+)",
-            r"email\s+of\s+(?:sir\s+|dr\.?\s+|prof\.?\s+|mr\.?\s+|ms\.?\s+|mrs\.?\s+)?([A-Z][a-z]+)",
-            r"(?:sir|dr\.?|prof\.?|mr\.?|ms\.?|mrs\.)\s+([A-Z][a-z]+)",
+            rf"contact\s+{HONORIFICS}?\s*([A-Za-z][a-z]+)",
+            rf"about\s+{HONORIFICS}\s+([A-Za-z][a-z]+)",
+            rf"find\s+{HONORIFICS}?\s*([A-Za-z][a-z]+)",
+            rf"where\s+is\s+{HONORIFICS}\s+([A-Za-z][a-z]+)",
+            rf"email\s+of\s+{HONORIFICS}?\s*([A-Za-z][a-z]+)",
+            rf"{HONORIFICS}\s+([A-Za-z][a-z]{{2,}}(?:\s+[A-Za-z][a-z]+)*)",
         ]
         for pat in other_name_pats:
             for match in re.findall(pat, original_query, re.IGNORECASE):
                 name = match.strip().title()
-                if len(name) > 2 and name not in skip_words:
-                    entities['first_names'].append(name)
+                if len(name) > 2 and name.lower() not in skip_lower:
+                    if name not in entities['first_names']:
+                        entities['first_names'].append(name)
 
         # Full capitalized names (fallback)
         potential_names = re.findall(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b', original_query)
@@ -860,7 +872,7 @@ class EnhancedDatabaseRAG:
                     print(f"[officials] returning {len(all_authorities)} authorities")
                     return all_authorities
 
-                # ── First name search (highest priority) ───────────────────
+                # ── First name / surname search (highest priority) ──────────
                 if entities.get('first_names'):
                     name_filters = []
                     for first_name in entities['first_names']:
@@ -873,12 +885,31 @@ class EnhancedDatabaseRAG:
                     query = query.filter(or_(*name_filters))
                     results = query.all()
                     if not results:
-                        # Partial fallback
+                        # Partial fallback — catches surnames anywhere in the name
                         partial = [
                             models.Authority.name.ilike(f'%{fn}%')
                             for fn in entities['first_names']
                         ]
                         results = db.query(models.Authority).filter(or_(*partial)).all()
+                    if not results:
+                        # Last resort — try each word in the name independently
+                        # Handles "maam sulit" where "sulit" is the key word
+                        all_words = []
+                        for fn in entities['first_names']:
+                            all_words.extend([
+                                w for w in fn.split()
+                                if len(w) > 2 and w.lower() not in
+                                {'sir', 'maam', 'mam', 'dr', 'mr', 'ms',
+                                 'mrs', 'prof', 'engr', 'atty', 'the'}
+                            ])
+                        if all_words:
+                            word_filters = [
+                                models.Authority.name.ilike(f'%{w}%')
+                                for w in all_words
+                            ]
+                            results = db.query(models.Authority).filter(
+                                or_(*word_filters)
+                            ).all()
                     return results
 
                 # ── Role filter ────────────────────────────────────────────
@@ -992,20 +1023,29 @@ class EnhancedDatabaseRAG:
 
                 results = query.all()
 
-                # Fallback — if no results, search using significant words from query
+                # Fallback 1 — if no results with entity filters, try direct keyword search
                 if not results:
                     query_words = [
                         w for w in original_query.lower().split()
                         if len(w) > 3 and w not in
                         {'where', 'what', 'find', 'show', 'tell', 'about',
                          'is', 'the', 'are', 'how', 'get', 'to', 'me', 'can',
-                         'you', 'please', 'i', 'want', 'know', 'look', 'for'}
+                         'you', 'please', 'i', 'want', 'know', 'look', 'for',
+                         'location', 'located', 'place', 'situated'}
                     ]
+                    # Also add the raw entity locations in case alias expansion missed them
+                    for loc in (entities.get('locations') or []):
+                        if loc.lower() not in query_words:
+                            query_words.append(loc.lower())
+
                     if query_words:
                         fallback_filters = [
                             or_(
                                 models.RoomLocation.name.ilike(f'%{w}%'),
                                 models.RoomLocation.building.ilike(f'%{w}%'),
+                                models.RoomLocation.description.ilike(f'%{w}%')
+                                if hasattr(models.RoomLocation, 'description')
+                                else models.RoomLocation.name.ilike(f'%{w}%'),
                             )
                             for w in query_words
                         ]
@@ -1019,30 +1059,42 @@ class EnhancedDatabaseRAG:
             elif intent == 'history_query':
                 all_history = db.query(models.History).order_by(models.History.year).all()
 
-                # ── Try to narrow by keywords in title/description ─────────
+                # Strip common prefixes so matching focuses on the meaningful part
+                query_lower = original_query.lower()
+                stripped = re.sub(
+                    r'^(tell me about|what is|what was|ano ang|about|'
+                    r'kwentuhan mo ako tungkol sa|ibigay mo ang|i want to know about)\s+',
+                    '', query_lower
+                ).strip()
+
                 stop = {'ano', 'ang', 'ng', 'sa', 'mga', 'na', 'at', 'the', 'is',
                         'of', 'a', 'an', 'in', 'on', 'about', 'what', 'tell',
                         'me', 'bsu', 'lipa', 'university', 'history', 'when'}
                 raw_words = [
-                    w for w in re.sub(r'[^\w\s]', '', original_query.lower()).split()
+                    w for w in re.sub(r'[^\w\s]', '', stripped).split()
                     if w not in stop and len(w) > 2
                 ]
 
-                if raw_words:
+                if raw_words or stripped:
                     def history_score(h):
-                        # Combine title + description into searchable text
                         text = (
                             (h.title or '') + ' ' +
                             (h.description or '') + ' ' +
                             str(h.year or '')
                         ).lower()
+                        title_lower = (h.title or '').lower()
 
                         score = 0
+
+                        # Highest priority: stripped query matches title directly
+                        if stripped and (stripped in title_lower or title_lower in stripped):
+                            score += 10
+
                         for w in raw_words:
                             if w in text:
                                 score += 2          # exact word match
                             else:
-                                # partial match — e.g. "strengthen" matches "strengthening"
+                                # partial match
                                 if any(w in token or token in w
                                        for token in text.split()
                                        if len(token) > 3):
@@ -1057,7 +1109,6 @@ class EnhancedDatabaseRAG:
                         matched.sort(key=lambda x: x[1], reverse=True)
                         return [h for h, _ in matched]
 
-                # Fallback — return all records so scorer can rank them
                 return all_history
 
             elif intent == 'announcement_query':
@@ -1302,17 +1353,53 @@ class EnhancedDatabaseRAG:
             return True
         return False
 
-    def generate_department_selection(self, specific_role: str = 'dean', lang: str = 'en') -> str:
+    def generate_department_selection(self, specific_role: str = 'dean', lang: str = 'en',
+                                        context: list = None) -> str:
+        """Build clarification prompt from actual DB results, falling back to hardcoded colleges."""
         role_title = specific_role.title() if specific_role else 'Dean'
+
+        # Build options from actual DB context
+        options = []
+        if context:
+            seen = set()
+            for doc, _ in context:
+                dept = getattr(doc, 'department', '') or ''
+                name = getattr(doc, 'name', '') or ''
+                if dept and dept not in seen:
+                    seen.add(dept)
+                    options.append({'dept': dept, 'name': name})
+
+        # Fallback to standard colleges if no context
+        if not options:
+            options = [
+                {'dept': 'College of Engineering Technology (CET)',                'name': ''},
+                {'dept': 'College of Informatics and Computing Sciences (CICS)',   'name': ''},
+                {'dept': 'College of Arts and Sciences (CAS)',                     'name': ''},
+                {'dept': 'College of Accountancy, Business, and Economics (CABE)', 'name': ''},
+                {'dept': 'College of Teacher Education (CTE)',                     'name': ''},
+            ]
+
         if lang == 'tl':
-            response = f"**Aling kolehiyo ang {role_title} ang gusto mong malaman?**\n\n"
+            response = f"**Aling {role_title} ang gusto mong malaman?**\n\n"
         else:
             response = f"**Which college {role_title} would you like to know about?**\n\n"
-        response += "**1.** College of Engineering Technology (CET)\n"
-        response += "**2.** College of Informatics and Computing Sciences (CICS)\n"
-        response += "**3.** College of Arts and Sciences (CAS)\n"
-        response += "**4.** College of Accountancy, Business, and Economics (CABE)\n"
-        response += "**5.** College of Teacher Education (CTE)"
+
+        for i, opt in enumerate(options, 1):
+            line = f"**{i}.** {opt['dept']}"
+            if opt['name']:
+                line += f" - *{opt['name']}*"
+            response += line + "\n"
+
+        # Always include CET and CICS so JS college-picker buttons activate
+        dept_str = " ".join(o['dept'] for o in options)
+        if 'CET' not in dept_str or 'CICS' not in dept_str:
+            response += "\n*(CET / CICS / CAS / CABE / CTE)*"
+
+        if lang == 'tl':
+            response += "\nI-type ang pangalan ng kolehiyo o numero."
+        else:
+            response += "\nType the college name or number to see their information."
+
         return response
 
     def generate_response(self, original_query: str,
@@ -1328,10 +1415,12 @@ class EnhancedDatabaseRAG:
         if entities is None:
             entities = self.extract_entities(original_query)
 
-        # Clarification check
+        # Clarification check — pass context so options are built from real DB data
         if intent == 'authority_query' and self.needs_department_clarification(
                 original_query, entities, context):
-            return self.generate_department_selection(entities.get('specific_role', 'dean'), lang)
+            return self.generate_department_selection(
+                entities.get('specific_role', 'dean'), lang, context=context
+            )
 
         if not context:
             return self.generate_fallback_response(intent, original_query, lang)
@@ -1689,7 +1778,7 @@ class EnhancedDatabaseRAG:
                 'announcement_query': "Walang anunsyo na tumutugma. 📢\n\nSubukan ang *'mga pinakabagong anunsyo'*!",
                 'organization_query': "Hindi ko mahanap ang organisasyong iyon. 🎓\n\nSubukan ang *'Listahan ng lahat ng organisasyon'*!",
                 'navigation_query': "Gamitin ang **Campus Navigator** para sa detalyadong navigasyon! 🗺️",
-                'general_info': "Ako si SPARTHA, ang iyong BSU Lipa campus assistant! 😊\n\n**👥 Mga Tao** - Guro, kawani, administrador\n**📍 Mga Lokasyon** - Gusali, silid, pasilidad\n**🏛️ Kasaysayan** - Timeline at mahahalagang pangyayari\n**📢 Mga Anunsyo** - Pinakabagong balita\n**🎓 Mga Organisasyon** - Mga estudyanteng grupo\n\nAno ang gusto mong malaman?",
+                'general_info': "Ako si SPARTA, ang iyong BSU Lipa campus assistant! 😊\n\n**👥 Mga Tao** - Mga itinalagang opisyal\n**📍 Mga Lokasyon** - Mga gusali at silid\n**🏛️ Kasaysayan** - BSU Lipa na nakaraan\n**🎓 Mga Organisasyon** - Mga estudyanteng organisasyon\n\nAno ang gusto mong malaman?",
             }
             return tl_fb.get(intent, tl_fb['general_info'])
         fallbacks = {
@@ -1719,12 +1808,11 @@ class EnhancedDatabaseRAG:
                 "You can also ask me about specific locations like *'Where is the library?'*"
             ),
             'general_info': (
-                "I'm SPARTHA, your BSU Lipa campus assistant! 😊 Here's what I can help you with:\n\n"
-                "**👥 People** - Faculty, staff, and administrators\n"
-                "**📍 Locations** - Buildings, rooms, and facilities\n"
-                "**🏛️ History** - University timeline and milestones\n"
-                "**📢 Announcements** - Latest news and events\n"
-                "**🎓 Organizations** - Student groups and departments\n\n"
+                "I'm SPARTA, your BSU Lipa campus assistant! 😊 Here's what I can help you with:\n\n"
+                "**👥 People** - Designated officials\n"
+                "**📍 Locations** - Buildings and rooms\n"
+                "**🏛️ History** - BSU Lipa background\n"
+                "**🎓 Organizations** - Student organization\n\n"
                 "What would you like to know?"
             ),
         }
@@ -1738,22 +1826,60 @@ class EnhancedDatabaseRAG:
         Returns the localised response_template if matched, else None.
         - lang='tl'  → uses response_template_tl if set, else falls back to response_template
         - lang='en'  → always uses response_template
+
+        Matching rules:
+        - Short keywords (<=4 chars) require word-boundary match, NOT just substring
+        - Keywords that are standalone honorifics (sir, maam, mr, ms, dr, etc.)
+          are skipped if the query also contains 'who is' — those are name searches
+        - Longer keywords use simple substring match as before
         """
+        # Honorifics that should never alone trigger a custom intent on a "who is" query
+        HONORIFICS = {'sir', 'maam', "ma'am", 'mr', 'ms', 'mrs', 'dr',
+                      'prof', 'engr', 'atty', 'hi', 'hey', 'hello'}
+        is_person_search = re.search(
+            r'\b(who\s+is|who\s+are|find|search|contact)\b',
+            query.lower()
+        )
+
         try:
             intents = db.query(models.Intent).all()
             query_lower = query.lower()
             best_match_en = None
             best_match_tl = None
             best_score = 0
+
             for intent in intents:
                 if not intent.keywords or not intent.response_template:
                     continue
                 keywords = [k.strip().lower() for k in intent.keywords.split(',') if k.strip()]
+
                 for keyword in keywords:
-                    if keyword in query_lower and len(keyword) > best_score:
-                        best_score = len(keyword)
+                    kw_len = len(keyword)
+
+                    # Skip very short single-word honorifics on person-search queries
+                    if is_person_search and keyword in HONORIFICS:
+                        continue
+
+                    # Word-boundary match for short keywords (≤6 chars)
+                    # Prevents "sir" matching inside "desire" or triggering on "who is sir X"
+                    if kw_len <= 6:
+                        if not re.search(rf'\b{re.escape(keyword)}\b', query_lower):
+                            continue
+                        # Even with word boundary, skip if it's just an honorific
+                        # and query looks like a name search
+                        if keyword in HONORIFICS and is_person_search:
+                            continue
+                    else:
+                        # Longer keywords: simple substring is fine
+                        if keyword not in query_lower:
+                            continue
+
+                    # This keyword matched — update best if it's the longest match
+                    if kw_len > best_score:
+                        best_score = kw_len
                         best_match_en = intent.response_template
                         best_match_tl = getattr(intent, 'response_template_tl', None) or None
+
             if best_match_en is None:
                 return None
             # Return Filipino version if lang is tl AND a tl template exists
@@ -1798,30 +1924,81 @@ class EnhancedDatabaseRAG:
             # Step 2: Intent Detection (on normalized query)
             intent, intent_confidence = self.detect_intent(normalized_query)
 
-            # Step 2.5: If intent is general_info, check if query matches a
-            # history title directly — handles "Tell me about <history title>"
-            if intent == 'general_info' or intent_confidence < 0.4:
-                query_lower = original_query.lower()
+            # Step 2.5: Check if query matches a history title directly.
+            # Only runs when intent is NOT already authority/location/org —
+            # those have strong signals and should not be overridden.
+            # Handles: "Tell me about Development of Campus Facilities" etc.
+            SKIP_HISTORY_CHECK = {'authority_query', 'organization_query',
+                                  'announcement_query', 'navigation_query'}
+            if intent not in SKIP_HISTORY_CHECK:
                 try:
-                    all_histories = db.query(models.History).all()
-                    for h in all_histories:
-                        title_lower = (h.title or '').lower()
-                        if not title_lower:
-                            continue
-                        # Check if title words appear in query or query words in title
-                        title_words = [w for w in title_lower.split() if len(w) > 3]
-                        query_words = [w for w in query_lower.split() if len(w) > 3]
-                        matches = sum(1 for w in title_words if w in query_lower)
-                        if matches >= max(1, len(title_words) * 0.5):
+                    query_lower = original_query.lower()
+                    # Strip common prefixes to isolate the topic phrase
+                    stripped_query = re.sub(
+                        r'^(tell me about|what is|what was|ano ang|about|'
+                        r'kwentuhan mo ako tungkol sa|ibigay mo ang|'
+                        r'i want to know about|can you tell me about)\s+',
+                        '', query_lower
+                    ).strip()
+
+                    # Also strip leading "the " / "bsu lipa " from stripped query
+                    stripped_query = re.sub(r'^(the|bsu lipa|bsu|lipa)\s+', '', stripped_query).strip()
+
+                    # Skip history check if query has strong authority signals
+                    authority_signals = ['who is', 'who are', 'chancellor', 'dean',
+                                        'president', 'vice chancellor', 'head of',
+                                        'sino ang', 'sino si']
+                    if any(sig in query_lower for sig in authority_signals):
+                        pass  # do not override with history
+                    elif len(stripped_query) > 3:
+                        all_histories = db.query(models.History).all()
+                        best_hist_score = 0.0
+                        best_hist_intent = None
+
+                        for h in all_histories:
+                            title_lower = (h.title or '').lower().strip()
+                            if not title_lower:
+                                continue
+
+                            # Score 1: direct substring match (highest confidence)
+                            if title_lower in stripped_query or stripped_query in title_lower:
+                                best_hist_score = 10.0
+                                best_hist_intent = 'history_query'
+                                break
+
+                            # Score 2: meaningful word overlap
+                            # Only count content words (>3 chars, not generic terms)
+                            generic = {'lipa', 'bsu', 'campus', 'university',
+                                       'program', 'programs', 'the', 'and', 'of'}
+                            title_words = [
+                                w for w in re.sub(r'[^\w\s]', '', title_lower).split()
+                                if len(w) > 3 and w not in generic
+                            ]
+                            query_words = [
+                                w for w in re.sub(r'[^\w\s]', '', stripped_query).split()
+                                if len(w) > 3 and w not in generic
+                            ]
+
+                            if not title_words or not query_words:
+                                continue
+
+                            forward = sum(
+                                1 for w in title_words
+                                if w in stripped_query or
+                                any(w in qw or qw in w
+                                    for qw in query_words if len(qw) > 3)
+                            )
+                            ratio = forward / len(title_words)
+
+                            if ratio > best_hist_score:
+                                best_hist_score = ratio
+                                if ratio >= 0.6:   # raised threshold
+                                    best_hist_intent = 'history_query'
+
+                        if best_hist_intent and best_hist_score >= 0.6:
                             intent = 'history_query'
-                            intent_confidence = 0.75
-                            break
-                        # Also check reverse: query words in title
-                        rev_matches = sum(1 for w in query_words if w in title_lower)
-                        if rev_matches >= max(1, len(query_words) * 0.5):
-                            intent = 'history_query'
-                            intent_confidence = 0.75
-                            break
+                            intent_confidence = min(0.5 + best_hist_score * 0.2, 0.95)
+
                 except Exception as e:
                     print(f"[intent] history title check failed: {e}")
 
@@ -1831,8 +2008,21 @@ class EnhancedDatabaseRAG:
             # Step 4: Context Retrieval (pass original query for scoring)
             context = self.retrieve_context(db, original_query, intent, entities)
 
-            # ── Early exit: no results found — skip generate_response entirely ──
+            # ── Early exit: no DB results — try FAQ docs + Gemini ─────────────
             if not context:
+                # Only fetch FAQ text when DB found nothing
+                faq_text = retrieve_faq_context(db, original_query)
+                if faq_text and GEMINI_ENABLED:
+                    faq_response = answer_from_faq_docs(original_query, faq_text, lang)
+                    if faq_response:
+                        return {
+                            'response': faq_response,
+                            'confidence': 0.55,
+                            'intent': intent,
+                            'suggestions': [],
+                            'context_used': 0,
+                            'entities_found': entities
+                        }
                 response = self.generate_fallback_response(intent, original_query, lang)
                 return {
                     'response': response,
@@ -1843,11 +2033,68 @@ class EnhancedDatabaseRAG:
                     'entities_found': entities
                 }
 
-            # Step 5: Response Generation (pass original query + already-extracted entities)
-            response = self.generate_response(
-                original_query, context, intent, intent_confidence, lang,
-                entities=entities
-            )
+            # Step 5: Response Generation
+            # Authority: RAG handles photo extraction + clarification logic;
+            #            Gemini writes the text body (more natural, multilingual).
+            #            If Gemini is unavailable, fall back to pure RAG template.
+            # Everything else: Gemini with DB + FAQ context merged.
+            if intent == 'authority_query':
+                # ── 5a. Let RAG decide if we need a clarification prompt first ──
+                rag_response = self.generate_response(
+                    original_query, context, intent, intent_confidence, lang,
+                    entities=entities
+                )
+
+                # Clarification prompts (college selection) must stay as-is —
+                # they contain buttons/links that Gemini must never rewrite.
+                is_clarification = (
+                    "Which college" in rag_response
+                    or "Aling kolehiyo" in rag_response
+                    or "select a college" in rag_response.lower()
+                    or "pumili ng kolehiyo" in rag_response.lower()
+                )
+
+                if is_clarification or not GEMINI_ENABLED:
+                    response = rag_response
+                else:
+                    # ── 5b. Extract photo tag produced by RAG (if any) ──────────
+                    import re as _re
+                    photo_match = _re.search(r'\[PHOTO:[^\]]+\]', rag_response)
+                    photo_prefix = photo_match.group(0) if photo_match else ''
+
+                    # ── 5c. Ask Gemini to write the text (no photo in context) ──
+                    try:
+                        gemini_text = generate_with_gemini(
+                            original_query, context, intent, lang
+                        )
+                    except Exception as _ge:
+                        print(f"[authority/gemini] error: {_ge}")
+                        gemini_text = None
+
+                    if gemini_text:
+                        response = photo_prefix + gemini_text if photo_prefix else gemini_text
+                    else:
+                        response = rag_response
+
+            elif GEMINI_ENABLED:
+                # For non-authority intents — optionally enrich with FAQ docs
+                # Only fetch FAQ when we have DB results (to add extra context)
+                faq_text = retrieve_faq_context(db, original_query)
+                if faq_text:
+                    db_context_text = _context_blocks_to_text(context, intent)
+                    combined_context = db_context_text + "\n\n[FAQ DOCUMENTS]\n" + faq_text
+                    gemini_response = answer_from_faq_docs(original_query, combined_context, lang)
+                else:
+                    gemini_response = generate_with_gemini(original_query, context, intent, lang)
+                response = gemini_response if gemini_response else self.generate_response(
+                    original_query, context, intent, intent_confidence, lang,
+                    entities=entities
+                )
+            else:
+                response = self.generate_response(
+                    original_query, context, intent, intent_confidence, lang,
+                    entities=entities
+                )
 
             # Step 6: Confidence
             if context:
@@ -1943,22 +2190,20 @@ def process_chat_with_rag(message: str, db: Session,
     if is_off_topic(message):
         lang = forced_lang or detect_language(message)
         if lang == 'tl':
-            off_msg = ("Ako si SPARTHA, ang iyong BSU Lipa campus assistant. "
+            off_msg = ("Ako si SPARTA, ang iyong BSU Lipa campus assistant. "
                        "Tumutulong lamang ako sa mga tanong tungkol sa aming kampus:\n\n"
-                       "**👥 Mga Tao** - Pangalan ng Guro, kawani, mga administrador\n"
-                       "**📍 Mga Lokasyon** - Mga gusali, silid, pasilidad\n"
-                       "**🏛️ Kasaysayan** - Timeline at mahahalagang pangyayari\n"
-                       "**📢 Mga Anunsyo** - Pinakabagong balita at kaganapan\n"
-                       "**🎓 Mga Organisasyon** - Mga estudyanteng grupo\n\n"
+                       "**👥 Mga Tao** - Mga itinalagang opisyal\n"
+                       "**📍 Mga Lokasyon** - Mga gusali at silid\n"
+                       "**🏛️ Kasaysayan** - BSU Lipa na nakaraan\n"
+                       "**🎓 Mga Organisasyon** - Mga estudyanteng organisasyon\n\n"
                        "Magtanong ng tungkol sa BSU Lipa campus!")
         else:
-            off_msg = ("I'm SPARTHA, your BSU Lipa campus assistant. I can only help with questions "
+            off_msg = ("I'm SPARTA, your BSU Lipa campus assistant. I can only help with questions "
                        "about our campus:\n\n"
-                       "**👥 People** - Name of the dean, faculty, staff, administrators\n"
+                       "**👥 People** - Designated officials\n"
                        "**📍 Locations** - Buildings, rooms, facilities\n"
-                       "**🏛️ History** - University timeline and milestones\n"
-                       "**📢 Announcements** - Latest news and events\n"
-                       "**🎓 Organizations** - Student groups and departments\n\n"
+                       "**🏛️ History** - BSU Lipa background\n"
+                       "**🎓 Organizations** - Student organization\n\n"
                        "Please ask me something about BSU Lipa campus!")
         return {'response': off_msg, 'confidence': 1.0, 'intent': 'off_topic', 'suggestions': []}
 
@@ -1980,6 +2225,15 @@ def _get_rag_instance(embedding_model: SentenceTransformer, db: Session) -> "Enh
         print("[rag] Creating singleton RAG instance...")
         _rag_instance = EnhancedDatabaseRAG(embedding_model)
         _rag_instance.warm_up_cache(db)
+        # ── Also warm up FAQ PDF chunk cache at startup ───────────────────────
+        try:
+            from faq_retriever import _load_cache as _faq_load
+            _faq_load(db)
+            print("[rag] FAQ PDF cache warmed up.")
+        except Exception as _faq_err:
+            import traceback
+            print(f"[rag] FAQ cache warmup skipped: {type(_faq_err).__name__}: {_faq_err}")
+            traceback.print_exc()
         print("[rag] Singleton ready.")
     return _rag_instance
 

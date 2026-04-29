@@ -53,11 +53,11 @@ const chatMessages = document.getElementById('chatMessages');
 
     // 1) Startup — always shown on first load
     const STARTUP_QUESTIONS = [
-        { text: '🎓 Who is the dean?',         query: 'Who is the dean?' },
-        { text: '🏛️ Who is the Chancellor?',   query: 'Who is the chancellor of BSU Lipa?' },
-        { text: '📍 Where is the speech lab?', query: 'Where is the speech lab?' },
-        { text: '🏆 Tell me about SETS org',   query: 'Tell me about SETS organization' },
-        { text: '🏛️ University history',       query: 'Tell me about BSU Lipa history' }
+        { text: '🎓 Who is the dean?',            query: 'Who is the dean?' },
+        { text: '🏛️ Who is the Chancellor?',      query: 'Who is the chancellor of BSU Lipa?' },
+        { text: '📍 Where is the speech lab?',    query: 'Where is the speech lab?' },
+        { text: '🏆 Tell me about SETS org',      query: 'Tell me about SETS organization' },
+        { text: '🏛️ Major Milestone',             query: 'Tell me about Major Milestone' }
     ];
 
     // 2) College dean picker — shown when chatbot asks which college
@@ -126,11 +126,9 @@ const chatMessages = document.getElementById('chatMessages');
 
     // Update quick questions after each bot response
     function updateQuickQuestions(intent = 'general_info', responseText = '') {
+        // Detect clarification prompt — backend always includes "Which college" + "CET" + "CICS"
         const isCollegeSelection = responseText &&
-            (responseText.includes('What specific department') ||
-             responseText.includes('Which college') ||
-             responseText.includes('Which college Dean') ||
-             responseText.includes('Which college Head')) &&
+            responseText.includes('Which college') &&
             responseText.includes('CET') && responseText.includes('CICS');
 
         // Animate out
@@ -139,7 +137,29 @@ const chatMessages = document.getElementById('chatMessages');
 
         setTimeout(async () => {
             if (isCollegeSelection) {
-                renderQuickQuestions(COLLEGE_PICKER_QUESTIONS);
+                // Parse the actual options from the response text dynamically
+                // Lines like "**1.** College of Engineering Technology (CET) — *Name*"
+                const dynamicButtons = [];
+                const lines = responseText.split('\n');
+                lines.forEach(line => {
+                    // Match numbered options: **1.** Department text
+                    const m = line.match(/^\*\*(\d+)\.\*\*\s+(.+?)(?:\s+—.*)?$/);
+                    if (m) {
+                        const dept = m[2].trim();
+                        // Extract abbreviation e.g. "(CET)" if present
+                        const abbr = dept.match(/\(([A-Z]{2,6})\)/);
+                        const code = abbr ? abbr[1] : dept.split(' ').map(w=>w[0]).join('').toUpperCase();
+                        const emoji = {
+                            CET:'🏗️', CICS:'💻', CAS:'🎨', CABE:'💼', CTE:'👨‍🏫'
+                        }[code] || '🎓';
+                        dynamicButtons.push({
+                            text: `${emoji} ${code}`,
+                            query: `Who is the dean of ${code}?`
+                        });
+                    }
+                });
+                // Use dynamic buttons if parsed successfully, else fall back to hardcoded
+                renderQuickQuestions(dynamicButtons.length > 0 ? dynamicButtons : COLLEGE_PICKER_QUESTIONS);
             } else {
                 await loadDynamicQuestions(intent);
             }
@@ -346,7 +366,7 @@ const chatMessages = document.getElementById('chatMessages');
 
         return isTagalog
             ? "⚠️ **Walang impormasyon sa database para sa query na iyon.**\n\nAko ay SPARTA, isang campus assistant para sa **BSU Lipa** lamang. Kaya kong sagutin ang tungkol sa:\n\n**👥 Mga Tao** - Mga guro, kawani, opisyal\n**📍 Mga Lokasyon** - Mga gusali at silid\n**📅 Mga Anunsyo** - Pinakabagong balita\n**🏛️ Kasaysayan** - BSU Lipa na nakaraan\n**🎓 Mga Organisasyon** - Mga estudyanteng grupo\n\nAno ang gusto mong malaman tungkol sa campus?"
-            : "⚠️ **No information found in the database for that query.**\n\nI'm SPARTA, a campus assistant for **BSU Lipa** only. I can help with:\n\n**👥 People** - Faculty, staff, and officials\n**📍 Locations** - Buildings and rooms\n**📅 Announcements** - Latest campus news\n**🏛️ History** - BSU Lipa background\n**🎓 Organizations** - Student groups\n\nWhat would you like to know about the campus?";
+            : "⚠️ **No information found in the database for that query.**\n\nI'm SPARTA, a campus assistant for **BSU Lipa** only. I can help with:\n\n**👥 People** - Designated officials\n**📍 Locations** - Buildings and rooms\n**🏛️ History** - BSU Lipa background\n**🎓 Organizations** - Student organization\n\nWhat would you like to know about the campus?";
     }
 
     // ── Chat lock — prevents sending while a response is pending ──────────
@@ -480,22 +500,6 @@ const chatMessages = document.getElementById('chatMessages');
         content.innerHTML = formattedText;
 
         // Step 2 — Intent query type badge only
-        if (sender === 'bot' && !isError && intent && intent !== 'unknown') {
-            const container = document.createElement('div');
-            container.className = 'confidence-container';
-
-            const row = document.createElement('div');
-            row.className = 'confidence-row';
-
-            const intentBadge = document.createElement('span');
-            intentBadge.className = 'intent-badge';
-            intentBadge.textContent = `🎯 ${intent.replace(/_/g, ' ')}`;
-            row.appendChild(intentBadge);
-
-            container.appendChild(row);
-            content.appendChild(container);
-        }
-
         // Step 3 — Timestamp
         const time = document.createElement('span');
         time.className = 'message-time';
