@@ -5,7 +5,7 @@ Replaces sentence-transformers + torch entirely.
 Uses google-genai's embed_content API, which runs in the cloud
 so zero RAM is used for a local model.
 
-Model: gemini-embedding-exp-03-07 (3072-dim, free tier friendly)
+Model: text-embedding-004 (3072-dim, free tier friendly)
 """
 
 import os
@@ -33,7 +33,7 @@ except Exception as e:
     print(f"[embedding] Could not initialize ({e}) — embeddings disabled.")
 
 
-_EMBED_MODEL = "gemini-embedding-exp-03-07"
+_EMBED_MODEL = "text-embedding-004"
 
 # ── In-memory cache: text → numpy array ──────────────────────────────────────
 # Avoids redundant API calls for the same string
