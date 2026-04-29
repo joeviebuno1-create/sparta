@@ -12,7 +12,6 @@ Major improvements:
 8. Response quality validation
 """
 
-from sentence_transformers import SentenceTransformer, util
 import re
 from typing import List, Dict, Tuple, Optional, Any
 from sqlalchemy.orm import Session
@@ -22,6 +21,12 @@ from datetime import datetime
 import json
 import numpy as np
 from difflib import SequenceMatcher
+
+# Gemini-based embedding (replaces sentence-transformers + torch)
+from embedding_handler import (
+    embed_text, embed_batch, cosine_sim_matrix,
+    EMBEDDING_ENABLED, clear_embed_cache
+)
 
 # ── Gemini 1.5 Flash + FAQ PDF retriever ─────────────────────────────────────
 from gemini_handler import generate_with_gemini, answer_from_faq_docs, _context_blocks_to_text, GEMINI_ENABLED
@@ -214,25 +219,19 @@ class EnhancedDatabaseRAG:
     Optimized for maximum accuracy and natural responses
     """
 
-    def __init__(self, embedding_model: SentenceTransformer = None):
-        self.embedding_model = embedding_model
-        self.use_embeddings = embedding_model is not None
+    def __init__(self, embedding_model=None):
+        # embedding_model param kept for API compatibility but no longer used
+        self.use_embeddings = EMBEDDING_ENABLED
         self.context_window_size = 5
 
         # ── Pre-computed doc embedding cache ──────────────────────────────────
-        # key: (table, doc_id) → tensor
+        # key: (table, doc_id) → np.ndarray
         # Populated once at startup via warm_up_cache(), never re-computed per query
         self._embedding_cache: Dict[tuple, Any] = {}
         self._cache_ready = False
 
         if self.use_embeddings:
-            try:
-                self.embedding_model.encode("test", convert_to_tensor=False)
-                print("Sentence transformer loaded successfully")
-            except Exception as e:
-                print(f"Sentence transformer test failed: {e}, falling back to keyword matching")
-                self.use_embeddings = False
-                self.embedding_model = None
+            print("✓ Gemini embedding-based semantic search enabled.")
 
         self.intent_config = {
             'authority_query': {
@@ -375,11 +374,13 @@ class EnhancedDatabaseRAG:
         """
         Pre-compute and cache embeddings for ALL documents at startup.
         Called once when the server starts — never runs during a user query.
+        Uses Gemini embedding API instead of a local model.
         """
-        if not self.embedding_model:
+        if not self.use_embeddings:
+            print("[cache] Embeddings disabled — skipping warm-up.")
             return
 
-        print("[cache] Warming up embedding cache...")
+        print("[cache] Warming up embedding cache via Gemini API...")
         total = 0
 
         table_intent_map = [
@@ -397,18 +398,14 @@ class EnhancedDatabaseRAG:
                     continue
 
                 texts = [self._doc_to_text(doc, intent) for doc in docs]
-                embeddings = self.embedding_model.encode(
-                    texts,
-                    convert_to_tensor=True,
-                    batch_size=32,
-                    show_progress_bar=False
-                )
+                embeddings = embed_batch(texts)
                 table_name = model_class.__tablename__
 
                 for doc, emb in zip(docs, embeddings):
-                    key = (table_name, doc.id)
-                    self._embedding_cache[key] = emb
-                    total += 1
+                    if emb is not None:
+                        key = (table_name, doc.id)
+                        self._embedding_cache[key] = emb
+                        total += 1
 
                 print(f"[cache] ✓ {table_name}: {len(docs)} docs cached")
 
@@ -429,6 +426,8 @@ class EnhancedDatabaseRAG:
             keys = [k for k in self._embedding_cache if k[0] == table_name]
             for k in keys:
                 del self._embedding_cache[k]
+        # Also clear the Gemini embedding text cache for affected docs
+        clear_embed_cache()
 
     def normalize_query(self, query: str) -> str:
         query = query.strip()
@@ -766,19 +765,18 @@ class EnhancedDatabaseRAG:
         # Any role OR name query uses entity-first scoring (no semantic noise)
         strong_entity_query = has_specific_role or has_first_name
 
-        use_embeddings = (self.embedding_model is not None) and (not strong_entity_query)
+        use_embeddings = self.use_embeddings and (not strong_entity_query)
 
-        # ── Use pre-computed cache if ready, otherwise batch encode ──────────
+        # ── Use pre-computed cache if ready, otherwise call Gemini API ─────────
         query_embedding = None
         doc_embeddings_list = None
+        similarities = []
         if use_embeddings:
             try:
-                query_embedding = self.embedding_model.encode(
-                    original_query, convert_to_tensor=True
-                )
-
-                if self._cache_ready:
-                    # Fast path: look up pre-computed embeddings from cache
+                query_embedding = embed_text(original_query)
+                if query_embedding is None:
+                    use_embeddings = False
+                else:
                     doc_embeddings_list = []
                     for doc in documents:
                         table_name = doc.__class__.__tablename__
@@ -786,23 +784,21 @@ class EnhancedDatabaseRAG:
                         if cached is not None:
                             doc_embeddings_list.append(cached)
                         else:
-                            # Doc added after startup — encode on the fly and cache it
+                            # Doc added after startup — embed on the fly and cache it
                             text = self._doc_to_text(doc, intent)
-                            emb = self.embedding_model.encode(text, convert_to_tensor=True)
-                            self._embedding_cache[(table_name, doc.id)] = emb
+                            emb = embed_text(text)
+                            if emb is not None:
+                                self._embedding_cache[(table_name, doc.id)] = emb
                             doc_embeddings_list.append(emb)
-                else:
-                    # Cache not ready — fall back to batch encode
-                    doc_texts = [self._doc_to_text(doc, intent) for doc in documents]
-                    import torch
-                    doc_embeddings_list = list(self.embedding_model.encode(
-                        doc_texts, convert_to_tensor=True,
-                        batch_size=32, show_progress_bar=False
-                    ))
 
-                import torch
-                doc_embeddings_tensor = torch.stack(doc_embeddings_list)
-                similarities = util.cos_sim(query_embedding, doc_embeddings_tensor)[0]
+                    # Filter out None embeddings
+                    valid_pairs = [(i, e) for i, e in enumerate(doc_embeddings_list) if e is not None]
+                    if valid_pairs:
+                        idxs, vecs = zip(*valid_pairs)
+                        sims = cosine_sim_matrix(query_embedding, list(vecs))
+                        similarities = [0.0] * len(doc_embeddings_list)
+                        for idx, sim in zip(idxs, sims):
+                            similarities[idx] = sim
 
             except Exception as e:
                 print(f"Embedding error: {e}")
@@ -814,9 +810,9 @@ class EnhancedDatabaseRAG:
             doc_text = self._doc_to_text(doc, intent)
 
             semantic_score = 0.0
-            if use_embeddings and doc_embeddings_list is not None:
+            if use_embeddings and similarities:
                 try:
-                    semantic_score = float(similarities[i])
+                    semantic_score = float(similarities[i]) if i < len(similarities) else 0.0
                 except Exception:
                     semantic_score = 0.0
 
@@ -2174,7 +2170,7 @@ def is_off_topic(message: str) -> bool:
 
 
 def process_chat_with_rag(message: str, db: Session,
-                           embedding_model: SentenceTransformer = None,
+                           embedding_model=None,
                            language: str = None) -> Dict[str, Any]:
     """Main entry point for chatbot with RAG."""
     # UI selector takes priority; fallback to auto-detect
@@ -2215,7 +2211,7 @@ def process_chat_with_rag(message: str, db: Session,
 # ── Singleton RAG instance — created once, reused on every request ────────────
 _rag_instance: "EnhancedDatabaseRAG" = None
 
-def _get_rag_instance(embedding_model: SentenceTransformer, db: Session) -> "EnhancedDatabaseRAG":
+def _get_rag_instance(embedding_model, db: Session) -> "EnhancedDatabaseRAG":
     """
     Return the shared RAG instance, creating and warming it up on first call.
     This ensures the embedding cache is built once at startup and reused forever.

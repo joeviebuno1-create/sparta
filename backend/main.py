@@ -19,8 +19,7 @@ import bcrypt
 import math
 import json
 
-# Sentence Transformers for offline semantic search
-from sentence_transformers import SentenceTransformer, util
+# numpy still used elsewhere
 import numpy as np
 
 # Import RAG-based chatbot
@@ -247,10 +246,8 @@ async def serve_nav_script():      return frontend_file("navigation-script.js")
 
 @app.get("/sparta_popup_announcements.js")
 async def serve_popup_script(): return frontend_file("sparta_popup_announcements.js")
-# Load offline ML model (runs once on startup)
-print("Loading RAG embedding model... (this may take a moment)")
-embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-print("✓ RAG model loaded successfully!")
+# Embedding is now handled via Gemini API in embedding_handler.py
+embedding_model = None  # kept for API compatibility
 
 # ============================================
 # PYDANTIC MODELS
@@ -1805,8 +1802,8 @@ async def health_check():
     return {
         "status": "healthy",
         "rag_enabled": True,
-        "model_loaded": embedding_model is not None,
-        "model_name": "all-MiniLM-L6-v2",
+        "model_loaded": True,
+        "model_name": "gemini-embedding-exp-03-07 (API)",
         "gemini_enabled": GEMINI_ENABLED,
         "version": "3.0-Gemini-RAG"
     }
