@@ -89,58 +89,118 @@ def _context_blocks_to_text(context: List[Tuple[Any, float]], intent: str) -> st
         elif cls == "Announcement":
             lines.append(f"ANNOUNCEMENT: {doc.title} | DATE: {getattr(doc, 'date_posted', 'N/A')} | {doc.content}")
         elif cls == "Organization":
-            members = ""
+            words = doc.name.split()
+            acronym = ''.join(w[0].upper() for w in words if w)
+            acronym_str = f" ({acronym})" if acronym and acronym != doc.name.upper() else ""
+            member_lines = ""
             if hasattr(doc, 'members') and doc.members:
-                members = " | MEMBERS: " + ", ".join(f"{m.name} ({m.position})" for m in doc.members)
+                member_lines = " | MEMBERS: " + "; ".join(
+                    f"{m.name} [{m.position}]" for m in doc.members
+                )
             lines.append(
-                f"ORGANIZATION: {doc.name}"
+                f"ORGANIZATION: {doc.name}{acronym_str}"
                 + (f" | DESCRIPTION: {doc.description}" if getattr(doc, 'description', None) else "")
-                + members
+                + member_lines
             )
         else:
             lines.append(str(doc))
     return "\n".join(lines)
 
 
-def _call_gemini(system_prompt: str, user_message: str) -> Optional[str]:
-    """Core Gemini API call using google-genai SDK."""
+# Errors that are worth retrying (Gemini server-side / transient)
+_RETRYABLE_CODES = {429, 500, 503, 504}
+_RETRYABLE_PHRASES = ("unavailable", "resource exhausted", "overloaded",
+                      "quota", "rate limit", "try again", "internal error")
+
+def _is_retryable(exc: Exception) -> bool:
+    """Return True if the exception looks like a transient Gemini error."""
+    msg = str(exc).lower()
+    # HTTP status code present in message (e.g. "503 UNAVAILABLE")
+    for code in _RETRYABLE_CODES:
+        if str(code) in msg:
+            return True
+    return any(phrase in msg for phrase in _RETRYABLE_PHRASES)
+
+
+def _call_gemini(system_prompt: str, user_message: str,
+                 max_retries: int = 3, base_delay: float = 1.5) -> Optional[str]:
+    """Core Gemini API call with exponential-backoff retry for transient errors."""
     global _client, genai_types
     if not GEMINI_ENABLED or _client is None:
         return None
-    try:
-        response = _client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=user_message,
-            config=genai_types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                temperature=0.2,
-                max_output_tokens=512,
-                top_p=0.8,
-                safety_settings=[
-                    genai_types.SafetySetting(
-                        category="HARM_CATEGORY_HARASSMENT",
-                        threshold="BLOCK_ONLY_HIGH"
-                    ),
-                    genai_types.SafetySetting(
-                        category="HARM_CATEGORY_HATE_SPEECH",
-                        threshold="BLOCK_ONLY_HIGH"
-                    ),
-                    genai_types.SafetySetting(
-                        category="HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                        threshold="BLOCK_ONLY_HIGH"
-                    ),
-                    genai_types.SafetySetting(
-                        category="HARM_CATEGORY_DANGEROUS_CONTENT",
-                        threshold="BLOCK_ONLY_HIGH"
-                    ),
-                ],
+
+    import time as _time
+
+    config = genai_types.GenerateContentConfig(
+        system_instruction=system_prompt,
+        temperature=0.2,
+        max_output_tokens=512,
+        top_p=0.8,
+        safety_settings=[
+            genai_types.SafetySetting(
+                category="HARM_CATEGORY_HARASSMENT",
+                threshold="BLOCK_ONLY_HIGH"
             ),
-        )
-        text = response.text.strip() if response.text else None
-        return text if text else None
-    except Exception as exc:
-        print(f"[gemini] generate_content failed: {exc}")
-        return None
+            genai_types.SafetySetting(
+                category="HARM_CATEGORY_HATE_SPEECH",
+                threshold="BLOCK_ONLY_HIGH"
+            ),
+            genai_types.SafetySetting(
+                category="HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                threshold="BLOCK_ONLY_HIGH"
+            ),
+            genai_types.SafetySetting(
+                category="HARM_CATEGORY_DANGEROUS_CONTENT",
+                threshold="BLOCK_ONLY_HIGH"
+            ),
+        ],
+    )
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            # Hard timeout via threading so a hung Gemini call never blocks forever
+            import threading
+            result_box = [None]
+            error_box  = [None]
+
+            def _call():
+                try:
+                    r = _client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=user_message,
+                        config=config,
+                    )
+                    result_box[0] = r.text.strip() if r.text else None
+                except Exception as e:
+                    error_box[0] = e
+
+            t = threading.Thread(target=_call, daemon=True)
+            t.start()
+            t.join(timeout=8)  # max 8 seconds per attempt
+
+            if t.is_alive():
+                # Gemini hung — treat as transient, retry or give up
+                print(f"[gemini] Timeout on attempt {attempt}/{max_retries}")
+                if attempt < max_retries:
+                    _time.sleep(base_delay)
+                    continue
+                return None
+
+            if error_box[0] is not None:
+                raise error_box[0]
+
+            return result_box[0] if result_box[0] else None
+
+        except Exception as exc:
+            if _is_retryable(exc) and attempt < max_retries:
+                delay = base_delay * (2 ** (attempt - 1))  # 1.5s, 3s …
+                print(f"[gemini] Transient error (attempt {attempt}/{max_retries}), "
+                      f"retrying in {delay:.1f}s: {exc}")
+                _time.sleep(delay)
+            else:
+                # Non-retryable, or all retries exhausted — fall back to RAG
+                print(f"[gemini] generate_content failed after {attempt} attempt(s): {exc}")
+                return None
 
 
 def generate_with_gemini(

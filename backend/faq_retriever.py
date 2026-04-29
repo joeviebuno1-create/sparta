@@ -120,6 +120,12 @@ def _load_cache(db: Session):
         if not text.strip():
             continue
 
+        # Cap text at 300KB to prevent MemoryError on huge PDFs
+        MAX_TEXT = 300_000
+        if len(text) > MAX_TEXT:
+            print(f"[faq_cache] '{doc.title}' truncated {len(text)} -> {MAX_TEXT} chars")
+            text = text[:MAX_TEXT]
+
         raw_chunks = _chunk_text(text, chunk_size=1500, overlap=200)
         processed = [
             {"text": chunk, "words": _content_words(chunk)}
@@ -182,4 +188,7 @@ def retrieve_faq_context(
     scored.sort(key=lambda x: x[0], reverse=True)
     top_chunks = [text for _, text in scored[:top_k]]
     print(f"[faq_retriever] Returning {len(top_chunks)} chunks (best score: {scored[0][0]:.3f})")
-    return "\n\n---\n\n".join(top_chunks)
+    result = "\n\n---\n\n".join(top_chunks)
+    if len(result) > 12_000:
+        result = result[:12_000] + "\n[...truncated...]"
+    return result

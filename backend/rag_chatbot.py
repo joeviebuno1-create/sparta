@@ -372,48 +372,12 @@ class EnhancedDatabaseRAG:
 
     def warm_up_cache(self, db: Session) -> None:
         """
-        Pre-compute and cache embeddings for ALL documents at startup.
-        Called once when the server starts — never runs during a user query.
-        Uses Gemini embedding API instead of a local model.
+        Lazy embedding — embeddings are computed on first query, not at startup.
+        This avoids making 100+ API calls during boot which blocks the server.
         """
-        if not self.use_embeddings:
-            print("[cache] Embeddings disabled — skipping warm-up.")
-            return
-
-        print("[cache] Warming up embedding cache via Gemini API...")
-        total = 0
-
-        table_intent_map = [
-            (models.Authority,     'authority_query'),
-            (models.RoomLocation,  'location_query'),
-            (models.History,       'history_query'),
-            (models.Announcement,  'announcement_query'),
-            (models.Organization,  'organization_query'),
-        ]
-
-        for model_class, intent in table_intent_map:
-            try:
-                docs = db.query(model_class).all()
-                if not docs:
-                    continue
-
-                texts = [self._doc_to_text(doc, intent) for doc in docs]
-                embeddings = embed_batch(texts)
-                table_name = model_class.__tablename__
-
-                for doc, emb in zip(docs, embeddings):
-                    if emb is not None:
-                        key = (table_name, doc.id)
-                        self._embedding_cache[key] = emb
-                        total += 1
-
-                print(f"[cache] ✓ {table_name}: {len(docs)} docs cached")
-
-            except Exception as e:
-                print(f"[cache] ✗ Failed to cache {model_class.__name__}: {e}")
-
+        # Skip pre-computation — embeddings are cached on first use per query
         self._cache_ready = True
-        print(f"[cache] ✓ Done — {total} embeddings cached")
+        print("[cache] Lazy embedding enabled — will embed on first query.")
 
     def invalidate_cache(self, table_name: str, doc_id: int = None) -> None:
         """
@@ -1914,6 +1878,66 @@ class EnhancedDatabaseRAG:
                     'entities_found': {}
                 }
 
+
+            # Step 0.7: Vague / ambiguous query guard
+            # Queries like "what is this", "what", "huh", "this" have no
+            # campus-specific substance. Catch them here before intent scoring
+            # sends them through the retrieval pipeline and accidentally
+            # returns a random DB record.
+            _VAGUE_PATTERNS = [
+                r"^(what is this|what'?s this|what is that|what'?s that)$",
+                r'^(what|huh|hmm|ha|ha\?|idk|idk what|ano ito|ano iyon|ano yan)$',
+                r'^(this|that|it|ito|iyon|yan)$',
+                r'^(ok|okay|oh|ah|uh|um|err|ahh|ohh)$',
+                r'^(and|then|so|but|because|kasi|eh|nga|naman)$',
+            ]
+            _VAGUE_SHORT_THRESHOLD = 3   # words
+            _VAGUE_CHAR_THRESHOLD  = 8   # characters (after strip)
+
+            _q_stripped = original_query.strip().lower()
+            _q_words    = _q_stripped.split()
+            _is_vague   = any(
+                re.search(pat, _q_stripped)
+                for pat in _VAGUE_PATTERNS
+            )
+            # Also flag ultra-short queries with no campus keyword
+            if not _is_vague and len(_q_words) <= _VAGUE_SHORT_THRESHOLD and len(_q_stripped) <= _VAGUE_CHAR_THRESHOLD:
+                _campus_hints = [
+                    'bsu', 'lipa', 'dean', 'room', 'lab', 'org', 'who',
+                    'where', 'when', 'chan', 'sets', 'cet', 'cics', 'cas',
+                    'cabe', 'cte', 'sino', 'saan', 'ano',
+                ]
+                if not any(h in _q_stripped for h in _campus_hints):
+                    _is_vague = True
+
+            if _is_vague:
+                _vague_en = (
+                    "I'm SPARTA, your BSU Lipa campus assistant! 😊 "
+                    "I can help you with:\n\n"
+                    "**👥 People** — Designated officials\n"
+                    "**📍 Locations** — Buildings and rooms\n"
+                    "**🏛️ History** — BSU Lipa background\n"
+                    "**🎓 Organizations** — Student organizations\n\n"
+                    "What would you like to know about the campus?"
+                )
+                _vague_tl = (
+                    "Ako si SPARTA, ang iyong BSU Lipa campus assistant! 😊 "
+                    "Maaari kitang tulungan sa:\n\n"
+                    "**👥 Mga Tao** — Mga itinalagang opisyal\n"
+                    "**📍 Mga Lokasyon** — Mga gusali at silid\n"
+                    "**🏛️ Kasaysayan** — BSU Lipa na nakaraan\n"
+                    "**🎓 Mga Organisasyon** — Mga estudyanteng organisasyon\n\n"
+                    "Ano ang gusto mong malaman tungkol sa kampus?"
+                )
+                return {
+                    'response':       _vague_tl if lang == 'tl' else _vague_en,
+                    'confidence':     1.0,
+                    'intent':         'general_info',
+                    'suggestions':    [],
+                    'context_used':   0,
+                    'entities_found': {}
+                }
+            # ── End vague query guard ──────────────────────────────────────────
             # Step 1: Normalize for intent detection only
             normalized_query = self.normalize_query(original_query)
 
@@ -2004,21 +2028,28 @@ class EnhancedDatabaseRAG:
             # Step 4: Context Retrieval (pass original query for scoring)
             context = self.retrieve_context(db, original_query, intent, entities)
 
-            # ── Early exit: no DB results — try FAQ docs + Gemini ─────────────
+            # ── Early exit: no DB results ──────────────────────────────────────
             if not context:
-                # Only fetch FAQ text when DB found nothing
-                faq_text = retrieve_faq_context(db, original_query)
-                if faq_text and GEMINI_ENABLED:
-                    faq_response = answer_from_faq_docs(original_query, faq_text, lang)
-                    if faq_response:
-                        return {
-                            'response': faq_response,
-                            'confidence': 0.55,
-                            'intent': intent,
-                            'suggestions': [],
-                            'context_used': 0,
-                            'entities_found': entities
-                        }
+                # Always try FAQ+Gemini first before giving up.
+                # FAQ docs may contain info not stored in the DB (mission, vision,
+                # core values, quality policy, FAQs, etc.).
+                # The is_off_topic() gate upstream already blocked truly off-topic
+                # queries, so anything reaching here is worth checking in the PDF.
+                if GEMINI_ENABLED:
+                    faq_text = retrieve_faq_context(db, original_query)
+                    if faq_text:
+                        faq_response = answer_from_faq_docs(original_query, faq_text, lang)
+                        if faq_response:
+                            return {
+                                'response': faq_response,
+                                'confidence': 0.60,
+                                'intent': intent,
+                                'suggestions': [],
+                                'context_used': 0,
+                                'entities_found': entities
+                            }
+
+                # No DB match + no FAQ answer → instant fallback
                 response = self.generate_fallback_response(intent, original_query, lang)
                 return {
                     'response': response,
@@ -2071,6 +2102,13 @@ class EnhancedDatabaseRAG:
                         response = photo_prefix + gemini_text if photo_prefix else gemini_text
                     else:
                         response = rag_response
+
+            elif intent == 'organization_query':
+                # Organization: always use RAG formatter for consistent output
+                response = self.generate_response(
+                    original_query, context, intent, intent_confidence, lang,
+                    entities=entities
+                )
 
             elif GEMINI_ENABLED:
                 # For non-authority intents — optionally enrich with FAQ docs
@@ -2220,17 +2258,9 @@ def _get_rag_instance(embedding_model, db: Session) -> "EnhancedDatabaseRAG":
     if _rag_instance is None:
         print("[rag] Creating singleton RAG instance...")
         _rag_instance = EnhancedDatabaseRAG(embedding_model)
-        _rag_instance.warm_up_cache(db)
-        # ── Also warm up FAQ PDF chunk cache at startup ───────────────────────
-        try:
-            from faq_retriever import _load_cache as _faq_load
-            _faq_load(db)
-            print("[rag] FAQ PDF cache warmed up.")
-        except Exception as _faq_err:
-            import traceback
-            print(f"[rag] FAQ cache warmup skipped: {type(_faq_err).__name__}: {_faq_err}")
-            traceback.print_exc()
-        print("[rag] Singleton ready.")
+        # No warm-up — embeddings are built lazily on first query
+        # FAQ PDF chunks are loaded on first FAQ query (already lazy in faq_retriever)
+        print("[rag] Singleton ready (lazy embedding mode).")
     return _rag_instance
 
 
