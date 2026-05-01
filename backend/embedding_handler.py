@@ -62,8 +62,21 @@ except Exception as e:
     print(f"[embedding] Could not initialize ({e}) — using keyword matching only.")
 
 
-# In-memory cache: text -> numpy array
-_embed_cache: dict = {}
+# ── LRU embedding cache — capped at 300 entries (~900 KB max) ─────────────────
+# Each 768-dim float32 vector ≈ 3 KB.  Unbounded dict grows forever on Railway.
+from collections import OrderedDict as _OD
+class _EmbedLRU:
+    def __init__(self, n=300): self._c = _OD(); self._n = n
+    def get(self, k):
+        if k not in self._c: return None
+        self._c.move_to_end(k); return self._c[k]
+    def set(self, k, v):
+        if k in self._c: self._c.move_to_end(k)
+        elif len(self._c) >= self._n: self._c.popitem(last=False)
+        self._c[k] = v
+    def clear(self): self._c.clear()
+    def __len__(self): return len(self._c)
+_embed_cache = _EmbedLRU(300)
 
 
 def embed_text(text: str) -> Optional[np.ndarray]:
@@ -72,8 +85,9 @@ def embed_text(text: str) -> Optional[np.ndarray]:
         return None
 
     key = text.strip()[:500]
-    if key in _embed_cache:
-        return _embed_cache[key]
+    cached = _embed_cache.get(key)
+    if cached is not None:
+        return cached
 
     try:
         # contents must be a list
@@ -82,7 +96,7 @@ def embed_text(text: str) -> Optional[np.ndarray]:
             contents=[key],
         )
         vec = np.array(result.embeddings[0].values, dtype=np.float32)
-        _embed_cache[key] = vec
+        _embed_cache.set(key, vec)
         return vec
     except Exception as e:
         print(f"[embedding] embed_text failed: {e}")
@@ -128,6 +142,5 @@ def cosine_sim_matrix(query_vec: np.ndarray, doc_vecs: List[np.ndarray]) -> List
 
 
 def clear_embed_cache():
-    global _embed_cache
-    _embed_cache = {}
-    print("[embedding] Cache cleared.")
+    _embed_cache.clear()
+    print('[embedding] Cache cleared.')

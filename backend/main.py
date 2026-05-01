@@ -601,10 +601,8 @@ async def get_quick_questions(intent: str = "general_info", db: Session = Depend
         def org_qs(n=3):
             qs = []
             for org in sample(orgs, n):
-                words = org.name.split()
-                label = ''.join(w[0].upper() for w in words if w)
-                label = label if len(label) <= 8 else truncate(org.name, 20)
-                qs.append({"text": f"🏆 {label}", "query": f"Tell me about {org.name} organization", "category": "organization"})
+                label = truncate(org.name, 26)
+                qs.append({"text": f"🎓 {label}", "query": f"Tell me about {org.name}", "category": "organization"})
             return qs
 
         def announcement_qs(n=3):

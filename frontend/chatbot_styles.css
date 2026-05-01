@@ -220,10 +220,10 @@
             font-family: 'Poppins', sans-serif;
         }
 
-        /* Hide label on very small screens */
+        /* Hide label on very small screens — already handled in 768px block */
         @media (max-width: 380px) {
-            .nav-icon-label { display: none; }
-            .nav-icon-btn { padding: 8px 10px; }
+            .nav-icon-btn { padding: 5px 7px; }
+            #langSelect { width: 68px; font-size: 10px; }
         }
 
         #langSelect {
@@ -604,7 +604,7 @@
 
         /* Mobile adjustments */
         @media (max-width: 480px) {
-            .tts-header-indicator { font-size: 11px; padding: 4px 10px 4px 8px; }
+            .tts-header-indicator { font-size: 10px; padding: 3px 8px 3px 6px; }
             .tts-msg-btn          { font-size: 10px; padding: 4px 10px; }
         }
 
@@ -826,9 +826,7 @@
 
         /* MOBILE RESPONSIVE STYLES */
         @media (max-width: 768px) {
-            body {
-                padding: 0;
-            }
+            body { padding: 0; }
 
             .chat-container {
                 height: 100vh;
@@ -837,49 +835,150 @@
                 max-width: 100%;
             }
 
-            .chat-header {
-                padding: 16px 20px;
-            }
+            .chat-header { padding: 8px 12px; }
 
+            /* Single tight row */
             .header-content {
                 flex-direction: row;
-                flex-wrap: wrap;
-                gap: 10px;
+                flex-wrap: nowrap;
+                align-items: center;
+                gap: 6px;
             }
 
+            /* Logo + title shrink */
             .header-left {
-                gap: 12px;
+                gap: 8px;
                 flex: 1;
-                min-width: 200px;
+                min-width: 0;
+                overflow: hidden;
             }
 
             .logo-container {
-                width: 48px;
-                height: 48px;
+                width: 32px;
+                height: 32px;
+                flex-shrink: 0;
             }
+
+            .header-text { min-width: 0; overflow: hidden; }
 
             .header-text h1 {
-                font-size: 20px;
+                font-size: 15px;
+                margin-bottom: 0;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
 
-            .header-text p {
-                font-size: 12px;
-            }
+            /* Hide subtitle on mobile — saves vertical + horizontal space */
+            .header-text p { display: none; }
 
+            /* Controls: compact, no wrap, right side only */
             .header-controls {
                 flex-direction: row;
-                gap: 8px;
-                width: 100%;
+                flex-wrap: nowrap;
+                gap: 5px;
+                align-items: center;
+                flex-shrink: 0;
+                width: auto;
             }
 
+            /* Back + Navigate: icon only */
+            .nav-icon-btn {
+                padding: 5px 8px;
+                border-radius: 8px;
+                gap: 0;
+                min-width: 32px;
+                justify-content: center;
+            }
+
+            .nav-icon-label { display: none; }
+
+            .nav-icon-emoji {
+                font-size: 16px;
+                line-height: 1;
+                display: inline-block;
+            }
+
+            /* Language select: minimal */
             #langSelect {
-                padding: 8px 12px;
-                font-size: 13px;
-                flex: 1;
+                padding: 5px 2px 5px 5px;
+                font-size: 11px;
+                width: 75px;
+                flex: none;
+                border-radius: 8px;
             }
 
-            .status-indicator {
+            /* Online dot only — hide text */
+            .status-indicator span:last-child { display: none; }
+            .status-dot { width: 7px; height: 7px; }
+
+            /* Hide TTS pill completely on mobile — replaced by compact version below */
+            .tts-header-indicator {
+                display: none !important;
+            }
+
+            /* Compact mobile TTS pill — shown only when speaking */
+            .tts-mobile-pill {
+                display: none;
+                align-items: center;
+                gap: 4px;
+                background: rgba(255,255,255,0.2);
+                border: 1.5px solid rgba(255,255,255,0.5);
+                border-radius: 20px;
+                padding: 3px 6px 3px 7px;
+                font-size: 10px;
+                font-weight: 600;
+                color: #fff;
+                white-space: nowrap;
+                cursor: pointer;
+                flex-shrink: 0;
+            }
+
+            .tts-mobile-pill.active { display: flex; }
+
+            .tts-mobile-pill-wave {
+                display: flex;
+                align-items: center;
+                gap: 1.5px;
+            }
+
+            .tts-mobile-pill-wave span {
+                display: inline-block;
+                width: 2px;
+                height: 8px;
+                background: #FFD700;
+                border-radius: 2px;
+                animation: mobileWave 0.8s ease-in-out infinite;
+            }
+
+            .tts-mobile-pill-wave span:nth-child(2) { animation-delay: 0.15s; }
+            .tts-mobile-pill-wave span:nth-child(3) { animation-delay: 0.30s; }
+
+            @keyframes mobileWave {
+                0%, 100% { transform: scaleY(0.4); }
+                50%       { transform: scaleY(1); }
+            }
+
+            .tts-mobile-pill-x {
                 font-size: 11px;
+                line-height: 1;
+                opacity: 0.85;
+                margin-left: 2px;
+            }
+
+            /* Hide status indicator when pill is active */
+            .tts-mobile-pill.active ~ .status-indicator,
+            .tts-active .status-indicator {
+                display: none;
+            }
+
+            /* Status dot — back to normal, no longer used for speaking state */
+            .status-dot.speaking {
+                background: #4CAF50;
+                animation: none;
+                cursor: default;
+                width: 7px;
+                height: 7px;
             }
 
             .chat-messages {

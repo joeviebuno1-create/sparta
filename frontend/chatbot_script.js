@@ -138,27 +138,29 @@ const chatMessages = document.getElementById('chatMessages');
         setTimeout(async () => {
             if (isCollegeSelection) {
                 // Parse the actual options from the response text dynamically
-                // Lines like "**1.** College of Engineering Technology (CET) — *Name*"
+                // Backend format: "**1.** College of Engineering Technology (CET) - *Name*"
                 const dynamicButtons = [];
                 const lines = responseText.split('\n');
                 lines.forEach(line => {
-                    // Match numbered options: **1.** Department text
-                    const m = line.match(/^\*\*(\d+)\.\*\*\s+(.+?)(?:\s+—.*)?$/);
+                    // Match: **1.** <dept text> optionally followed by - *name*
+                    const m = line.match(/^\*\*\d+\.\*\*\s+(.+?)(?:\s*[-–—]\s*\*.*\*)?$/);
                     if (m) {
-                        const dept = m[2].trim();
-                        // Extract abbreviation e.g. "(CET)" if present
-                        const abbr = dept.match(/\(([A-Z]{2,6})\)/);
-                        const code = abbr ? abbr[1] : dept.split(' ').map(w=>w[0]).join('').toUpperCase();
+                        const dept = m[1].trim();
+                        // Extract abbreviation e.g. "(CET)" from dept name
+                        const abbrMatch = dept.match(/\(([A-Z]{2,6})\)/);
+                        const code = abbrMatch ? abbrMatch[1] : '';
+                        if (!code) return; // skip if no clean abbreviation found
                         const emoji = {
-                            CET:'🏗️', CICS:'💻', CAS:'🎨', CABE:'💼', CTE:'👨‍🏫'
+                            CET: '🏗️', CICS: '💻', CAS: '🎨',
+                            CABE: '💼', CTE: '👨‍🏫', DCOTE: '👨‍🏫'
                         }[code] || '🎓';
                         dynamicButtons.push({
-                            text: `${emoji} ${code}`,
+                            text: `${emoji} ${code} Dean`,
                             query: `Who is the dean of ${code}?`
                         });
                     }
                 });
-                // Use dynamic buttons if parsed successfully, else fall back to hardcoded
+                // Use dynamic buttons if parsed, else fall back to hardcoded
                 renderQuickQuestions(dynamicButtons.length > 0 ? dynamicButtons : COLLEGE_PICKER_QUESTIONS);
             } else {
                 await loadDynamicQuestions(intent);
@@ -718,24 +720,34 @@ const chatMessages = document.getElementById('chatMessages');
     let activeTtsBtn = null;
 
     function setTtsIndicator(speaking, btnEl) {
-        const pill = document.getElementById('ttsHeaderIndicator');
-        // Header pill
-        if (speaking) {
-            pill.classList.add('active');
-        } else {
-            pill.classList.remove('active');
+        const pill       = document.getElementById('ttsHeaderIndicator');
+        const mobilePill = document.getElementById('ttsMobilePill');
+        const dot        = document.querySelector('.status-dot');
+        const statusEl   = document.querySelector('.status-indicator');
+
+        // Desktop pill
+        if (speaking) { pill.classList.add('active'); }
+        else           { pill.classList.remove('active'); }
+
+        // Mobile compact pill — show/hide and toggle status dot
+        if (mobilePill) {
+            if (speaking) {
+                mobilePill.classList.add('active');
+                if (statusEl) statusEl.style.display = 'none';
+            } else {
+                mobilePill.classList.remove('active');
+                if (statusEl) statusEl.style.display = '';
+            }
         }
+
         // Clear old button state
         if (activeTtsBtn && activeTtsBtn !== btnEl) {
             activeTtsBtn.classList.remove('speaking');
         }
         activeTtsBtn = btnEl || null;
         if (activeTtsBtn) {
-            if (speaking) {
-                activeTtsBtn.classList.add('speaking');
-            } else {
-                activeTtsBtn.classList.remove('speaking');
-            }
+            if (speaking) { activeTtsBtn.classList.add('speaking'); }
+            else          { activeTtsBtn.classList.remove('speaking'); }
         }
     }
 

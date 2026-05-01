@@ -49,7 +49,34 @@ def _content_words(text: str) -> set:
     return {w for w in words if len(w) > 2 and w not in _STOP_WORDS}
 
 
-def _score_chunk(query_words: set, chunk_words: set) -> float:
+_HEADER_NOISE = re.compile(
+    r'^(frequently\s+asked\s+questions?|faq|batangas\s+state\s+university'
+    r'|don\s+claro|the\s+national\s+engineering|page\s+\d+|\d+\s*of\s*\d+)',
+    re.IGNORECASE
+)
+
+def _clean_chunk(text: str) -> str:
+    """Remove PDF header/footer noise lines from a chunk."""
+    lines = text.split('\n')
+    cleaned = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # Skip short header-like lines (page titles, doc titles)
+        if len(stripped) < 60 and _HEADER_NOISE.match(stripped):
+            continue
+        cleaned.append(line)
+    return '\n'.join(cleaned).strip()
+
+
+def _is_qa_chunk(text: str) -> bool:
+    """Return True if chunk contains a Q&A pattern — higher quality for retrieval."""
+    return bool(re.search(r'^\s*Q\s*:', text, re.MULTILINE) or
+                re.search(r'^\s*Q\s*\d*[:\.]', text, re.MULTILINE))
+
+
+def _score_chunk(query_words: set, chunk_words: set, chunk_text: str = "") -> float:
     """Score pre-computed chunk word set against query words."""
     if not query_words or not chunk_words:
         return 0.0
@@ -58,35 +85,44 @@ def _score_chunk(query_words: set, chunk_words: set) -> float:
         return 0.0
     base    = len(matches) / len(query_words)
     density = len(matches) / max(len(chunk_words), 1)
-    return base * 0.7 + density * 0.3
+    score   = base * 0.7 + density * 0.3
+    # Boost Q&A formatted chunks — they are more likely to be accurate answers
+    if chunk_text and _is_qa_chunk(chunk_text):
+        score *= 1.3
+    return score
 
 
-def _chunk_text(text: str, chunk_size: int = 1500, overlap: int = 200) -> List[str]:
-    """Split text into overlapping sentence-aware chunks."""
+def _chunk_text(text: str, chunk_size: int = 800, overlap: int = 100) -> List[str]:
+    """Split text into overlapping sentence-aware chunks. Memory-efficient."""
     text = re.sub(r'\n{3,}', '\n\n', text)
     text = re.sub(r'[ \t]+', ' ', text)
 
+    text_len = len(text)
     chunks = []
     start = 0
-    text_len = len(text)
 
     while start < text_len:
         end = min(start + chunk_size, text_len)
 
         if end < text_len:
-            break_search = text[max(end - 200, start):end]
+            search_start = max(end - 150, start)
+            break_search = text[search_start:end]
             for sep in ['\n\n', '.\n', '. ', '\n']:
                 idx = break_search.rfind(sep)
                 if idx != -1:
-                    end = max(end - 200, start) + idx + len(sep)
+                    end = search_start + idx + len(sep)
                     break
 
         chunk = text[start:end].strip()
         if chunk:
             chunks.append(chunk)
 
-        start = end - overlap
-        if start <= 0 or start >= text_len:
+        next_start = end - overlap
+        if next_start <= start:
+            next_start = end  # prevent infinite loop
+        start = next_start
+
+        if start >= text_len:
             break
 
     return chunks
@@ -102,6 +138,9 @@ def _load_cache(db: Session):
     global _chunk_cache, _cache_dirty
 
     t0 = time.time()
+    # Release old cache BEFORE building new one — prevents 2× RAM spike
+    _chunk_cache = {}
+    import gc; gc.collect()
     try:
         docs = (
             db.query(models.FAQDocument)
@@ -120,17 +159,26 @@ def _load_cache(db: Session):
         if not text.strip():
             continue
 
-        # Cap text at 300KB to prevent MemoryError on huge PDFs
-        MAX_TEXT = 300_000
+        # Cap at 50KB per document — enough for a full FAQ PDF
+        # Larger PDFs should be split into multiple FAQ documents in admin
+        MAX_TEXT = 50_000
         if len(text) > MAX_TEXT:
             print(f"[faq_cache] '{doc.title}' truncated {len(text)} -> {MAX_TEXT} chars")
             text = text[:MAX_TEXT]
 
-        raw_chunks = _chunk_text(text, chunk_size=1500, overlap=200)
-        processed = [
-            {"text": chunk, "words": _content_words(chunk)}
-            for chunk in raw_chunks
-        ]
+        raw_chunks = _chunk_text(text, chunk_size=800, overlap=100)
+        processed = []
+        for chunk in raw_chunks:
+            cleaned = _clean_chunk(chunk)
+            if len(cleaned) < 30:  # skip near-empty chunks after cleaning
+                continue
+            processed.append({
+                "text":  cleaned,
+                "words": _content_words(cleaned),
+                "is_qa": _is_qa_chunk(cleaned),
+            })
+        del raw_chunks
+
         new_cache[doc.id] = {
             "title":     doc.title,
             "chunks":    processed,
@@ -150,8 +198,8 @@ def _load_cache(db: Session):
 def retrieve_faq_context(
     db: Session,
     query: str,
-    top_k: int = 5,
-    min_score: float = 0.10,
+    top_k: int = 3,
+    min_score: float = 0.15,
 ) -> str:
     """
     Search cached FAQ chunks for the query and return top-k as context string.
@@ -174,12 +222,11 @@ def retrieve_faq_context(
     scored: List[Tuple[float, str]] = []
 
     for doc_id, doc_data in _chunk_cache.items():
-        title  = doc_data["title"]
         chunks = doc_data["chunks"]
         for chunk in chunks:
-            score = _score_chunk(query_words, chunk["words"])
+            score = _score_chunk(query_words, chunk["words"], chunk["text"])
             if score >= min_score:
-                scored.append((score, f"[{title}]\n{chunk['text']}"))
+                scored.append((score, chunk["text"]))
 
     if not scored:
         print(f"[faq_retriever] No matches found for: {query!r}")
@@ -188,7 +235,19 @@ def retrieve_faq_context(
     scored.sort(key=lambda x: x[0], reverse=True)
     top_chunks = [text for _, text in scored[:top_k]]
     print(f"[faq_retriever] Returning {len(top_chunks)} chunks (best score: {scored[0][0]:.3f})")
-    result = "\n\n---\n\n".join(top_chunks)
-    if len(result) > 12_000:
-        result = result[:12_000] + "\n[...truncated...]"
+
+    # Join chunks, remove duplicate lines across chunks
+    seen_lines = set()
+    final_lines = []
+    for chunk in top_chunks:
+        for line in chunk.split('\n'):
+            stripped = line.strip()
+            if stripped and stripped not in seen_lines:
+                seen_lines.add(stripped)
+                final_lines.append(line)
+        final_lines.append('')  # blank line between chunks
+
+    result = '\n'.join(final_lines).strip()
+    if len(result) > 6_000:
+        result = result[:6_000] + "\n[...truncated...]"
     return result

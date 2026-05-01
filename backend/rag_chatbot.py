@@ -22,13 +22,14 @@ import json
 import numpy as np
 from difflib import SequenceMatcher
 
-# Gemini-based embedding (replaces sentence-transformers + torch)
+# Sentence-transformers embedding (CPU-only, no Gemini API needed)
 from embedding_handler import (
     embed_text, embed_batch, cosine_sim_matrix,
     EMBEDDING_ENABLED, clear_embed_cache
 )
 
-# ── Gemini 1.5 Flash + FAQ PDF retriever ─────────────────────────────────────
+# ── Pure RAG mode — Gemini disabled to prevent Railway OOM ───────────────────
+# gemini_handler stubs return None; rag_chatbot falls back to template responses
 from gemini_handler import generate_with_gemini, answer_from_faq_docs, _context_blocks_to_text, GEMINI_ENABLED
 from faq_retriever import retrieve_faq_context
 
@@ -231,7 +232,7 @@ class EnhancedDatabaseRAG:
         self._cache_ready = False
 
         if self.use_embeddings:
-            print("✓ Gemini embedding-based semantic search enabled.")
+            print("✓ Sentence-transformers semantic search enabled.")
 
         self.intent_config = {
             'authority_query': {
@@ -784,16 +785,32 @@ class EnhancedDatabaseRAG:
             fuzzy_score = self._calculate_fuzzy_match(original_query, doc, entities, intent)
             entity_score = self._calculate_entity_match(entities, doc, intent)
 
+            # ── Location name phrase boost ────────────────────────────────────
+            # Fixes: "Where is Office of Vice Chancellor for Admin and Finance"
+            # returning CET Dean's Office because word "administration" matched.
+            # We count how many query content-words appear in the room NAME
+            # specifically and boost docs where the name is a better phrase match.
+            loc_phrase_boost = 0.0
+            if intent == 'location_query' and hasattr(doc, 'name'):
+                _skip_loc = {'where', 'is', 'the', 'of', 'for', 'and', 'or',
+                             'find', 'locate', 'location', 'room', 'office', 'a',
+                             'what', 'how', 'get', 'to', 'me', 'can', 'you'}
+                _qw = [w for w in original_query.lower().split()
+                       if w not in _skip_loc and len(w) >= 3]
+                _dn = doc.name.lower()
+                _hits = sum(1 for w in _qw if w in _dn)
+                if _hits > 0:
+                    loc_phrase_boost = min(_hits * 0.35, 1.0)
+
             if strong_entity_query:
-                # Pure entity/keyword mode — fast, accurate, no semantic noise
                 combined = (keyword_score * 0.25 + fuzzy_score * 0.25
-                            + entity_score * 0.50)
+                            + entity_score * 0.50) + loc_phrase_boost
             elif use_embeddings:
                 combined = (semantic_score * 0.40 + keyword_score * 0.25
-                            + fuzzy_score * 0.20 + entity_score * 0.15)
+                            + fuzzy_score * 0.20 + entity_score * 0.15) + loc_phrase_boost
             else:
                 combined = (keyword_score * 0.40 + fuzzy_score * 0.30
-                            + entity_score * 0.30)
+                            + entity_score * 0.30) + loc_phrase_boost
 
             if combined >= threshold:
                 # Penalize emergency exits — they should never surface as a primary result
@@ -936,83 +953,83 @@ class EnhancedDatabaseRAG:
                 return query.all()
 
             elif intent == 'location_query':
-                query = db.query(models.RoomLocation).filter(
-                    ~models.RoomLocation.name.ilike('%emergency exit%'),
-                    ~models.RoomLocation.name.ilike('%emergency%exit%'),
-                    ~models.RoomLocation.type.ilike('%emergency%'),
+                _loc_base = db.query(models.RoomLocation).filter(
+                    ~models.RoomLocation.name.ilike('%emergency%'),
                 )
-                if entities.get('locations'):
-                    # Expand location aliases — library → also search LRC
-                    location_alias_map = {
-                        'library': ['library', 'lrc', 'learning resource center', 'learning resource'],
-                        'lrc': ['library', 'lrc', 'learning resource center'],
-                        'learning resource center': ['library', 'lrc', 'learning resource center'],
-                        'gym': ['gym', 'gymnasium', 'sports', 'physical education'],
-                        'gymnasium': ['gym', 'gymnasium'],
-                        'canteen': ['canteen', 'cafeteria', 'food', 'dining'],
-                        'cafeteria': ['canteen', 'cafeteria', 'dining'],
-                        'clinic': ['clinic', 'health', 'medical', 'infirmary'],
-                        'chapel': ['chapel', 'church', 'prayer'],
-                        'registrar': ['registrar', 'registration', 'enrollment'],
-                        'cashier': ['cashier', 'payment', 'finance'],
-                    }
-                    all_search_terms = []
-                    for loc in entities['locations']:
-                        loc_lower = loc.lower().strip()
-                        aliases = location_alias_map.get(loc_lower, [loc_lower])
-                        all_search_terms.extend(aliases)
 
-                    # Remove duplicates
-                    all_search_terms = list(set(all_search_terms))
+                # Alias map: common terms → DB search variants
+                _alias = {
+                    'library': ['library', 'lrc', 'learning resource center'],
+                    'lrc': ['library', 'lrc', 'learning resource center'],
+                    'gym': ['gym', 'gymnasium'],
+                    'gymnasium': ['gym', 'gymnasium'],
+                    'canteen': ['canteen', 'cafeteria'],
+                    'cafeteria': ['canteen', 'cafeteria'],
+                    'clinic': ['clinic', 'infirmary', 'health'],
+                    'chapel': ['chapel', 'church'],
+                    'registrar': ['registrar', 'registration'],
+                    'cashier': ['cashier', 'finance'],
+                    'speech lab': ['speech'],
+                    'computer lab': ['computer lab', 'computer laboratory'],
+                    'vmb': ['vmb'],
+                    'cet': ['cet'],
+                    'cics': ['cics'],
+                }
 
-                    loc_filters = [
+                # Collect search terms from entity extraction
+                _terms = []
+                for loc in (entities.get('locations') or []):
+                    _ll = loc.lower().strip()
+                    _terms.extend(_alias.get(_ll, [_ll]))
+
+                # ALSO pull words directly from the raw query — catches "speech lab",
+                # "VMB", building codes that entity extraction may miss
+                _skip = {'where', 'what', 'find', 'show', 'tell', 'about', 'is',
+                         'the', 'are', 'how', 'get', 'to', 'me', 'can', 'you',
+                         'please', 'want', 'know', 'look', 'for', 'location',
+                         'located', 'place', 'situated', 'and', 'or', 'of', 'a'}
+                _raw = [w for w in original_query.lower().split() if w not in _skip and len(w) >= 2]
+                _terms.extend(_raw)
+
+                # Room numbers (e.g. "402")
+                for rn in (entities.get('room_numbers') or []):
+                    _terms.append(rn)
+
+                # Deduplicate
+                _terms = list(dict.fromkeys(_terms))
+
+                if _terms:
+                    _filters = [
                         or_(
-                            models.RoomLocation.name.ilike(f'%{term}%'),
-                            models.RoomLocation.building.ilike(f'%{term}%'),
-                            models.RoomLocation.description.ilike(f'%{term}%') if hasattr(models.RoomLocation, 'description') else models.RoomLocation.name.ilike(f'%{term}%'),
+                            models.RoomLocation.name.ilike(f'%{t}%'),
+                            models.RoomLocation.building.ilike(f'%{t}%'),
                         )
-                        for term in all_search_terms
+                        for t in _terms
                     ]
-                    query = query.filter(or_(*loc_filters))
-                if entities.get('room_numbers'):
-                    room_filters = [
-                        models.RoomLocation.name.ilike(f'%{r}%')
-                        for r in entities['room_numbers']
-                    ]
-                    query = query.filter(or_(*room_filters))
+                    results = _loc_base.filter(or_(*_filters)).all()
+                else:
+                    results = _loc_base.all()
 
-                results = query.all()
-
-                # Fallback 1 — if no results with entity filters, try direct keyword search
-                if not results:
-                    query_words = [
-                        w for w in original_query.lower().split()
-                        if len(w) > 3 and w not in
-                        {'where', 'what', 'find', 'show', 'tell', 'about',
-                         'is', 'the', 'are', 'how', 'get', 'to', 'me', 'can',
-                         'you', 'please', 'i', 'want', 'know', 'look', 'for',
-                         'location', 'located', 'place', 'situated'}
-                    ]
-                    # Also add the raw entity locations in case alias expansion missed them
-                    for loc in (entities.get('locations') or []):
-                        if loc.lower() not in query_words:
-                            query_words.append(loc.lower())
-
-                    if query_words:
-                        fallback_filters = [
-                            or_(
-                                models.RoomLocation.name.ilike(f'%{w}%'),
-                                models.RoomLocation.building.ilike(f'%{w}%'),
-                                models.RoomLocation.description.ilike(f'%{w}%')
-                                if hasattr(models.RoomLocation, 'description')
-                                else models.RoomLocation.name.ilike(f'%{w}%'),
-                            )
-                            for w in query_words
-                        ]
-                        results = db.query(models.RoomLocation).filter(
-                            ~models.RoomLocation.name.ilike('%emergency%'),
-                            or_(*fallback_filters)
-                        ).all()
+                # ── Exact-phrase boost: re-rank by how many consecutive query
+                # words appear in the room name. This fixes cases like
+                # "Vice Chancellor for Administration and Finance" returning
+                # a CET record because individual words matched better.
+                if results and len(results) > 1:
+                    _qwords = [w for w in original_query.lower().split()
+                               if w not in _skip and len(w) >= 3]
+                    def _name_score(loc):
+                        _n = loc.name.lower()
+                        # Count how many query content-words appear in the name
+                        hits = sum(1 for w in _qwords if w in _n)
+                        # Extra bonus if a long substring of the query is in the name
+                        for length in range(min(6, len(_qwords)), 1, -1):
+                            for start in range(len(_qwords) - length + 1):
+                                phrase = ' '.join(_qwords[start:start + length])
+                                if len(phrase) > 5 and phrase in _n:
+                                    hits += length * 2
+                                    break
+                        return hits
+                    results = sorted(results, key=_name_score, reverse=True)
 
                 return results
 
@@ -1713,70 +1730,32 @@ class EnhancedDatabaseRAG:
 
         if _is_list_fail:
             if lang == 'tl':
-                return (
-                    "📋 **Hindi ko ma-listahan ang lahat ng opisyal ngayon.**\n\n"
-                    "Maaaring walang datos sa database pa. Subukan ang:\n\n"
-                    "• *'Sino ang dekano ng CET?'*\n"
-                    "• *'Sino ang chancellor ng BSU Lipa?'*\n"
-                    "• *'Sino ang presidente ng unibersidad?'*\n\n"
-                    "O mag-click sa mga quick questions sa ibaba! 👇"
-                )
-            return (
-                "📋 **I wasn't able to list all university officials right now.**\n\n"
-                "The database may not have officials added yet. Try asking about a specific person instead:\n\n"
-                "• *'Who is the dean of CET?'*\n"
-                "• *'Who is the chancellor of BSU Lipa?'*\n"
-                "• *'Who is the university president?'*\n\n"
-                "Or use the quick question buttons below! 👇"
-            )
+                return "Paumanhin, wala akong impormasyon tungkol sa mga opisyal sa aking database."
+            return "Sorry, I don't have that information in my database."
 
         if lang == 'tl':
             tl_fb = {
-                'authority_query': "Hindi ko mahanap ang taong iyon o posisyon. 🤔\n\nSubukan ang buong titulo tulad ng *'Dekano ng CET'*, o tanungin ang *'Sino ang mga opisyal?'*",
-                'location_query': "Wala akong impormasyon tungkol sa lokasyong iyon. 📍\n\nGamitin ang **Campus Navigator** para sa interactive na mapa ng kampus!",
-                'history_query': "Wala akong ganoong kasaysayan. 🏛️\n\nSubukan ang pagtatanong tungkol sa pagkakatatag ng unibersidad!",
-                'announcement_query': "Walang anunsyo na tumutugma. 📢\n\nSubukan ang *'mga pinakabagong anunsyo'*!",
-                'organization_query': "Hindi ko mahanap ang organisasyong iyon. 🎓\n\nSubukan ang *'Listahan ng lahat ng organisasyon'*!",
-                'navigation_query': "Gamitin ang **Campus Navigator** para sa detalyadong navigasyon! 🗺️",
-                'general_info': "Ako si SPARTA, ang iyong BSU Lipa campus assistant! 😊\n\n**👥 Mga Tao** - Mga itinalagang opisyal\n**📍 Mga Lokasyon** - Mga gusali at silid\n**🏛️ Kasaysayan** - BSU Lipa na nakaraan\n**🎓 Mga Organisasyon** - Mga estudyanteng organisasyon\n\nAno ang gusto mong malaman?",
+                'authority_query':    "Paumanhin, wala akong impormasyon tungkol sa taong iyon o posisyong iyan sa aking database.",
+                'location_query':     "Paumanhin, wala akong impormasyon tungkol sa lokasyong iyan sa aking database.",
+                'history_query':      "Paumanhin, wala akong impormasyon tungkol sa kasaysayang iyan sa aking database.",
+                'announcement_query': "Paumanhin, wala akong impormasyon tungkol sa anunsyong iyan sa aking database.",
+                'organization_query': "Paumanhin, wala akong impormasyon tungkol sa organisasyong iyan sa aking database.",
+                'navigation_query':   "Paumanhin, wala akong impormasyon tungkol diyan sa aking database.",
+                'general_info':       "Paumanhin, wala akong impormasyon tungkol diyan sa aking database.",
             }
-            return tl_fb.get(intent, tl_fb['general_info'])
+            return tl_fb.get(intent, "Paumanhin, wala akong impormasyon tungkol diyan sa aking database.")
+
+        _no_info = "Sorry, I don't have that information in my database."
         fallbacks = {
-            'authority_query': (
-                "Hmm, I wasn't able to find that person or position in my records. 🤔\n\n"
-                "Try asking with the full official title like *'Dean of College of Engineering Technology'*, "
-                "or ask *'Who are the university officials?'* to see everyone!"
-            ),
-            'location_query': (
-                "I don't have information about that specific location. 📍 What other location would you like to know about?\n\n"
-                "You can also use the **Campus Navigator** for detailed directions and an interactive map of the entire campus!"
-            ),
-            'history_query': (
-                "I don't have that specific historical record. 🏛️\n\n"
-                "Try asking about the university's founding, major milestones, or a specific year!"
-            ),
-            'announcement_query': (
-                "I couldn't find any announcements matching that. 📢\n\n"
-                "Try asking for *'latest announcements'* to see what's new on campus!"
-            ),
-            'organization_query': (
-                "I couldn't find that organization. 🎓\n\n"
-                "Try asking *'List all organizations'* to see everything available!"
-            ),
-            'navigation_query': (
-                "For detailed navigation, please use the **Campus Navigator** for an interactive 3D map! 🗺️\n\n"
-                "You can also ask me about specific locations like *'Where is the library?'*"
-            ),
-            'general_info': (
-                "I'm SPARTA, your BSU Lipa campus assistant! 😊 Here's what I can help you with:\n\n"
-                "**👥 People** - Designated officials\n"
-                "**📍 Locations** - Buildings and rooms\n"
-                "**🏛️ History** - BSU Lipa background\n"
-                "**🎓 Organizations** - Student organization\n\n"
-                "What would you like to know?"
-            ),
+            'authority_query':    _no_info,
+            'location_query':     _no_info,
+            'history_query':      _no_info,
+            'announcement_query': _no_info,
+            'organization_query': _no_info,
+            'navigation_query':   _no_info,
+            'general_info':       _no_info,
         }
-        return fallbacks.get(intent, fallbacks['general_info'])
+        return fallbacks.get(intent, _no_info)
 
     def check_custom_response(self, query: str, db: Session,
                                lang: str = 'en') -> Optional[str]:
@@ -1879,6 +1858,26 @@ class EnhancedDatabaseRAG:
                 }
 
 
+            # Step 0.6: College-number / college-name follow-up handler
+            # When user replies "1"..."5" or a college name/code after the dean
+            # clarification prompt, map it to a full authority query.
+            _CN_MAP = {
+                '1':'CET','2':'CAS','3':'CABE','4':'CICS','5':'CTE',
+                'one':'CET','two':'CAS','three':'CABE','four':'CICS','five':'CTE',
+                'cet':'CET','engineering':'CET','engineering technology':'CET',
+                'cics':'CICS','informatics':'CICS','computing':'CICS','computing sciences':'CICS',
+                'cas':'CAS','arts':'CAS','arts and sciences':'CAS',
+                'cabe':'CABE','accountancy':'CABE','business':'CABE','economics':'CABE',
+                'cte':'CTE','teacher':'CTE','education':'CTE','teacher education':'CTE',
+            }
+            _q_cn = original_query.strip().lower()
+            _college_hit = _CN_MAP.get(_q_cn) or next(
+                (v for k, v in _CN_MAP.items() if k in _q_cn and len(k) > 2), None
+            )
+            if _college_hit:
+                original_query = f'Who is the dean of {_college_hit}?'
+                _q_cn = original_query.lower()
+
             # Step 0.7: Vague / ambiguous query guard
             # Queries like "what is this", "what", "huh", "this" have no
             # campus-specific substance. Catch them here before intent scoring
@@ -1906,6 +1905,8 @@ class EnhancedDatabaseRAG:
                     'bsu', 'lipa', 'dean', 'room', 'lab', 'org', 'who',
                     'where', 'when', 'chan', 'sets', 'cet', 'cics', 'cas',
                     'cabe', 'cte', 'sino', 'saan', 'ano',
+                    '1', '2', '3', '4', '5',
+                    'engineering', 'informatics', 'accountancy', 'teacher',
                 ]
                 if not any(h in _q_stripped for h in _campus_hints):
                     _is_vague = True
@@ -1943,6 +1944,50 @@ class EnhancedDatabaseRAG:
 
             # Step 2: Intent Detection (on normalized query)
             intent, intent_confidence = self.detect_intent(normalized_query)
+
+            # Step 2.3: Org acronym / name override
+            # Catches queries like "who is SETS", "SETS", "tell me about SETS",
+            # "sino si ACETS" where the keyword is an org acronym or name fragment
+            # but intent detection landed on authority_query or general_info.
+            if intent in ('authority_query', 'general_info', 'history_query'):
+                try:
+                    _ql_org = original_query.lower().strip()
+                    _org_stripped = re.sub(
+                        r'^(who is|what is|tell me about|about|sino si|sino ang|'
+                        r'ano ang|what are|show me|give me info about|'
+                        r'i want to know about|can you tell me about)\s+',
+                        '', _ql_org
+                    ).strip()
+                    _org_stripped = re.sub(r'^(the|ang|si|ni|ng)\s+', '', _org_stripped).strip()
+
+                    if len(_org_stripped) >= 2:
+                        _all_orgs = db.query(models.Organization).all()
+                        _best_org_score = 0.0
+                        for _org in _all_orgs:
+                            _oname = (_org.name or '').lower()
+                            _owords = _oname.split()
+                            _acronym = ''.join(w[0] for w in _owords if w)
+                            # Exact acronym match — strongest signal
+                            if _org_stripped == _acronym:
+                                _best_org_score = 4.0
+                                break
+                            # Acronym is in the stripped query
+                            if _acronym and len(_acronym) >= 2 and _acronym in _org_stripped:
+                                _best_org_score = max(_best_org_score, 3.0)
+                            # Stripped query is a substring of full org name
+                            if len(_org_stripped) > 2 and _org_stripped in _oname:
+                                _best_org_score = max(_best_org_score, 2.5)
+                            # Any org word matches a word in the query
+                            for _ow in _owords:
+                                if len(_ow) > 2 and _ow in _org_stripped:
+                                    _best_org_score = max(_best_org_score, 2.0)
+                        if _best_org_score >= 2.0:
+                            print(f"[intent_override] '{original_query}' -> organization_query "
+                                  f"(org score={_best_org_score:.1f})")
+                            intent = 'organization_query'
+                            intent_confidence = min(0.5 + _best_org_score * 0.1, 0.95)
+                except Exception as _oe:
+                    print(f"[intent_override] org check failed: {_oe}")
 
             # Step 2.5: Check if query matches a history title directly.
             # Only runs when intent is NOT already authority/location/org —
@@ -2030,26 +2075,34 @@ class EnhancedDatabaseRAG:
 
             # ── Early exit: no DB results ──────────────────────────────────────
             if not context:
-                # Always try FAQ+Gemini first before giving up.
-                # FAQ docs may contain info not stored in the DB (mission, vision,
-                # core values, quality policy, FAQs, etc.).
-                # The is_off_topic() gate upstream already blocked truly off-topic
-                # queries, so anything reaching here is worth checking in the PDF.
-                if GEMINI_ENABLED:
-                    faq_text = retrieve_faq_context(db, original_query)
-                    if faq_text:
-                        faq_response = answer_from_faq_docs(original_query, faq_text, lang)
-                        if faq_response:
-                            return {
-                                'response': faq_response,
-                                'confidence': 0.60,
-                                'intent': intent,
-                                'suggestions': [],
-                                'context_used': 0,
-                                'entities_found': entities
-                            }
+                # Location with no DB match → instant friendly fallback (no Gemini)
+                if intent == 'location_query':
+                    response = self.generate_fallback_response(intent, original_query, lang)
+                    return {
+                        'response': response,
+                        'confidence': 0.0,
+                        'intent': intent,
+                        'suggestions': [],
+                        'context_used': 0,
+                        'entities_found': entities
+                    }
 
-                # No DB match + no FAQ answer → instant fallback
+                # For all other intents with no DB result, try FAQ chunks directly
+                faq_text = retrieve_faq_context(db, original_query)
+                if faq_text:
+                    if lang == 'tl':
+                        faq_header = "📄 **Natagpuan sa FAQ:**\n\n"
+                    else:
+                        faq_header = "📄 **From the BSU Lipa FAQ:**\n\n"
+                    return {
+                        'response': faq_header + faq_text,
+                        'confidence': 0.55,
+                        'intent': intent,
+                        'suggestions': [],
+                        'context_used': 0,
+                        'entities_found': entities
+                    }
+
                 response = self.generate_fallback_response(intent, original_query, lang)
                 return {
                     'response': response,
@@ -2110,21 +2163,46 @@ class EnhancedDatabaseRAG:
                     entities=entities
                 )
 
-            elif GEMINI_ENABLED:
-                # For non-authority intents — optionally enrich with FAQ docs
-                # Only fetch FAQ when we have DB results (to add extra context)
-                faq_text = retrieve_faq_context(db, original_query)
-                if faq_text:
-                    db_context_text = _context_blocks_to_text(context, intent)
-                    combined_context = db_context_text + "\n\n[FAQ DOCUMENTS]\n" + faq_text
-                    gemini_response = answer_from_faq_docs(original_query, combined_context, lang)
-                else:
-                    gemini_response = generate_with_gemini(original_query, context, intent, lang)
-                response = gemini_response if gemini_response else self.generate_response(
+            elif intent == 'location_query':
+                # Location: always use fast RAG template — no Gemini call.
+                # Gemini adds 2-3s of latency for a simple "where is X" answer
+                # that RAG can answer instantly from DB fields.
+                response = self.generate_response(
                     original_query, context, intent, intent_confidence, lang,
                     entities=entities
                 )
+
+            elif intent == 'general_info':
+                # Pure RAG: search FAQ PDF chunks directly, no LLM needed.
+                # Wrapped in try/except so a slow first-load never crashes the response.
+                try:
+                    import signal as _signal
+
+                    def _timeout_handler(signum, frame):
+                        raise TimeoutError("faq_retriever timeout")
+
+                    # Give FAQ retrieval max 5 seconds — avoids Railway request timeout
+                    _signal.signal(_signal.SIGALRM, _timeout_handler)
+                    _signal.alarm(5)
+                    try:
+                        faq_text = retrieve_faq_context(db, original_query)
+                    finally:
+                        _signal.alarm(0)  # cancel alarm
+
+                    if faq_text:
+                        if lang == 'tl':
+                            header = "📄 **Natagpuan sa FAQ:**\n\n"
+                        else:
+                            header = "📄 **From the BSU Lipa FAQ:**\n\n"
+                        response = header + faq_text
+                    else:
+                        response = "Sorry, I don't have that information in my database."
+                except Exception as _faq_err:
+                    print(f"[faq] retrieval failed or timed out: {_faq_err}")
+                    response = "Sorry, I don't have that information in my database."
             else:
+                # history_query, announcement_query, navigation_query
+                # All handled by RAG template generator
                 response = self.generate_response(
                     original_query, context, intent, intent_confidence, lang,
                     entities=entities
@@ -2188,14 +2266,62 @@ class EnhancedDatabaseRAG:
             }
 
 
+def is_nonsense(message: str) -> bool:
+    """
+    Detect queries that are nonsense, math expressions, gibberish,
+    or completely unrelated to a university — before hitting the RAG pipeline.
+    Returns True if the message should get a clean 'not in database' reply.
+    """
+    msg = message.strip()
+    msg_lower = msg.lower()
+
+    # 1. Math / arithmetic expressions  e.g. "1+1", "2*3", "5/2", "sqrt(4)"
+    if re.match(r'^[\d\s\+\-\*\/\^\(\)\.\%=]+$', msg):
+        return True
+    if re.search(r'\d[\+\-\*\/\^]\d', msg):
+        return True
+    math_words = ['sqrt', 'log(', 'sin(', 'cos(', 'tan(', 'integral', 'derivative',
+                  'solve for', 'calculate', 'compute', '= ?', '=?']
+    if any(w in msg_lower for w in math_words):
+        return True
+
+    # 2. Gibberish — random keyboard smash, no real words
+    # Heuristic: if >60% of chars are repeated or no vowel in any 5+ char token
+    tokens = re.findall(r'[a-zA-Z]{3,}', msg)
+    if tokens:
+        no_vowel_count = sum(
+            1 for t in tokens
+            if not re.search(r'[aeiouAEIOU]', t) and len(t) >= 4
+        )
+        if no_vowel_count / len(tokens) >= 0.7:
+            return True
+
+    # 3. Single/double random characters or symbols with no meaning
+    if len(msg) <= 3 and not re.search(r'[a-zA-Z]{2,}', msg):
+        return True
+
+    # 4. Repeated character spam  e.g. "aaaaaaa", "hhhhhh", "???"
+    if re.match(r'^(.)\1{4,}$', msg):
+        return True
+
+    # 5. Pure symbol / emoji / number strings
+    if re.match(r'^[\W\d_]+$', msg) and len(msg) < 20:
+        return True
+
+    return False
+
+
 def is_off_topic(message: str) -> bool:
     off_topic_keywords = [
         'weather', 'climate', 'movie', 'film', 'celebrity', 'actor', 'actress',
         'tv show', 'series', 'netflix', 'music', 'song', 'singer', 'band',
-        'politics', 'election', 'president of', 'government', 'congress',
+        'politics', 'election', 'government', 'congress',
         'nba', 'nfl', 'soccer', 'football', 'basketball',
         'recipe', 'cooking', 'restaurant', 'menu',
-        'joke', 'riddle', 'game', 'play', 'lottery'
+        'joke', 'riddle', 'game', 'play', 'lottery',
+        'stock price', 'cryptocurrency', 'bitcoin', 'forex',
+        'horoscope', 'zodiac', 'astrology',
+        'dating', 'relationship advice', 'breakup',
     ]
     message_lower = message.lower()
     if any(kw in message_lower for kw in off_topic_keywords):
@@ -2220,6 +2346,17 @@ def process_chat_with_rag(message: str, db: Session,
     else:
         forced_lang = None
     print(f"[language] forced_lang='{forced_lang}'")
+
+    if is_nonsense(message):
+        lang = forced_lang or detect_language(message)
+        no_info_msg = (
+            "Paumanhin, wala akong impormasyon tungkol diyan sa aking database. "
+            "Magtanong ng tungkol sa BSU Lipa campus!"
+            if lang == 'tl' else
+            "Sorry, I don't have that information in my database. "
+            "Please ask me something about BSU Lipa campus!"
+        )
+        return {'response': no_info_msg, 'confidence': 1.0, 'intent': 'off_topic', 'suggestions': []}
 
     if is_off_topic(message):
         lang = forced_lang or detect_language(message)
@@ -2258,9 +2395,14 @@ def _get_rag_instance(embedding_model, db: Session) -> "EnhancedDatabaseRAG":
     if _rag_instance is None:
         print("[rag] Creating singleton RAG instance...")
         _rag_instance = EnhancedDatabaseRAG(embedding_model)
-        # No warm-up — embeddings are built lazily on first query
-        # FAQ PDF chunks are loaded on first FAQ query (already lazy in faq_retriever)
-        print("[rag] Singleton ready (lazy embedding mode).")
+        # Pre-load FAQ chunk cache so the first user query doesn't pay the cost
+        try:
+            from faq_retriever import retrieve_faq_context as _warm_faq
+            _warm_faq(db, "vision mission")
+            print("[rag] FAQ cache warmed up.")
+        except Exception as _we:
+            print(f"[rag] FAQ warm-up skipped: {_we}")
+        print("[rag] Singleton ready.")
     return _rag_instance
 
 

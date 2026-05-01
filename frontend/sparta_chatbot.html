@@ -28,6 +28,10 @@
                     </div>
                 </div>
                 <div class="header-controls">
+                    <!-- Back button -->
+                    <a href="javascript:history.back()" class="nav-icon-btn" title="Go Back">
+                        <span class="nav-icon-emoji">←</span>
+                    </a>
                     <!-- Campus Navigator shortcut button -->
                     <a href="sparta_campus-navigator.html" class="nav-icon-btn" title="Campus Navigator">
                         <span class="nav-icon-emoji">🗺️</span>
@@ -40,6 +44,14 @@
                     <div class="status-indicator">
                         <span class="status-dot"></span>
                         <span>Online</span>
+                    </div>
+                    <!-- Mobile-only compact TTS pill -->
+                    <div class="tts-mobile-pill" id="ttsMobilePill" onclick="stopSpeaking()">
+                        <div class="tts-mobile-pill-wave">
+                            <span></span><span></span><span></span>
+                        </div>
+                        <span style="margin-left:3px;">Speaking</span>
+                        <span class="tts-mobile-pill-x">✕</span>
                     </div>
                     <!-- TTS speaking indicator pill -->
                     <div class="tts-header-indicator" id="ttsHeaderIndicator">
