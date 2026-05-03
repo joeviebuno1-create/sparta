@@ -532,9 +532,23 @@ input, textarea, .info-content, .loc-panel-inner, .evac-panel-inner {
     .ctrl-btn{width:36px; height:36px; font-size:1rem;}
     
     /* Top nav */
-    .top-nav{height:50px; padding:0 .75rem;}
-    .breadcrumb{font-size:.7rem;}
-    .action-btn{padding:.35rem .7rem; font-size:.7rem;}
+    .top-nav{height:auto; min-height:50px; padding:.4rem .75rem; flex-wrap:nowrap; gap:.4rem;}
+    .breadcrumb{font-size:.65rem; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;}
+    .nav-actions{gap:.35rem; flex-shrink:0;}
+    /* Icon-only action buttons on mobile */
+    .action-btn{
+        padding:.3rem .45rem;
+        font-size:.65rem;
+        white-space:nowrap;
+        overflow:hidden;
+        max-width:72px;
+        text-overflow:ellipsis;
+    }
+    /* Shorten button labels on mobile */
+    .action-btn[title="Go Back"]::before { content:"←"; }
+    .action-btn[title="Go Back"] { font-size:0; padding:.3rem .5rem; }
+    .action-btn[title="Go Back"]::before { font-size:.8rem; }
+    .chatbot-nav-btn { max-width:90px; font-size:.6rem; }
     
     /* Viewing strip */
     .viewing-strip{margin:.5rem .75rem 0;}

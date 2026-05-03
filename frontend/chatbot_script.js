@@ -295,18 +295,20 @@ const chatMessages = document.getElementById('chatMessages');
         // People & roles
         'dean', 'chancellor', 'president', 'faculty', 'staff', 'professor',
         'teacher', 'instructor', 'official', 'admin', 'registrar', 'cashier',
-        'who is', 'sino', 'pangalan',
+        'who is', 'sino', 'pangalan', 'maam', 'sir', 'dr.', 'prof.',
         // Locations
         'where', 'location', 'building', 'room', 'office', 'lab', 'library',
         'laboratory', 'classroom', 'floor', 'campus', 'canteen', 'gym', 'chapel',
         'nasaan', 'saan',
         // Academic
         'college', 'department', 'cet', 'cics', 'cas', 'cabe', 'cte',
-        'enrollment', 'schedule', 'curriculum', 'course',
+        'enrollment', 'schedule', 'curriculum', 'course', 'program', 'tuition',
         // Events & info
         'announcement', 'event', 'news', 'update', 'history', 'founded',
         'organization', 'org', 'club', 'bsu', 'sparta', 'batangas state',
-        'anunsyo', 'kasaysayan', 'organisasyon',
+        'milestone', 'milestones', 'vision', 'mission', 'core values',
+        'association', 'society', 'council', 'student',
+        'anunsyo', 'kasaysayan', 'organisasyon', 'samahan',
         // Navigation
         'navigate', 'direction', 'map', 'find', 'go to', 'paano pumunta',
     ];
@@ -342,11 +344,14 @@ const chatMessages = document.getElementById('chatMessages');
         const hasCampusKeyword = CAMPUS_KEYWORDS.some(kw => lower.includes(kw));
         if (hasCampusKeyword) return false;
 
-        // If it's a longer sentence (5+ words) with NO campus keywords, flag as out-of-scope
-        // but only if it looks like a real question (not just a name being searched)
+        // "Tell me about X" / "What is X" — always send to backend
+        // The backend knows if X is in the DB or not; don't block here
+        if (/^(tell me about|what is|what are|sino ang|ano ang|about)\s+\S/i.test(lower)) return false;
+
+        // If it's a longer sentence (5+ words) with NO campus keywords,
+        // only flag if it's clearly off-topic (has question word + no proper noun)
         if (wordCount >= 5 && !hasCampusKeyword) {
-            // Allow if it could be a name/entity search (no verb-like question words)
-            const hasQuestionWord = /\b(what|how|why|when|where|who|is|are|can|do|does|tell me|explain|give|show|list|find|please)\b/i.test(lower);
+            const hasQuestionWord = /\b(how|why|when|explain|give)\b/i.test(lower);
             if (hasQuestionWord) return true;
         }
 
