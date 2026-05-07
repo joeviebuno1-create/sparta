@@ -917,7 +917,7 @@
                 display: none !important;
             }
 
-            /* Compact mobile TTS pill — shown only when speaking */
+            /* Mobile compact TTS pill — hidden by default, shown only on mobile */
             .tts-mobile-pill {
                 display: none;
                 align-items: center;
@@ -934,6 +934,7 @@
                 flex-shrink: 0;
             }
 
+            /* Compact mobile TTS pill — shown when .active on mobile only */
             .tts-mobile-pill.active { display: flex; }
 
             .tts-mobile-pill-wave {
@@ -953,11 +954,6 @@
 
             .tts-mobile-pill-wave span:nth-child(2) { animation-delay: 0.15s; }
             .tts-mobile-pill-wave span:nth-child(3) { animation-delay: 0.30s; }
-
-            @keyframes mobileWave {
-                0%, 100% { transform: scaleY(0.4); }
-                50%       { transform: scaleY(1); }
-            }
 
             .tts-mobile-pill-x {
                 font-size: 11px;
@@ -1184,6 +1180,11 @@
         }
 
         /* Photo Modal */
+        @keyframes mobileWave {
+            0%, 100% { transform: scaleY(0.4); }
+            50%       { transform: scaleY(1); }
+        }
+
         @keyframes fadeInModal {
             from { opacity: 0; }
             to   { opacity: 1; }

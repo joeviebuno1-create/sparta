@@ -592,43 +592,69 @@ class EnhancedDatabaseRAG:
         # KEY RULE: if a role was detected, this is a role query ("who is the dean")
         # Only extract a person name when NO role was detected ("who is Juan")
         if not entities['specific_role']:
-            # Pattern 1: honorific + name (case-insensitive, includes maam/sir/maam)
-            title_pat = rf"who\s+is\s+{HONORIFICS}\s+([A-Za-z][a-z]{{2,}}(?:\s+[A-Za-z][a-z]+)*)"
-            m = re.search(title_pat, original_query, re.IGNORECASE)
+            # Normalize query for matching — collapse multiple spaces
+            _q = re.sub(r'\s+', ' ', original_query).strip()
+
+            # Pattern 1: honorific + name — handles Title Case AND ALL CAPS
+            # e.g. "Who is Mr. DIONECES O. ALIMOREN?" or "Who is maam Sulit"
+            title_pat = (
+                rf"(?:who\s+is\s+|about\s+|find\s+)"
+                rf"{HONORIFICS}\s+"
+                rf"([A-Za-z][A-Za-z.'\-]{{1,}}(?:\s+[A-Za-z.'\-]{{1,}})*)"
+            )
+            m = re.search(title_pat, _q, re.IGNORECASE)
             if m:
-                name = m.group(1).strip().title()
-                if name.lower() not in skip_lower:
+                raw = m.group(1).strip()
+                # Remove trailing punctuation
+                raw = re.sub(r'[?.!,]+$', '', raw).strip()
+                name = raw.title()
+                if name.lower() not in skip_lower and len(name) > 2:
                     entities['first_names'].append(name)
             else:
-                # Pattern 2: plain name — case-insensitive
-                # Handles: "who is maam sulit", "who is sulit", "who is juan"
-                plain_pat = r"who\s+is\s+(?:the\s+)?([A-Za-z][a-z]{2,}(?:\s+[A-Za-z][a-z]+)*)"
-                m = re.search(plain_pat, original_query, re.IGNORECASE)
+                # Pattern 2: plain "who is X" — Title Case or ALL CAPS
+                plain_pat = (
+                    r"who\s+is\s+(?:the\s+)?"
+                    r"([A-Za-z][A-Za-z.'\-]{1,}(?:\s+[A-Za-z.'\-]{1,})*)"
+                )
+                m = re.search(plain_pat, _q, re.IGNORECASE)
                 if m:
-                    name = m.group(1).strip().title()
-                    if name.lower() not in skip_lower:
+                    raw = re.sub(r'[?.!,]+$', m.group(1).strip(), '').strip()
+                    raw = m.group(1).strip()
+                    raw = re.sub(r'[?.!,]+$', '', raw)
+                    name = raw.title()
+                    if name.lower() not in skip_lower and len(name) > 2:
                         entities['first_names'].append(name)
 
         # Other name contexts: contact, find, where is, email, honorific alone
+        # Updated to handle ALL CAPS names too
         other_name_pats = [
-            rf"contact\s+{HONORIFICS}?\s*([A-Za-z][a-z]+)",
-            rf"about\s+{HONORIFICS}\s+([A-Za-z][a-z]+)",
-            rf"find\s+{HONORIFICS}?\s*([A-Za-z][a-z]+)",
-            rf"where\s+is\s+{HONORIFICS}\s+([A-Za-z][a-z]+)",
-            rf"email\s+of\s+{HONORIFICS}?\s*([A-Za-z][a-z]+)",
-            rf"{HONORIFICS}\s+([A-Za-z][a-z]{{2,}}(?:\s+[A-Za-z][a-z]+)*)",
+            rf"contact\s+{HONORIFICS}?\s*([A-Za-z][A-Za-z'\-]+)",
+            rf"about\s+{HONORIFICS}\s+([A-Za-z][A-Za-z'\-]+(?:\s+[A-Za-z'\-]+)*)",
+            rf"find\s+{HONORIFICS}?\s*([A-Za-z][A-Za-z'\-]+)",
+            rf"where\s+is\s+{HONORIFICS}\s+([A-Za-z][A-Za-z'\-]+)",
+            rf"email\s+of\s+{HONORIFICS}?\s*([A-Za-z][A-Za-z'\-]+)",
+            rf"{HONORIFICS}\s+([A-Za-z][A-Za-z'\-]{{2,}}(?:\s+[A-Za-z.'\-]{{1,}})*)",
         ]
         for pat in other_name_pats:
             for match in re.findall(pat, original_query, re.IGNORECASE):
-                name = match.strip().title()
+                raw = re.sub(r'[?.!,]+$', '', match.strip())
+                name = raw.title()
                 if len(name) > 2 and name.lower() not in skip_lower:
                     if name not in entities['first_names']:
                         entities['first_names'].append(name)
 
-        # Full capitalized names (fallback)
+        # Full capitalized names — Title Case (e.g. "Philip Geneta")
         potential_names = re.findall(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b', original_query)
-        entities['person_names'] = [n for n in potential_names
-                                     if len(n) > 2 and n not in skip_words]
+        # ALL CAPS names — e.g. "DIONECES ALIMOREN", "CATHERYN RAMIREZ-LATADE"
+        allcaps_names = re.findall(
+            r'\b([A-Z]{2,}(?:[.\-][A-Z]{2,})?(?:\s+[A-Z]{1,2}\.)?(?:\s+[A-Z]{2,}(?:[.\-][A-Z]{2,})?)+)\b',
+            original_query
+        )
+        all_names = potential_names + [n.title() for n in allcaps_names]
+        entities['person_names'] = [
+            n for n in all_names
+            if len(n) > 2 and n not in skip_words
+        ]
 
         # ── 4. Locations ──────────────────────────────────────────────────────
         location_keywords = ['building', 'hall', 'library', 'gymnasium', 'auditorium',
@@ -1086,6 +1112,9 @@ class EnhancedDatabaseRAG:
                         matched.sort(key=lambda x: x[1], reverse=True)
                         return [h for h, _ in matched]
 
+                    # No history matched — return empty so fallback fires cleanly
+                    return []
+
                 return all_history
 
             elif intent == 'announcement_query':
@@ -1205,21 +1234,36 @@ class EnhancedDatabaseRAG:
         max_score = 0.0
 
         if entities.get('first_names') and hasattr(doc, 'name'):
+            doc_name_lower = doc.name.lower()
             for first_name in entities['first_names']:
-                dn = doc.name.lower()
                 fn = first_name.lower()
-                if dn.startswith(fn + ' ') or (' ' + fn) in dn:
-                    max_score = max(max_score, 0.95)
-                else:
-                    parts = doc.name.split()
-                    if parts:
-                        score = self.fuzzy_match_score(first_name, parts[0])
-                        if score > 0.8:
-                            max_score = max(max_score, score * 0.9)
+                # Exact substring match — highest confidence
+                if fn in doc_name_lower:
+                    max_score = max(max_score, 0.98)
+                    continue
+                # Word-by-word: each word of the extracted name found in doc name
+                fn_words = [w for w in fn.split() if len(w) > 1]
+                if fn_words:
+                    hits = sum(1 for w in fn_words if w in doc_name_lower)
+                    if hits == len(fn_words):
+                        max_score = max(max_score, 0.95)
+                    elif hits >= 1:
+                        max_score = max(max_score, 0.7 * hits / len(fn_words))
+                # Fuzzy on first token (handles slight misspellings)
+                parts = doc.name.split()
+                if parts:
+                    score = self.fuzzy_match_score(first_name, parts[0])
+                    if score > 0.8:
+                        max_score = max(max_score, score * 0.9)
 
         if entities.get('person_names') and hasattr(doc, 'name'):
+            doc_name_lower = doc.name.lower()
             for name in entities['person_names']:
-                max_score = max(max_score, self.fuzzy_match_score(name, doc.name))
+                nl = name.lower()
+                if nl in doc_name_lower:
+                    max_score = max(max_score, 0.95)
+                else:
+                    max_score = max(max_score, self.fuzzy_match_score(name, doc.name))
 
         if entities.get('locations'):
             for loc in entities['locations']:
