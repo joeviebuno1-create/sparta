@@ -256,7 +256,8 @@ class EnhancedDatabaseRAG:
                              'laboratory', 'lab', 'classroom', 'auditorium', 'gym', 'saan',
                              'library', 'lib', 'lrc', 'learning resource center',
                              'canteen', 'cafeteria', 'clinic', 'chapel', 'registrar',
-                             'cashier', 'gymnasium', 'office', 'campus'],
+                             'cashier', 'gymnasium', 'office', 'campus',
+                             "dean's office", 'deans office', 'dean office'],
                 'question_words': ['where', 'which building', 'what floor', 'saan'],
                 'retrieval_strategy': 'spatial_aware',
                 'max_results': 5,
@@ -482,12 +483,17 @@ class EnhancedDatabaseRAG:
             # ── Location question word hard override ──────────────────────────
             # "Where is the Cashier Office?" must always be location_query even
             # though "cashier" and "office" also appear in authority_query keywords.
+            # Also catches "college of X dean's office" queries.
             _LOC_STARTERS = ('where', 'saan', 'nasa saan', 'how to get to',
                              'how do i get to', 'paano pumunta', 'direction to',
                              'directions to', 'locate', 'find the')
+            _LOC_PHRASES = ("dean's office", "deans office", "dean office",
+                            "chancellor's office", "registrar's office",
+                            "cashier's office", "admin office")
             if best_intent != 'location_query':
                 ql = query_lower.strip()
-                if any(ql.startswith(s) for s in _LOC_STARTERS):
+                if (any(ql.startswith(s) for s in _LOC_STARTERS) or
+                        any(p in ql for p in _LOC_PHRASES)):
                     best_intent = 'location_query'
                     confidence = min(confidence * 1.1, 1.0)
 
@@ -668,6 +674,18 @@ class EnhancedDatabaseRAG:
             n for n in all_names
             if len(n) > 2 and n not in skip_words
         ]
+
+        # ── Single-word bare name fallback ────────────────────────────────────
+        # Handles queries like "monette", "soquiat", "geneta" — just a surname typed alone
+        # Only applies when no other entity was found and query is 1-2 words
+        _qwords = original_query.strip().split()
+        if (not entities['first_names'] and not entities['person_names']
+                and not entities['specific_role']
+                and 1 <= len(_qwords) <= 2):
+            for _w in _qwords:
+                _wc = re.sub(r'[^a-zA-Z]', '', _w)
+                if len(_wc) >= 3 and _wc.lower() not in skip_lower:
+                    entities['first_names'].append(_wc.title())
 
         # ── 4. Locations ──────────────────────────────────────────────────────
         location_keywords = ['building', 'hall', 'library', 'gymnasium', 'auditorium',
@@ -912,56 +930,52 @@ class EnhancedDatabaseRAG:
 
                 # ── First name / surname search (highest priority) ──────────
                 if entities.get('first_names'):
-                    name_filters = []
-                    for first_name in entities['first_names']:
-                        # Full name substring — handles "DR. MONETTE M. SOQUIAT" when
-                        # extracted name is "Monette M. Soquiat"
-                        name_filters += [
-                            models.Authority.name.ilike(f'{first_name}%'),
-                            models.Authority.name.ilike(f'% {first_name} %'),
-                            models.Authority.name.ilike(f'% {first_name}'),
-                            models.Authority.name.ilike(f'%. {first_name}%'),
-                            models.Authority.name.ilike(f'%{first_name}%'),
-                        ]
-                        # Also add each meaningful word (3+ chars) as individual filter
-                        # Catches "SOQUIAT" matching "DR. MONETTE M. SOQUIAT"
-                        for word in first_name.split():
-                            if len(word) > 3 and word.lower() not in {
-                                'sir', 'maam', 'mam', 'dr', 'mr', 'ms',
-                                'mrs', 'prof', 'engr', 'atty', 'the', 'and'
+                    # Extract all meaningful words from the full extracted name
+                    _all_name_words = []
+                    for fn in entities['first_names']:
+                        for w in fn.split():
+                            if len(w) > 2 and w.lower() not in {
+                                'dr', 'mr', 'ms', 'mrs', 'prof', 'engr',
+                                'atty', 'sir', 'maam', 'the', 'and'
                             }:
-                                name_filters.append(
-                                    models.Authority.name.ilike(f'%{word}%')
-                                )
-                    query = query.filter(or_(*name_filters))
-                    results = query.all()
-                    if not results:
-                        # Partial fallback — catches surnames anywhere in the name
-                        partial = [
-                            models.Authority.name.ilike(f'%{fn}%')
-                            for fn in entities['first_names']
+                                _all_name_words.append(w)
+
+                    if _all_name_words:
+                        # Try each word individually — catches names stored in any format
+                        # e.g. "SOQUIAT, MONETTE M." or "DR. MONETTE M. SOQUIAT"
+                        word_filters = [
+                            models.Authority.name.ilike(f'%{w}%')
+                            for w in _all_name_words
                         ]
-                        results = db.query(models.Authority).filter(or_(*partial)).all()
-                    if not results:
-                        # Last resort — try each word in the name independently
-                        # Handles "maam sulit" where "sulit" is the key word
-                        all_words = []
-                        for fn in entities['first_names']:
-                            all_words.extend([
-                                w for w in fn.split()
-                                if len(w) > 2 and w.lower() not in
-                                {'sir', 'maam', 'mam', 'dr', 'mr', 'ms',
-                                 'mrs', 'prof', 'engr', 'atty', 'the'}
-                            ])
-                        if all_words:
-                            word_filters = [
+                        # Use AND logic for multi-word names (more precise)
+                        # Use OR logic for single-word names (broader)
+                        if len(_all_name_words) >= 2:
+                            # Must match at least the 2 most distinctive words
+                            # Pick the two longest words as they're most unique
+                            sorted_words = sorted(_all_name_words, key=len, reverse=True)
+                            primary_filters = [
                                 models.Authority.name.ilike(f'%{w}%')
-                                for w in all_words
+                                for w in sorted_words[:2]
                             ]
+                            from sqlalchemy import and_
+                            results = db.query(models.Authority).filter(
+                                and_(*primary_filters)
+                            ).all()
+                            if not results:
+                                # Fall back to OR on all words
+                                results = db.query(models.Authority).filter(
+                                    or_(*word_filters)
+                                ).all()
+                        else:
                             results = db.query(models.Authority).filter(
                                 or_(*word_filters)
                             ).all()
-                    return results
+
+                        if not results:
+                            # Last resort: fetch all, let scorer sort it out
+                            print(f"[authority] No name match found — fetching all for scorer")
+                            results = db.query(models.Authority).all()
+                        return results
 
                 # ── Role filter ────────────────────────────────────────────
                 specific_role = entities.get('specific_role')
@@ -1042,12 +1056,24 @@ class EnhancedDatabaseRAG:
                     'clinic': ['clinic', 'infirmary', 'health'],
                     'chapel': ['chapel', 'church'],
                     'registrar': ['registrar', 'registration'],
-                    'cashier': ['cashier', 'finance'],
+                    'cashier': ['cashier', 'finance', 'disbursing'],
                     'speech lab': ['speech'],
-                    'computer lab': ['computer lab', 'computer laboratory'],
-                    'vmb': ['vmb'],
+                    'speech laboratory': ['speech'],
+                    'dean\'s office': ['dean\'s office', "dean's office", 'deans office'],
+                    'deans office': ['dean\'s office', "dean's office", 'deans office'],
+                    'computer lab': ['computer lab', 'computer laboratory', 'comlab'],
+                    'computer laboratory': ['computer lab', 'computer laboratory', 'comlab'],
+                    'comlab': ['computer lab', 'computer laboratory', 'comlab'],
+                    'it lab': ['computer lab', 'computer laboratory', 'it lab'],
+                    'vmb': ['vmb', 'valerio malabanan'],
+                    'valerio': ['vmb', 'valerio malabanan'],
+                    'gzb': ['gzb'],
+                    'ob': ['ob'],
                     'cet': ['cet'],
                     'cics': ['cics'],
+                    'restroom': ['restroom', 'comfort room', 'cr', 'lavatory'],
+                    'comfort room': ['restroom', 'comfort room', 'cr'],
+                    'cr': ['restroom', 'comfort room', 'cr'],
                 }
 
                 # Collect search terms from entity extraction
@@ -1091,17 +1117,45 @@ class EnhancedDatabaseRAG:
                 if results and len(results) > 1:
                     _qwords = [w for w in original_query.lower().split()
                                if w not in _skip and len(w) >= 3]
+                    # Extract numbers from query for exact number matching
+                    _query_nums = re.findall(r'\b\d+\b', original_query)
+
                     def _name_score(loc):
                         _n = loc.name.lower()
-                        # Count how many query content-words appear in the name
                         hits = sum(1 for w in _qwords if w in _n)
-                        # Extra bonus if a long substring of the query is in the name
+                        # Extra bonus for consecutive phrase match
                         for length in range(min(6, len(_qwords)), 1, -1):
                             for start in range(len(_qwords) - length + 1):
                                 phrase = ' '.join(_qwords[start:start + length])
                                 if len(phrase) > 5 and phrase in _n:
                                     hits += length * 2
                                     break
+                        # CRITICAL: exact number match
+                        if _query_nums:
+                            loc_nums = re.findall(r'\b\d+\b', loc.name)
+                            for num in _query_nums:
+                                if num in loc_nums:
+                                    hits += 10
+                                else:
+                                    hits -= 5
+                        # CRITICAL: college/dept abbreviation match
+                        # "CET dean's office" must beat "CAS dean's office"
+                        # Check if any dept code from query appears in location name
+                        _dept_codes = {
+                            'cet': ['cet', 'engineering technology'],
+                            'cas': ['cas', 'arts and science'],
+                            'cabe': ['cabe', 'accountancy', 'business'],
+                            'cics': ['cics', 'informatics', 'computing'],
+                            'cte': ['cte', 'teacher education'],
+                        }
+                        _q_lower = original_query.lower()
+                        for code, variants in _dept_codes.items():
+                            query_has_dept = any(v in _q_lower for v in variants)
+                            name_has_dept = code in _n or any(v in _n for v in variants)
+                            if query_has_dept and name_has_dept:
+                                hits += 8   # strong boost for matching college
+                            elif query_has_dept and not name_has_dept:
+                                hits -= 4   # penalty for wrong college
                         return hits
                     results = sorted(results, key=_name_score, reverse=True)
 

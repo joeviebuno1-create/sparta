@@ -136,20 +136,20 @@ const chatMessages = document.getElementById('chatMessages');
         quickQuestionsContainer.style.transform = 'translateY(10px)';
 
         setTimeout(async () => {
-            if (isCollegeSelection) {
-                // Parse the actual options from the response text dynamically
-                // Backend format: "**1.** College of Engineering Technology (CET) - *Name*"
-                const dynamicButtons = [];
-                const lines = responseText.split('\n');
-                lines.forEach(line => {
-                    // Match: **1.** <dept text> optionally followed by - *name*
-                    const m = line.match(/^\*\*\d+\.\*\*\s+(.+?)(?:\s*[-–—]\s*\*.*\*)?$/);
-                    if (m) {
-                        const dept = m[1].trim();
-                        // Extract abbreviation e.g. "(CET)" from dept name
-                        const abbrMatch = dept.match(/\(([A-Z]{2,6})\)/);
-                        const code = abbrMatch ? abbrMatch[1] : '';
-                        if (!code) return; // skip if no clean abbreviation found
+            try {
+                if (isCollegeSelection) {
+                    // Parse options from response text
+                    // Format: "**1.** College of Engineering Technology – CET – *Name*"
+                    const dynamicButtons = [];
+                    const lines = responseText.split('\n');
+                    lines.forEach(line => {
+                        if (!line.match(/^\*\*\d+\.\*\*/)) return;
+                        // Extract department code — look for dash + code pattern
+                        // Handles: "... – CET –", "... - CET -", "... (CET)"
+                        const codeMatch = line.match(/[-–—]\s*([A-Z]{2,6})\s*[-–—*]/)
+                                       || line.match(/\(([A-Z]{2,6})\)/);
+                        if (!codeMatch) return;
+                        const code = codeMatch[1];
                         const emoji = {
                             CET: '🏗️', CICS: '💻', CAS: '🎨',
                             CABE: '💼', CTE: '👨‍🏫', DCOTE: '👨‍🏫'
@@ -158,12 +158,14 @@ const chatMessages = document.getElementById('chatMessages');
                             text: `${emoji} ${code} Dean`,
                             query: `Who is the dean of ${code}?`
                         });
-                    }
-                });
-                // Use dynamic buttons if parsed, else fall back to hardcoded
-                renderQuickQuestions(dynamicButtons.length > 0 ? dynamicButtons : COLLEGE_PICKER_QUESTIONS);
-            } else {
-                await loadDynamicQuestions(intent);
+                    });
+                    renderQuickQuestions(dynamicButtons.length > 0 ? dynamicButtons : COLLEGE_PICKER_QUESTIONS);
+                } else {
+                    await loadDynamicQuestions(intent);
+                }
+            } catch (e) {
+                console.warn('[updateQuickQuestions] error:', e.message);
+                renderQuickQuestions(STARTUP_QUESTIONS);
             }
             // Animate in
             quickQuestionsContainer.style.opacity = '1';
@@ -853,4 +855,4 @@ window.sendQuickQuestion = sendQuickQuestion;
 window.startVoice = typeof startVoice !== 'undefined' ? startVoice : function(){};
 window.stopSpeaking = typeof stopSpeaking !== 'undefined' ? stopSpeaking : function(){};
 
-}); // end DOMContentLoaded
+}); // end DOMContentLoadeds
