@@ -7,7 +7,7 @@ from collections import defaultdict
 import time as time_module
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, text
 from pydantic import BaseModel
 from typing import List, Optional, Tuple
 from datetime import datetime
@@ -18,6 +18,7 @@ import os
 import bcrypt
 import math
 import json
+import re
 
 # numpy still used elsewhere
 import numpy as np
@@ -31,6 +32,62 @@ import io
 
 # Import auth helpers
 from auth import verify_session, create_session, clear_session
+
+# ── Cloudinary setup ──────────────────────────────────────────────────────────
+# Add CLOUDINARY_URL to Railway environment variables:
+# cloudinary://API_KEY:API_SECRET@CLOUD_NAME
+_CLOUDINARY_ENABLED = False
+try:
+    import cloudinary
+    import cloudinary.uploader
+    _cld_url = os.getenv("CLOUDINARY_URL", "")
+    if _cld_url:
+        cloudinary.config(cloudinary_url=_cld_url)
+        _CLOUDINARY_ENABLED = True
+        print("✓ Cloudinary configured.")
+    else:
+        print("[cloudinary] CLOUDINARY_URL not set — photos stored as base64 fallback.")
+except ImportError:
+    print("[cloudinary] Package not installed — photos stored as base64 fallback.")
+
+def upload_photo_to_cloudinary(raw_bytes: bytes, filename: str, mime: str) -> str:
+    """Upload photo to Cloudinary, return URL. Falls back to base64 if not configured."""
+    if _CLOUDINARY_ENABLED:
+        try:
+            public_id = re.sub(r'[^a-z0-9_]', '_',
+                               os.path.splitext(filename)[0].lower())
+            result = cloudinary.uploader.upload(
+                raw_bytes,
+                public_id=f"sparta/staff/{public_id}",
+                overwrite=True,
+                resource_type="image",
+                transformation=[
+                    {"width": 400, "height": 400, "crop": "fill", "gravity": "face"},
+                    {"quality": "auto", "fetch_format": "auto"},
+                ],
+            )
+            return result["secure_url"]
+        except Exception as e:
+            print(f"[cloudinary] Upload failed ({e}) — falling back to base64.")
+    import base64
+    b64 = base64.b64encode(raw_bytes).decode("utf-8")
+    return f"data:{mime};base64,{b64}"
+
+
+def delete_photo_from_cloudinary(photo_url: str):
+    """Delete a Cloudinary photo by URL. Silent no-op if not Cloudinary or fails."""
+    if not _CLOUDINARY_ENABLED or not photo_url:
+        return
+    if "res.cloudinary.com" not in photo_url:
+        return
+    try:
+        parts = photo_url.split("/upload/")
+        if len(parts) == 2:
+            public_id = re.sub(r'^v\d+/', '', parts[1].split(".")[0])
+            cloudinary.uploader.destroy(public_id)
+    except Exception as e:
+        print(f"[cloudinary] Delete failed (non-critical): {e}")
+
 
 # ============================================
 # SECURITY — Rate Limiter + Security Headers
@@ -767,15 +824,13 @@ async def create_authority(
     photo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
-    import base64
     photo_data = None
     if photo and photo.filename:
         raw = await photo.read()
         if len(raw) > 2 * 1024 * 1024:
             raise HTTPException(status_code=413, detail="Photo too large. Please use an image under 2MB.")
-        b64 = base64.b64encode(raw).decode("utf-8")
         mime = photo.content_type or "image/jpeg"
-        photo_data = f"data:{mime};base64,{b64}"
+        photo_data = upload_photo_to_cloudinary(raw, photo.filename, mime)
     db_authority = models.Authority(
         name=name, position=position, department=department,
         email=email or None, phone=phone or None,
@@ -796,7 +851,6 @@ async def update_authority(
     keep_existing_photo: str = Form("true"),
     db: Session = Depends(get_db)
 ):
-    import base64
     db_authority = db.query(models.Authority).filter(models.Authority.id == authority_id).first()
     if not db_authority:
         raise HTTPException(status_code=404, detail="Authority not found")
@@ -811,10 +865,11 @@ async def update_authority(
         raw = await photo.read()
         if len(raw) > 2 * 1024 * 1024:
             raise HTTPException(status_code=413, detail="Photo too large. Please use an image under 2MB.")
-        b64 = base64.b64encode(raw).decode("utf-8")
         mime = photo.content_type or "image/jpeg"
-        db_authority.photo = f"data:{mime};base64,{b64}"
+        delete_photo_from_cloudinary(db_authority.photo or "")
+        db_authority.photo = upload_photo_to_cloudinary(raw, photo.filename, mime)
     elif keep_existing_photo.lower() != "true":
+        delete_photo_from_cloudinary(db_authority.photo or "")
         db_authority.photo = None
     # else: no new file + keep_existing_photo=true → leave photo unchanged
     db.commit()
@@ -826,6 +881,7 @@ async def delete_authority(authority_id: int, db: Session = Depends(get_db)):
     db_authority = db.query(models.Authority).filter(models.Authority.id == authority_id).first()
     if not db_authority:
         raise HTTPException(status_code=404, detail="Authority not found")
+    delete_photo_from_cloudinary(db_authority.photo or "")
     db.delete(db_authority)
     db.commit()
     return {"message": "Authority deleted successfully"}
@@ -1670,22 +1726,31 @@ def _extract_text_from_pdf(file_bytes: bytes) -> Tuple[str, int]:
 @admin_router.get("/faq-documents")
 async def list_faq_documents(db: Session = Depends(get_db)):
     """List all FAQ PDF documents stored in the database."""
-    docs = db.query(models.FAQDocument).order_by(
-        models.FAQDocument.uploaded_at.desc()
-    ).all()
-    return [
-        {
-            "id": d.id,
-            "title": d.title,
-            "filename": d.filename,
-            "page_count": d.page_count,
-            "file_size": d.file_size,
-            "is_active": d.is_active,
-            "uploaded_at": d.uploaded_at.isoformat() if d.uploaded_at else None,
-            "text_preview": (d.extracted_text or "")[:300] + "…" if d.extracted_text else "",
-        }
-        for d in docs
-    ]
+    for attempt in range(2):
+        try:
+            db.execute(text("SELECT 1"))  # wake NeonDB if sleeping
+            docs = db.query(models.FAQDocument).order_by(
+                models.FAQDocument.uploaded_at.desc()
+            ).all()
+            return [
+                {
+                    "id": d.id,
+                    "title": d.title,
+                    "filename": d.filename,
+                    "page_count": d.page_count,
+                    "file_size": d.file_size,
+                    "is_active": d.is_active,
+                    "uploaded_at": d.uploaded_at.isoformat() if d.uploaded_at else None,
+                    "text_preview": (d.extracted_text or "")[:300] + "…" if d.extracted_text else "",
+                }
+                for d in docs
+            ]
+        except Exception as e:
+            if attempt == 0:
+                print(f"[faq-documents] DB error, retrying: {e}")
+                db.rollback()
+                continue
+            raise HTTPException(status_code=503, detail="Database temporarily unavailable. Please try again.")
 
 @admin_router.post("/faq-documents")
 async def upload_faq_document(
@@ -1790,20 +1855,55 @@ async def delete_faq_document(doc_id: int, db: Session = Depends(get_db)):
     invalidate_faq_cache()
     return {"message": "FAQ document deleted."}
 
+@admin_router.post("/migrate-photos-to-cloudinary")
+async def migrate_photos_to_cloudinary(db: Session = Depends(get_db)):
+    """
+    One-time migration: uploads all existing base64 photos to Cloudinary.
+    Safe to run multiple times — skips photos already on Cloudinary.
+    """
+    if not _CLOUDINARY_ENABLED:
+        raise HTTPException(status_code=400, detail="Cloudinary is not configured. Set CLOUDINARY_URL in Railway.")
+    import base64 as _b64
+    authorities = db.query(models.Authority).all()
+    migrated, skipped, failed = [], [], []
+    for a in authorities:
+        if not a.photo:
+            skipped.append(f"{a.name} — no photo"); continue
+        if "res.cloudinary.com" in a.photo:
+            skipped.append(f"{a.name} — already on Cloudinary"); continue
+        if not a.photo.startswith("data:"):
+            skipped.append(f"{a.name} — unknown format"); continue
+        try:
+            header, b64data = a.photo.split(",", 1)
+            mime = header.split(":")[1].split(";")[0]
+            raw = _b64.b64decode(b64data)
+            safe_name = re.sub(r'[^a-z0-9_]', '_', a.name.lower())
+            url = upload_photo_to_cloudinary(raw, f"{safe_name}.jpg", mime)
+            if "res.cloudinary.com" in url:
+                a.photo = url
+                db.commit()
+                migrated.append(f"{a.name} → {url}")
+            else:
+                failed.append(f"{a.name} — upload did not return Cloudinary URL")
+        except Exception as e:
+            failed.append(f"{a.name} — {str(e)}")
+    return {"migrated": len(migrated), "skipped": len(skipped), "failed": len(failed),
+            "details": {"migrated": migrated, "skipped": skipped, "failed": failed}}
+
+
 # ============================================
 # HEALTH CHECK (PUBLIC)
 # ============================================
 
 @app.get("/health")
 async def health_check():
-    from gemini_handler import GEMINI_ENABLED
     return {
         "status": "healthy",
         "rag_enabled": True,
         "model_loaded": True,
-        "model_name": "gemini-embedding-exp-03-07 (API)",
-        "gemini_enabled": GEMINI_ENABLED,
-        "version": "3.0-Gemini-RAG"
+        "model_name": "sentence-transformers/all-MiniLM-L6-v2 (CPU)",
+        "cloudinary_enabled": _CLOUDINARY_ENABLED,
+        "version": "4.0-PureRAG"
     }
 
 # ============================================
