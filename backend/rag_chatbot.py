@@ -824,6 +824,28 @@ class EnhancedDatabaseRAG:
             fuzzy_score = self._calculate_fuzzy_match(original_query, doc, entities, intent)
             entity_score = self._calculate_entity_match(entities, doc, intent)
 
+            # ── Full name exact match override ────────────────────────────────
+            # When a full person name was extracted (e.g. "Monette M. Soquiat"),
+            # any doc whose name contains ALL the key words of that name gets a
+            # massive boost — guaranteeing it wins over generic keyword matches.
+            name_exact_boost = 0.0
+            if intent == 'authority_query' and entities.get('first_names') and hasattr(doc, 'name'):
+                doc_name_lower = doc.name.lower()
+                for fn in entities['first_names']:
+                    fn_words = [w for w in fn.lower().split()
+                                if len(w) > 2 and w not in
+                                {'dr', 'mr', 'ms', 'mrs', 'prof', 'engr', 'atty', 'sir', 'maam'}]
+                    if not fn_words:
+                        continue
+                    hits = sum(1 for w in fn_words if w in doc_name_lower)
+                    if hits == len(fn_words):
+                        # All words matched — this is the right person
+                        name_exact_boost = 5.0
+                        break
+                    elif hits >= max(1, len(fn_words) - 1):
+                        # All but one word matched — very likely the right person
+                        name_exact_boost = max(name_exact_boost, 3.0)
+
             # ── Location name phrase boost ────────────────────────────────────
             # Fixes: "Where is Office of Vice Chancellor for Admin and Finance"
             # returning CET Dean's Office because word "administration" matched.
@@ -843,13 +865,13 @@ class EnhancedDatabaseRAG:
 
             if strong_entity_query:
                 combined = (keyword_score * 0.25 + fuzzy_score * 0.25
-                            + entity_score * 0.50) + loc_phrase_boost
+                            + entity_score * 0.50) + loc_phrase_boost + name_exact_boost
             elif use_embeddings:
                 combined = (semantic_score * 0.40 + keyword_score * 0.25
-                            + fuzzy_score * 0.20 + entity_score * 0.15) + loc_phrase_boost
+                            + fuzzy_score * 0.20 + entity_score * 0.15) + loc_phrase_boost + name_exact_boost
             else:
                 combined = (keyword_score * 0.40 + fuzzy_score * 0.30
-                            + entity_score * 0.30) + loc_phrase_boost
+                            + entity_score * 0.30) + loc_phrase_boost + name_exact_boost
 
             if combined >= threshold:
                 # Penalize emergency exits — they should never surface as a primary result
@@ -892,12 +914,25 @@ class EnhancedDatabaseRAG:
                 if entities.get('first_names'):
                     name_filters = []
                     for first_name in entities['first_names']:
+                        # Full name substring — handles "DR. MONETTE M. SOQUIAT" when
+                        # extracted name is "Monette M. Soquiat"
                         name_filters += [
                             models.Authority.name.ilike(f'{first_name}%'),
                             models.Authority.name.ilike(f'% {first_name} %'),
                             models.Authority.name.ilike(f'% {first_name}'),
                             models.Authority.name.ilike(f'%. {first_name}%'),
+                            models.Authority.name.ilike(f'%{first_name}%'),
                         ]
+                        # Also add each meaningful word (3+ chars) as individual filter
+                        # Catches "SOQUIAT" matching "DR. MONETTE M. SOQUIAT"
+                        for word in first_name.split():
+                            if len(word) > 3 and word.lower() not in {
+                                'sir', 'maam', 'mam', 'dr', 'mr', 'ms',
+                                'mrs', 'prof', 'engr', 'atty', 'the', 'and'
+                            }:
+                                name_filters.append(
+                                    models.Authority.name.ilike(f'%{word}%')
+                                )
                     query = query.filter(or_(*name_filters))
                     results = query.all()
                     if not results:
@@ -1432,7 +1467,7 @@ class EnhancedDatabaseRAG:
         if lang == 'tl':
             response += "\nI-type ang pangalan ng kolehiyo o numero."
         else:
-            response += "\nType the college name."
+            response += "\nType the college name to see their information."
 
         return response
 
@@ -2003,10 +2038,18 @@ class EnhancedDatabaseRAG:
             intent, intent_confidence = self.detect_intent(normalized_query)
 
             # Step 2.3: Org acronym / name override
-            # Catches queries like "who is SETS", "SETS", "tell me about SETS",
-            # "sino si ACETS" where the keyword is an org acronym or name fragment
-            # but intent detection landed on authority_query or general_info.
-            if intent in ('authority_query', 'general_info', 'history_query'):
+            # Catches queries like "who is SETS", "SETS", "tell me about SETS"
+            # NEVER overrides when the query contains a role keyword like "dean of X"
+            # because that's clearly an authority query, not an org query.
+            _ROLE_KEYWORDS = {
+                'dean', 'chancellor', 'president', 'director', 'head',
+                'registrar', 'faculty', 'professor', 'coordinator', 'chair',
+                'vp', 'vice president', 'officer', 'staff', 'instructor',
+                'administrator', 'supervisor', 'manager', 'chief'
+            }
+            _has_role_kw = any(rk in original_query.lower() for rk in _ROLE_KEYWORDS)
+
+            if intent in ('authority_query', 'general_info', 'history_query') and not _has_role_kw:
                 try:
                     _ql_org = original_query.lower().strip()
                     _org_stripped = re.sub(
@@ -2029,16 +2072,17 @@ class EnhancedDatabaseRAG:
                                 _best_org_score = 4.0
                                 break
                             # Acronym is in the stripped query
-                            if _acronym and len(_acronym) >= 2 and _acronym in _org_stripped:
+                            if _acronym and len(_acronym) >= 3 and _acronym in _org_stripped:
                                 _best_org_score = max(_best_org_score, 3.0)
                             # Stripped query is a substring of full org name
-                            if len(_org_stripped) > 2 and _org_stripped in _oname:
+                            if len(_org_stripped) > 3 and _org_stripped in _oname:
                                 _best_org_score = max(_best_org_score, 2.5)
-                            # Any org word matches a word in the query
+                            # Any org word (4+ chars) matches whole word in query
+                            _qwords = set(_org_stripped.split())
                             for _ow in _owords:
-                                if len(_ow) > 2 and _ow in _org_stripped:
+                                if len(_ow) >= 4 and _ow in _qwords:
                                     _best_org_score = max(_best_org_score, 2.0)
-                        if _best_org_score >= 2.0:
+                        if _best_org_score >= 2.5:  # raised threshold from 2.0
                             print(f"[intent_override] '{original_query}' -> organization_query "
                                   f"(org score={_best_org_score:.1f})")
                             intent = 'organization_query'
