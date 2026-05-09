@@ -1432,7 +1432,7 @@ class EnhancedDatabaseRAG:
         if lang == 'tl':
             response += "\nI-type ang pangalan ng kolehiyo o numero."
         else:
-            response += "\nType the college name or number to see their information."
+            response += "\nType the college name."
 
         return response
 
