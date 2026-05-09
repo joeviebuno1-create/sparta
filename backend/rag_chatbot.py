@@ -237,7 +237,7 @@ class EnhancedDatabaseRAG:
         self.intent_config = {
             'authority_query': {
                 'keywords': ['who is', 'dean', 'head', 'director', 'president', 'contact',
-                             'email', 'phone', 'office', 'authority', 'faculty', 'staff',
+                             'email', 'phone', 'authority', 'faculty', 'staff',
                              'chairman', 'administrator', 'vp', 'vice president', 'coordinator',
                              'chief', 'officer', 'manager', 'supervisor', 'professor', 'instructor',
                              'chairperson', 'provost', 'chancellor', 'rector', 'registrar',
@@ -478,6 +478,19 @@ class EnhancedDatabaseRAG:
             confidence = min(max_score / 20, 1.0)
             if max_score > 25:
                 confidence = min(confidence * 1.2, 1.0)
+
+            # ── Location question word hard override ──────────────────────────
+            # "Where is the Cashier Office?" must always be location_query even
+            # though "cashier" and "office" also appear in authority_query keywords.
+            _LOC_STARTERS = ('where', 'saan', 'nasa saan', 'how to get to',
+                             'how do i get to', 'paano pumunta', 'direction to',
+                             'directions to', 'locate', 'find the')
+            if best_intent != 'location_query':
+                ql = query_lower.strip()
+                if any(ql.startswith(s) for s in _LOC_STARTERS):
+                    best_intent = 'location_query'
+                    confidence = min(confidence * 1.1, 1.0)
+
             return best_intent, confidence
 
         return 'general_info', 0.25

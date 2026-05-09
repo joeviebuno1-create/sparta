@@ -487,6 +487,9 @@
             text-transform: capitalize;
         }
 
+        /* Mobile TTS pill — hidden globally, only shown on mobile via media query */
+        .tts-mobile-pill { display: none !important; }
+
         /* ════════════════════════════════
            TTS INDICATOR STYLES
         ════════════════════════════════ */
@@ -935,7 +938,7 @@
             }
 
             /* Compact mobile TTS pill — shown when .active on mobile only */
-            .tts-mobile-pill.active { display: flex; }
+            .tts-mobile-pill.active { display: flex !important; }
 
             .tts-mobile-pill-wave {
                 display: flex;
