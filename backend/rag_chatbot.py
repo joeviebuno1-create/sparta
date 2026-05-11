@@ -257,7 +257,9 @@ class EnhancedDatabaseRAG:
                              'library', 'lib', 'lrc', 'learning resource center',
                              'canteen', 'cafeteria', 'clinic', 'chapel', 'registrar',
                              'cashier', 'gymnasium', 'office', 'campus',
-                             "dean's office", 'deans office', 'dean office'],
+                             "dean's office", 'deans office', 'dean office',
+                             'vmb', 'gzb', 'ob room', 'valerio malabanan',
+                             'gonzales', 'teresa solis', 'tsb'],
                 'question_words': ['where', 'which building', 'what floor', 'saan'],
                 'retrieval_strategy': 'spatial_aware',
                 'max_results': 5,
@@ -287,6 +289,22 @@ class EnhancedDatabaseRAG:
                 'retrieval_strategy': 'recency_weighted',
                 'max_results': 5,
                 'similarity_threshold': 0.25
+            },
+            'general_info': {
+                'keywords': ['vision', 'mission', 'core values', 'tagline', 'motto',
+                             'tuition', 'free tuition', 'scholarship', 'fees', 'payment',
+                             'enrollment', 'admission', 'apply', 'application', 'requirement',
+                             'program', 'course', 'degree', 'curriculum', 'subject',
+                             'dormitory', 'dorm', 'housing', 'accommodation',
+                             'contact', 'website', 'email', 'social media', 'facebook',
+                             'office hours', 'schedule', 'calendar',
+                             'about bsu', 'about batangas state', 'what is bsu',
+                             'patriotism', 'service', 'integrity', 'resilience', 'faith',
+                             'bat', 'admission test', 'entrance exam'],
+                'question_words': ['what', 'how', 'when', 'is', 'are', 'does'],
+                'retrieval_strategy': 'faq_search',
+                'max_results': 3,
+                'similarity_threshold': 0.15
             },
             'organization_query': {
                 'keywords': ['organization', 'org chart', 'structure', 'department',
@@ -490,10 +508,15 @@ class EnhancedDatabaseRAG:
             _LOC_PHRASES = ("dean's office", "deans office", "dean office",
                             "chancellor's office", "registrar's office",
                             "cashier's office", "admin office")
+            # Building code + number pattern: "vmb 401", "gzb 302", "ob 101"
+            _BUILDING_CODES = ('vmb', 'gzb', 'ob', 'tsb', 'valerio', 'gonzales',
+                               'room', 'floor', 'building')
             if best_intent != 'location_query':
                 ql = query_lower.strip()
                 if (any(ql.startswith(s) for s in _LOC_STARTERS) or
-                        any(p in ql for p in _LOC_PHRASES)):
+                        any(p in ql for p in _LOC_PHRASES) or
+                        (any(b in ql for b in _BUILDING_CODES) and
+                         bool(re.search(r'\d+', ql)))):
                     best_intent = 'location_query'
                     confidence = min(confidence * 1.1, 1.0)
 
@@ -675,16 +698,20 @@ class EnhancedDatabaseRAG:
             if len(n) > 2 and n not in skip_words
         ]
 
-        # ── Single-word bare name fallback ────────────────────────────────────
-        # Handles queries like "monette", "soquiat", "geneta" — just a surname typed alone
-        # Only applies when no other entity was found and query is 1-2 words
-        _qwords = original_query.strip().split()
+        # ── Single-word / bare name fallback ─────────────────────────────────
+        # Handles: "sulit", "monette", "maam sulit", "sir garcia"
+        # Only when no entity found and query is short (1-3 words)
+        _qwords_bare = original_query.strip().split()
         if (not entities['first_names'] and not entities['person_names']
                 and not entities['specific_role']
-                and 1 <= len(_qwords) <= 2):
-            for _w in _qwords:
-                _wc = re.sub(r'[^a-zA-Z]', '', _w)
-                if len(_wc) >= 3 and _wc.lower() not in skip_lower:
+                and 1 <= len(_qwords_bare) <= 3):
+            _HONOR = {'sir', 'maam', 'mam', 'dr', 'mr', 'ms', 'mrs',
+                      'prof', 'engr', 'atty', 'asst'}
+            for _w in _qwords_bare:
+                _wc = re.sub(r'[^a-zA-Z]', '', _w).lower()
+                if _wc in _HONOR:
+                    continue  # skip honorific, keep looking
+                if len(_wc) >= 3 and _wc not in skip_lower:
                     entities['first_names'].append(_wc.title())
 
         # ── 4. Locations ──────────────────────────────────────────────────────
@@ -957,7 +984,6 @@ class EnhancedDatabaseRAG:
                                 models.Authority.name.ilike(f'%{w}%')
                                 for w in sorted_words[:2]
                             ]
-                            from sqlalchemy import and_
                             results = db.query(models.Authority).filter(
                                 and_(*primary_filters)
                             ).all()
@@ -1153,9 +1179,16 @@ class EnhancedDatabaseRAG:
                             query_has_dept = any(v in _q_lower for v in variants)
                             name_has_dept = code in _n or any(v in _n for v in variants)
                             if query_has_dept and name_has_dept:
-                                hits += 8   # strong boost for matching college
+                                hits += 8
                             elif query_has_dept and not name_has_dept:
-                                hits -= 4   # penalty for wrong college
+                                hits -= 4
+                        # Distinctive long words get extra weight
+                        # Prevents "cashier office" returning "dean's office"
+                        _skip_common = {'where', 'floor', 'level', 'building',
+                                        'located', 'office', 'room', 'find'}
+                        for w in _qwords:
+                            if len(w) >= 6 and w not in _skip_common and w in _n:
+                                hits += 3
                         return hits
                     results = sorted(results, key=_name_score, reverse=True)
 
@@ -1471,8 +1504,8 @@ class EnhancedDatabaseRAG:
         multi_college_roles = ['dean', 'director', 'head', 'chairman', 'coordinator']
         if (specific_role in multi_college_roles
                 and not has_department
-                and not has_first_name
-                and len(context) > 1):
+                and not has_first_name):
+            # Show picker if multiple results OR no results (DB may just be empty for that dept)
             return True
         return False
 
@@ -2329,29 +2362,47 @@ class EnhancedDatabaseRAG:
 
             elif intent == 'general_info':
                 # Pure RAG: search FAQ PDF chunks directly, no LLM needed.
-                # Wrapped in try/except so a slow first-load never crashes the response.
                 try:
                     import signal as _signal
 
                     def _timeout_handler(signum, frame):
                         raise TimeoutError("faq_retriever timeout")
 
-                    # Give FAQ retrieval max 5 seconds — avoids Railway request timeout
                     _signal.signal(_signal.SIGALRM, _timeout_handler)
                     _signal.alarm(5)
                     try:
                         faq_text = retrieve_faq_context(db, original_query)
                     finally:
-                        _signal.alarm(0)  # cancel alarm
+                        _signal.alarm(0)
 
                     if faq_text:
+                        formatted = _format_faq_response(faq_text, original_query, lang)
                         if lang == 'tl':
-                            header = "📄 **Natagpuan sa FAQ:**\n\n"
+                            header = "📄 **Mula sa BSU Lipa FAQ:**\n\n"
                         else:
                             header = "📄 **From the BSU Lipa FAQ:**\n\n"
-                        response = header + faq_text
+                        response = header + formatted
                     else:
-                        response = "Sorry, I don't have that information in my database."
+                        # Retry with lower threshold for short single-word queries
+                        # like "vision", "mission", "tuition"
+                        try:
+                            faq_text2 = retrieve_faq_context(
+                                db, original_query, top_k=2, min_score=0.05
+                            )
+                            if faq_text2:
+                                formatted = _format_faq_response(faq_text2, original_query, lang)
+                                header = ("📄 **Mula sa BSU Lipa FAQ:**\n\n"
+                                         if lang == 'tl'
+                                         else "📄 **From the BSU Lipa FAQ:**\n\n")
+                                response = header + formatted
+                            else:
+                                response = ("Paumanhin, wala akong impormasyon tungkol diyan."
+                                           if lang == 'tl'
+                                           else "Sorry, I don't have that information in my database.")
+                        except Exception:
+                            response = ("Paumanhin, wala akong impormasyon tungkol diyan."
+                                       if lang == 'tl'
+                                       else "Sorry, I don't have that information in my database.")
                 except Exception as _faq_err:
                     print(f"[faq] retrieval failed or timed out: {_faq_err}")
                     response = "Sorry, I don't have that information in my database."
@@ -2419,6 +2470,87 @@ class EnhancedDatabaseRAG:
                 'context_used': 0,
                 'entities_found': {}
             }
+
+
+def _format_faq_response(raw_text: str, query: str, lang: str = 'en') -> str:
+    """
+    Format raw FAQ chunk text into a clean readable response.
+    Removes header noise, joins broken lines, highlights Q&A pairs.
+    """
+    # Split and clean lines
+    lines = [l.strip() for l in raw_text.split('\n') if l.strip()]
+
+    # Remove pure header/title lines
+    _NOISE = re.compile(
+        r'^(vision,?\s*mission|core values?|university vision|university mission|'
+        r'university core values?|frequently asked|batangas state university|'
+        r'don claro|the national engineering|page \d+|\d+\s*of\s*\d+)\.?$',
+        re.IGNORECASE
+    )
+    lines = [l for l in lines if not _NOISE.match(l)]
+
+    if not lines:
+        return raw_text[:600]
+
+    # Detect if this is a Q&A formatted chunk
+    has_qa = any(re.match(r'^Q\s*[\d.:]\s*|^Q:\s*', l, re.IGNORECASE) for l in lines)
+
+    if has_qa:
+        # Parse Q&A pairs
+        result_parts = []
+        i = 0
+        query_lower = query.lower()
+        best_qa = []
+        other_qa = []
+
+        while i < len(lines):
+            line = lines[i]
+            is_q = bool(re.match(r'^Q\s*[\d.:]\s*|^Q:\s*', line, re.IGNORECASE))
+            if is_q:
+                q_text = re.sub(r'^Q\s*[\d.:]\s*', '', line, flags=re.IGNORECASE).strip()
+                answer_lines = []
+                i += 1
+                while i < len(lines) and not re.match(r'^Q\s*[\d.:]', lines[i], re.IGNORECASE):
+                    answer_lines.append(lines[i])
+                    i += 1
+                answer = ' '.join(answer_lines).strip()
+                if answer:
+                    q_words = set(re.findall(r'\w+', q_text.lower()))
+                    query_words = set(re.findall(r'\w+', query_lower))
+                    overlap = len(q_words & query_words)
+                    entry = (f"**Q: {q_text}**\n{answer}", overlap)
+                    if overlap > 0:
+                        best_qa.append(entry)
+                    else:
+                        other_qa.append(entry)
+            else:
+                i += 1
+
+        best_qa.sort(key=lambda x: x[1], reverse=True)
+        final_parts = [text for text, _ in best_qa[:2]]
+        if not final_parts and other_qa:
+            final_parts = [other_qa[0][0]]
+        return '\n\n'.join(final_parts) if final_parts else '\n'.join(lines[:8])
+
+    else:
+        # Plain paragraph text — join broken lines into proper sentences
+        paragraphs = []
+        buf = ''
+        for line in lines:
+            # Start new paragraph if line starts with capital and buf is complete sentence
+            if buf and line and line[0].isupper() and buf.endswith('.'):
+                paragraphs.append(buf.strip())
+                buf = line
+            elif buf:
+                # Check if buf ends mid-sentence (no period) — join with space
+                buf = buf + (' ' if not buf.endswith('-') else '') + line
+            else:
+                buf = line
+        if buf:
+            paragraphs.append(buf.strip())
+
+        # Return max 4 clean paragraphs
+        return '\n\n'.join(paragraphs[:4]) if paragraphs else '\n'.join(lines[:6])
 
 
 def is_nonsense(message: str) -> bool:
