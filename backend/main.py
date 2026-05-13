@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text
 from pydantic import BaseModel
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, TYPE_CHECKING
 from datetime import datetime
 import models
 from database import engine, get_db
@@ -1659,9 +1659,70 @@ async def delete_popup(popup_id: int, db: Session = Depends(get_db)):
 # ============================================
 
 def _extract_text_from_pdf(file_bytes: bytes) -> Tuple[str, int]:
-    """Extract all text from a PDF and return (text, page_count)."""
+    """
+    Extract all text from a PDF and return (text, page_count).
+
+    Uses pdfplumber with column-aware extraction:
+    - Pages whose content spans two columns (like the Core Values section)
+      are split at the vertical midpoint and the left column is read before
+      the right column, producing correct reading order.
+    - Single-column pages (Q&A sections) are extracted normally.
+    - Falls back to pypdf if pdfplumber is unavailable.
+    """
+    import io as _io
+
+    # ── pdfplumber path (preferred) ──────────────────────────────────────────
     try:
-        reader = PdfReader(io.BytesIO(file_bytes))
+        import pdfplumber  # type: ignore[import-untyped]
+
+        page_texts = []
+        with pdfplumber.open(_io.BytesIO(file_bytes)) as pdf:
+            page_count = len(pdf.pages)
+            for page in pdf.pages:
+                width  = page.width
+                height = page.height
+                mid    = width / 2
+
+                # Heuristic: check if the page has two distinct text columns.
+                # We do this by extracting left and right halves and seeing if
+                # BOTH have substantial content — if so, it's a 2-column page.
+                left_words  = page.within_bbox((0,    0, mid,   height)).extract_words()
+                right_words = page.within_bbox((mid,  0, width, height)).extract_words()
+
+                # A column is "substantial" if it has >10 word tokens
+                left_sub  = len(left_words)  > 10
+                right_sub = len(right_words) > 10
+
+                if left_sub and right_sub:
+                    # Check whether the two columns are truly separate columns
+                    # (not just a header spanning full width).
+                    # We compare the x-positions: real 2-column layout has left
+                    # words mostly < mid and right words mostly > mid.
+                    left_x_ok  = sum(1 for w in left_words  if float(w['x0']) < mid)  > len(left_words)  * 0.6
+                    right_x_ok = sum(1 for w in right_words if float(w['x0']) >= mid) > len(right_words) * 0.6
+
+                    if left_x_ok and right_x_ok:
+                        # Genuine 2-column layout — read left then right
+                        left_text  = page.within_bbox((0,   0, mid,   height)).extract_text() or ''
+                        right_text = page.within_bbox((mid, 0, width, height)).extract_text() or ''
+                        page_texts.append(left_text.strip() + '\n' + right_text.strip())
+                        continue
+
+                # Default: single-column or full-width content
+                text = page.extract_text() or ''
+                page_texts.append(text)
+
+        return '\n\n'.join(page_texts), page_count
+
+    except ImportError:
+        pass  # fall through to pypdf
+    except Exception as exc:
+        print(f"[pdf_extract] pdfplumber failed ({exc}), falling back to pypdf")
+
+    # ── pypdf fallback ───────────────────────────────────────────────────────
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(_io.BytesIO(file_bytes))
         pages = [page.extract_text() or "" for page in reader.pages]
         return "\n".join(pages), len(reader.pages)
     except Exception as exc:

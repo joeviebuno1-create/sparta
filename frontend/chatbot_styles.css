@@ -883,15 +883,18 @@
                 align-items: center;
                 flex-shrink: 0;
                 width: auto;
+                overflow: hidden; /* prevent bleed */
             }
 
             /* Back + Navigate: icon only */
             .nav-icon-btn {
-                padding: 5px 8px;
+                padding: 5px 7px;
                 border-radius: 8px;
                 gap: 0;
-                min-width: 32px;
+                min-width: 30px;
+                max-width: 36px;
                 justify-content: center;
+                flex-shrink: 0;
             }
 
             .nav-icon-label { display: none; }
@@ -1067,48 +1070,42 @@
             }
         }
 
-        /* Small phones */
+        /* Small phones (≤480px) — tighten further, never enlarge vs 768px block */
         @media (max-width: 480px) {
-            .header-text h1 {
-                font-size: 18px;
-            }
+            .header-text h1  { font-size: 14px; }
+            .logo-container  { width: 28px; height: 28px; }
 
-            .header-text p {
-                font-size: 11px;
-            }
+            .message-content { max-width: 92%; font-size: 13px; padding: 11px 13px; }
 
-            .logo-container {
-                width: 42px;
-                height: 42px;
-            }
+            .quick-question-btn { font-size: 11px; padding: 8px 13px; }
 
-            .message-content {
-                max-width: 90%;
-                font-size: 13px;
-                padding: 12px 14px;
-            }
+            #userInput  { font-size: 16px !important; padding: 11px 13px; } /* 16px prevents iOS zoom */
 
-            .quick-question-btn {
-                font-size: 11px;
-                padding: 8px 14px;
-            }
+            .input-btn  { padding: 11px 13px; }
+            #sendBtn    { padding: 11px 15px; }
+            #micBtn span { font-size: 17px; }
 
-            #userInput {
-                font-size: 13px;
-                padding: 12px 14px;
-            }
+            /* Tighten confidence/intent badges */
+            .confidence-badge, .intent-badge { font-size: 9px; padding: 2px 7px; }
+        }
 
-            .input-btn {
-                padding: 12px 14px;
-            }
+        /* Very small phones (≤360px — older Androids, Galaxy A series) */
+        @media (max-width: 360px) {
+            .header-text h1  { font-size: 13px; }
+            .logo-container  { width: 26px; height: 26px; }
 
-            #sendBtn {
-                padding: 12px 16px;
-            }
+            /* Shrink lang select further */
+            #langSelect { width: 62px; font-size: 10px; padding: 4px 2px 4px 4px; }
 
-            #micBtn span {
-                font-size: 18px;
-            }
+            .nav-icon-btn { padding: 4px 6px; min-width: 28px; }
+            .nav-icon-emoji { font-size: 14px; }
+
+            .message-content { padding: 10px 12px; font-size: 12.5px; }
+
+            .quick-question-btn { font-size: 10.5px; padding: 7px 11px; }
+
+            .input-btn  { padding: 10px 11px; }
+            #sendBtn    { padding: 10px 13px; }
         }
 
         /* Landscape mode on mobile */
@@ -1166,19 +1163,29 @@
             }
         }
 
-        /* Safe area for notched phones (iPhone X, etc) */
+        /* Safe area for notched phones (iPhone X+, Android with gesture nav) */
         @supports (padding: max(0px)) {
             .chat-container {
-                padding-left: max(0px, env(safe-area-inset-left));
+                padding-left:  max(0px, env(safe-area-inset-left));
                 padding-right: max(0px, env(safe-area-inset-right));
             }
 
-            .chat-header {
-                padding-top: max(16px, env(safe-area-inset-top));
+            /* Only add top safe-area on desktop; mobile header already tight */
+            @media (min-width: 769px) {
+                .chat-header {
+                    padding-top: max(24px, env(safe-area-inset-top));
+                }
             }
 
-            .chat-input-container {
-                padding-bottom: max(12px, env(safe-area-inset-bottom));
+            /* On mobile add top inset to the header without blowing up height */
+            @media (max-width: 768px) {
+                .chat-header {
+                    padding-top: max(8px, env(safe-area-inset-top));
+                }
+                /* Bottom bar safe area (Android gesture nav / iPhone home bar) */
+                .chat-input-container {
+                    padding-bottom: max(16px, env(safe-area-inset-bottom));
+                }
             }
         }
 

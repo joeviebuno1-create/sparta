@@ -484,7 +484,210 @@ input, textarea, .info-content, .loc-panel-inner, .evac-panel-inner {
 
 /* ===================== RESPONSIVE ===================== */
 @media(max-width:768px){
-    .sidebar{transform:translateX(calc(-1 * var(--sidebar-w)));}
+    /* Sidebar: slides in from left, full width capped at sidebar-w */
+    .sidebar{ transform:translateX(calc(-1 * var(--sidebar-w))); width:100vw; max-width:var(--sidebar-w); }
+    .sidebar.open{ transform:translateX(0); }
+    .map-container{ margin-left:0; }
+    .toggle-sb{ display:flex; }
+    .close-sb{ display:flex; }
+
+    /* ── Top nav ── */
+    .top-nav{
+        height:auto; min-height:52px; padding:.45rem .75rem;
+        flex-wrap:nowrap; gap:.35rem; align-items:center;
+    }
+    .nav-left{ gap:.45rem; flex-shrink:0; min-width:0; }
+    .breadcrumb{
+        font-size:.62rem; min-width:0; flex:1;
+        overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    }
+    .nav-actions{ gap:.3rem; flex-shrink:0; flex-wrap:nowrap; }
+
+    /* Action buttons — icon-only on mobile */
+    .action-btn{
+        padding:.3rem .45rem; font-size:.65rem;
+        white-space:nowrap; overflow:hidden;
+        max-width:76px; text-overflow:ellipsis; flex-shrink:0;
+    }
+    .action-btn[title="Go Back"]{ font-size:0; padding:.3rem .5rem; }
+    .action-btn[title="Go Back"]::before{ content:"←"; font-size:.85rem; }
+    .chatbot-nav-btn{ max-width:88px; font-size:.6rem; }
+
+    /* ── Info panel ──
+       Use CSS custom property so JS can override top if nav grows */
+    .info-panel{
+        position:fixed;           /* fixed so it's relative to viewport, not map */
+        top:56px;                 /* matches min top-nav height */
+        left:.65rem; right:.65rem;
+        width:auto; max-width:calc(100vw - 1.3rem);
+        max-height:calc(100vh - 72px);
+        overflow-y:auto;
+        -webkit-overflow-scrolling:touch;
+        z-index:200;              /* above map controls */
+        border-radius:12px;
+    }
+    .info-title{ font-size:1rem; }
+    .info-value{ font-size:.7rem; }
+    .info-label{ font-size:.58rem; }
+    .directions-btn{ font-size:.72rem; padding:.55rem; }
+
+    /* ── Path strip ── */
+    .path-strip{
+        position:fixed; top:56px;
+        left:.65rem; right:.65rem; width:auto;
+        z-index:190;
+    }
+    .ps-title{ font-size:.7rem; }
+    .ps-stat-val{ font-size:.68rem; }
+    .ps-stat-lbl{ font-size:.6rem; }
+
+    /* ── Path stats ── */
+    .path-stats{
+        position:fixed; top:56px; right:.65rem;
+        left:auto; width:auto; min-width:136px;
+        z-index:190;
+    }
+
+    /* ── Map controls: move up from bottom to avoid home bar ── */
+    .map-controls{ right:.65rem; bottom:1.25rem; }
+    .ctrl-btn{ width:36px; height:36px; font-size:.95rem; }
+
+    /* ── Sidebar internals ── */
+    .search-input{ font-size:.75rem; padding:.52rem .85rem .52rem 2.1rem; }
+    .search-btn{ padding:.3rem .55rem; font-size:.68rem; }
+
+    .tab-btn{ font-size:.6rem; padding:.48rem 0; }
+    .tab-btn .t-icon{ font-size:.8rem; }
+
+    .filter-bar{
+        overflow-x:auto; flex-wrap:nowrap; padding:.55rem .85rem;
+        scrollbar-width:none;
+    }
+    .filter-bar::-webkit-scrollbar{ display:none; }
+    .floor-bar{
+        overflow-x:auto; flex-wrap:nowrap;
+        scrollbar-width:none;
+    }
+    .floor-bar::-webkit-scrollbar{ display:none; }
+
+    .loc-item{ padding:.45rem .55rem; }
+    .loc-name{ font-size:.74rem; }
+    .loc-sub{ font-size:.62rem; }
+    .loc-icon{ font-size:.9rem; }
+
+    /* ── Viewing strip ── */
+    .viewing-strip{ margin:.45rem .65rem 0; }
+    .vs-name{ font-size:.72rem; }
+    .vs-sub{ font-size:.6rem; }
+
+    /* ── Evacuation panel ── */
+    .evac-guidance h3{ font-size:.95rem; }
+    .evac-guidance p{ font-size:.7rem; }
+    .eb-title{ font-size:.72rem; }
+    .eb-sub{ font-size:.62rem; }
+
+    /* ── Accessibility badges ── */
+    .a11y-badge, .stairs-badge{ padding:.3rem .55rem; font-size:.63rem; }
+}
+
+/* ── Small phones (≤480px) ── */
+@media(max-width:480px){
+    .info-panel{
+        top:52px;
+        max-height:calc(100vh - 66px);
+        left:.5rem; right:.5rem;
+        max-width:calc(100vw - 1rem);
+        border-radius:10px;
+        padding:.8rem;
+    }
+    .path-strip{ top:52px; left:.5rem; right:.5rem; }
+    .path-stats{ top:52px; right:.5rem; }
+
+    .action-btn{ max-width:68px; font-size:.62rem; padding:.28rem .4rem; }
+    .chatbot-nav-btn{ max-width:78px; }
+
+    .ctrl-btn{ width:34px; height:34px; font-size:.9rem; }
+    .map-controls{ right:.5rem; bottom:1rem; }
+}
+
+/* ── Very small phones (≤360px — older Androids) ── */
+@media(max-width:360px){
+    .sidebar-header h1{ font-size:1.1rem; }
+    .sidebar-header p{ font-size:.68rem; }
+    .logo-wrap{ width:54px !important; height:54px !important; }
+    .logo-wrap img{ width:44px !important; height:44px !important; }
+
+    .tab-btn{ font-size:.52rem; padding:.42rem 0; }
+    .tab-btn .t-icon{ font-size:.72rem; }
+
+    .filter-pill{ padding:.22rem .45rem; font-size:.6rem; }
+    .floor-pill{ padding:.18rem .42rem; font-size:.58rem; }
+
+    .loc-name{ font-size:.68rem; }
+    .loc-sub{ font-size:.58rem; }
+
+    .info-panel{ padding:.75rem; border-radius:9px; }
+    .info-title{ font-size:.92rem; }
+
+    .ctrl-btn{ width:32px; height:32px; font-size:.85rem; }
+
+    /* Breadcrumb takes too much space — hide on tiny screens */
+    .breadcrumb{ display:none; }
+    .action-btn{ padding:.28rem .38rem; font-size:.6rem; max-width:62px; }
+}
+
+/* ── Landscape on mobile ── */
+@media(max-width:768px) and (orientation:landscape){
+    .sidebar{ height:100vh; overflow-y:auto; }
+    .info-panel{
+        top:48px; max-height:calc(100vh - 56px);
+        max-width:320px; /* don't take full width in landscape */
+        right:auto;       /* anchor left only */
+    }
+    .path-strip{ top:48px; }
+    .path-stats{ top:48px; }
+    .map-controls{ bottom:.75rem; }
+}
+
+/* ── Touch-friendly tap targets ── */
+@media (hover:none) and (pointer:coarse){
+    .loc-item{ padding:.6rem .65rem; margin-bottom:.25rem; }
+    .filter-pill{ padding:.3rem .62rem; }
+    .floor-pill{ padding:.25rem .52rem; }
+    .tab-btn{ padding:.62rem 0; }
+    .ctrl-btn{ width:44px; height:44px; }
+    .search-btn{ padding:.4rem .72rem; }
+    .directions-btn{ padding:.72rem; min-height:44px; }
+}
+
+/* ── Safe area (notched iPhones, Android gesture nav) ── */
+@supports (padding:max(0px)){
+    @media(max-width:768px){
+        .top-nav{
+            padding-top:max(.45rem, env(safe-area-inset-top));
+            padding-left:max(.75rem, env(safe-area-inset-left));
+            padding-right:max(.75rem, env(safe-area-inset-right));
+        }
+        .map-controls{
+            bottom:max(1.25rem, env(safe-area-inset-bottom));
+        }
+        .chat-input-container{
+            padding-bottom:max(12px, env(safe-area-inset-bottom));
+        }
+        /* Adjust panels to sit below the safe-area-aware nav */
+        .info-panel,
+        .path-strip,
+        .path-stats{
+            top:max(56px, calc(44px + env(safe-area-inset-top)));
+        }
+        /* Edge tab: keep it away from side notches */
+        .sidebar-edge-tab{
+            left:max(0px, env(safe-area-inset-left));
+        }
+    }
+}
+
+
     .sidebar.open{transform:translateX(0);}
     .map-container{margin-left:0;}
     .toggle-sb{display:flex;}
@@ -564,55 +767,7 @@ input, textarea, .info-content, .loc-panel-inner, .evac-panel-inner {
     /* Accessibility badges */
     .a11y-badge, .stairs-badge{padding:.35rem .6rem; font-size:.65rem;}
     
-    /* Path strip */
-    .path-strip{left:.75rem; right:.75rem; width:auto; top:60px;}
-    .ps-title{font-size:.72rem;}
-    .ps-stat-val{font-size:.7rem;}
-    .ps-stat-lbl{font-size:.62rem;}
-}
 
-/* Extra small devices (phones in portrait, less than 400px) */
-@media(max-width:400px){
-    .sidebar-header h1{font-size:1.2rem;}
-    .sidebar-header p{font-size:.7rem;}
-    .logo-wrap{width:60px !important; height:60px !important;}
-    .logo-wrap img{width:50px !important; height:50px !important;}
-    
-    .tab-btn{font-size:.55rem; padding:.45rem 0;}
-    .tab-btn .t-icon{font-size:.75rem; margin-bottom:.05rem;}
-    
-    .filter-pill{padding:.25rem .5rem; font-size:.62rem;}
-    .floor-pill{padding:.2rem .45rem; font-size:.6rem;}
-    
-    .loc-name{font-size:.7rem;}
-    .loc-sub{font-size:.6rem;}
-    
-    .info-panel{padding:.85rem;}
-    .info-title{font-size:1rem;}
-    
-    .ctrl-btn{width:34px; height:34px; font-size:.95rem;}
-    
-    .breadcrumb{display:none;}
-    .action-btn{padding:.32rem .6rem; font-size:.68rem;}
-}
-
-/* Landscape mode adjustments */
-@media(max-width:768px) and (orientation: landscape){
-    .sidebar{height:100vh; overflow-y:auto;}
-    .info-panel{max-height:calc(100vh - 70px); top:10px;}
-    .map-controls{bottom:1rem;}
-}
-
-/* Touch-friendly adjustments */
-@media (hover: none) and (pointer: coarse) {
-    /* Increase tap targets for touch devices */
-    .loc-item{padding:.6rem .65rem; margin-bottom:.3rem;}
-    .filter-pill{padding:.32rem .65rem;}
-    .floor-pill{padding:.26rem .55rem;}
-    .tab-btn{padding:.65rem 0;}
-    .ctrl-btn{width:44px; height:44px;}
-    .search-btn{padding:.42rem .75rem;}
-}
 /* ===================== SIDEBAR EDGE TAB ===================== */
 .sidebar-edge-tab {
     display: none; /* hidden by default; shown via .edge-tab-visible */

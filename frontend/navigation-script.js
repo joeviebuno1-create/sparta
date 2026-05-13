@@ -459,7 +459,18 @@ function selectLocation(idOrObj, clickedEl) {
         <div class="info-row"><span class="info-row-icon">🗺️</span><div><div class="info-label">Coordinates</div><div class="info-value">X:${location.coordinates.x} Y:${location.coordinates.y} Z:${location.coordinates.z}</div></div></div>
         ${dirHtml}
     `;
-    document.getElementById('infoPanel').classList.add('show');
+    const panel = document.getElementById('infoPanel');
+    panel.classList.add('show');
+
+    // Dynamically position panel below the actual top-nav height (important on mobile)
+    const nav = document.querySelector('.top-nav');
+    if (nav && window.innerWidth <= 768) {
+        const navBottom = nav.getBoundingClientRect().bottom;
+        panel.style.top = (navBottom + 6) + 'px';
+    } else {
+        panel.style.top = '';
+    }
+
     document.getElementById('searchResults').classList.remove('show');
 
     if (location.coordinates && scene) {

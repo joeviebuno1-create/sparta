@@ -140,7 +140,8 @@ def extract_college_from_query(original_query: str) -> Tuple[List[str], List[str
             # wrongly exclude people like the Head of ICT Services.
             _ict_position_ctx = ['services', 'planning', 'development', 'unit',
                                   'office', 'division', 'center', 'head of ict',
-                                  'director of ict', 'chief of ict']
+                                  'director of ict', 'chief of ict',
+                                  'head', 'director', 'chief']
             _is_position_ctx = any(w in ql for w in _ict_position_ctx)
             if not _is_position_ctx:
                 add_code('CICS')
@@ -155,7 +156,7 @@ def extract_college_from_query(original_query: str) -> Tuple[List[str], List[str
             raw = m.group(1).upper()
             if raw == 'ICT':
                 _ict_position_ctx = ['services', 'planning', 'development', 'unit',
-                                      'office', 'division', 'center']
+                                      'office', 'division', 'center', 'head', 'director', 'chief']
                 if not any(w in ql for w in _ict_position_ctx):
                     add_code('CICS')
             else:
@@ -168,7 +169,7 @@ def extract_college_from_query(original_query: str) -> Tuple[List[str], List[str
             raw = m.group(1).upper()
             if raw == 'ICT':
                 _ict_position_ctx = ['services', 'planning', 'development', 'unit',
-                                      'office', 'division', 'center']
+                                      'office', 'division', 'center', 'head', 'director', 'chief']
                 if not any(w in ql for w in _ict_position_ctx):
                     add_code('CICS')
             else:
@@ -1135,23 +1136,79 @@ class EnhancedDatabaseRAG:
                 all_dept_terms = list(set(dept_codes + dept_kws))
 
                 # ── Position-context keyword filter ────────────────────────
-                # When the query contains specific unit/service keywords (e.g. "ict",
-                # "ict services") but NO college was extracted (dept_codes is empty),
-                # search the position field directly so Alimoren-type records are found.
+                # When the query contains specific unit/service keywords but NO college
+                # was extracted (dept_codes is empty), search the position field directly
+                # so non-college unit heads are found (e.g. Alimoren for ICT, Generoso for QA).
+                # Maps query trigger words → position ILIKE search term.
                 _ql_lower = (original_query or '').lower()
                 _pos_ctx_terms = []
                 _pos_ctx_map = {
-                    'ict services': 'ICT Services',
-                    'ict': 'ICT',
-                    'planning': 'Planning',
-                    'research': 'Research',
-                    'extension': 'Extension',
+                    # Most specific first (multi-word before single-word)
+                    'internal audit':           'Internal Audit',
+                    'quality assurance':        'Quality Assurance',
+                    'sustainable development':  'Sustainable Development',
+                    'ict services':             'ICT Services',
+                    'general education':        'General Education',
+                    'health services':          'Health Services',
+                    'library services':         'Library Services',
+                    'library':                  'Library',
+                    'registration services':    'Registration Services',
+                    'registration':             'Registration',
+                    'testing and admission':    'Testing and Admission',
+                    'testing':                  'Testing',
+                    'admission':                'Admission',
+                    'on the job training':      'On the Job Training',
+                    'ojt':                      'On the Job Training',
+                    'student organization':     'Student Organization',
+                    'guidance and counselling': 'Guidance and Counselling',
+                    'guidance and counseling':  'Guidance and Counselling',
+                    'guidance':                 'Guidance',
+                    'counselling':              'Counselling',
+                    'counseling':               'Counselling',
+                    'student discipline':       'Student Discipline',
+                    'discipline':               'Discipline',
+                    'national service training': 'National Service Training',
+                    'nstp':                     'National Service Training',
+                    'culture and arts':         'Culture and Arts',
+                    'sports development':       'Sports Development',
+                    'sports':                   'Sports',
+                    'scholarship':              'Scholarship',
+                    'financial assistance':     'Financial Assistance',
+                    'human resource':           'Human Resource',
+                    'records management':       'Records Management',
+                    'records':                  'Records',
+                    'procurement':              'Procurement',
+                    'property and supply':      'Property and Supply',
+                    'property':                 'Property',
+                    'supply':                   'Supply',
+                    'project and facility':     'Project and Facility',
+                    'facility management':      'Facility Management',
+                    'facility':                 'Facility',
+                    'general services':         'General Services',
+                    'environmental management': 'Environmental Management',
+                    'environmental':            'Environmental',
+                    'budget':                   'Budget',
+                    'cashiering':               'Cashiering',
+                    'cashier':                  'Cashiering',
+                    'accounting':               'Accounting',
+                    'disbursing':               'Disbursing',
+                    'research':                 'Research',
+                    'extension services':       'Extension Services',
+                    'extension':                'Extension',
+                    'external affairs':         'External Affairs',
+                    'resource generation':      'Resource Generation',
+                    'job placement':            'Job Placement',
+                    'employment':               'Job Placement',
+                    'planning and development': 'Planning and Development',
+                    'planning':                 'Planning',
+                    'development':              'Development',
+                    'ict':                      'ICT',
                 }
                 if not dept_codes:  # only when no college filter applies
                     for trigger, pos_kw in _pos_ctx_map.items():
                         if trigger in _ql_lower:
                             _pos_ctx_terms.append(pos_kw)
-                            break  # one match is enough
+                            break  # one match is enough (most-specific wins)
 
                 if all_dept_terms:
                     dept_conditions = [
@@ -1611,12 +1668,28 @@ class EnhancedDatabaseRAG:
             # If the query already contains specific position/unit context words,
             # the user is asking about a specific person (e.g. "head of ict services"),
             # not a college-level role — skip clarification and let scoring find them.
+            # Covers ALL unit heads from the FY 2026 Designated Officials list.
             _position_specifics = [
-                'ict', 'ict services', 'planning', 'development', 'research',
-                'extension', 'finance', 'administration', 'procurement',
-                'budget', 'legal', 'audit', 'records', 'security',
-                'maintenance', 'library', 'guidance', 'alumni', 'sports',
-                'cultural', 'publication', 'health', 'welfare',
+                # ICT / Development / External Affairs
+                'ict', 'ict services', 'planning', 'development', 'external affairs',
+                'resource generation', 'job placement', 'employment',
+                # Chancellor office units
+                'internal audit', 'audit', 'quality assurance', 'sustainable',
+                # Academic service units (non-college)
+                'general education', 'health services', 'library', 'registration',
+                'testing', 'admission', 'ojt', 'on the job', 'student organization',
+                'guidance', 'counselling', 'counseling', 'discipline',
+                'nstp', 'national service', 'culture', 'arts', 'sports',
+                'scholarship', 'financial assistance',
+                # Admin / Finance units
+                'human resource', 'records', 'procurement', 'property', 'supply',
+                'facility', 'project', 'general services', 'environmental',
+                'budget', 'cashiering', 'cashier', 'accounting', 'disbursing',
+                # Research / Extension
+                'research', 'extension',
+                # Catch-all service/unit words
+                'services', 'management', 'office', 'unit', 'division', 'center',
+                'affairs', 'finance', 'administration',
             ]
             _ql = original_query.lower()
             if any(w in _ql for w in _position_specifics):
@@ -2215,7 +2288,7 @@ class EnhancedDatabaseRAG:
                 # Only proceed when unit keyword is NOT a college name (colleges are handled later)
                 _college_words = {'cet', 'cics', 'cas', 'cabe', 'cte', 'engineering',
                                   'informatics', 'computing', 'accountancy', 'business',
-                                  'economics', 'teacher', 'arts', 'sciences', 'education'}
+                                  'economics', 'teacher', 'sciences', 'education'}
                 _unit_words = [w.lower() for w in _unit_kw_clean.split()]
                 _is_college = any(w in _college_words for w in _unit_words)
                 if not _is_college and _unit_kw_clean:
@@ -2735,28 +2808,34 @@ class EnhancedDatabaseRAG:
 def _format_faq_response(raw_text: str, query: str, lang: str = 'en') -> str:
     """
     Format raw FAQ chunk text into a clean readable response.
-    Removes header noise, joins broken lines, highlights Q&A pairs.
+    Handles: Q&A pairs, Core Values sections, Vision/Mission text, plain paragraphs.
     """
-    # Split and clean lines
     lines = [l.strip() for l in raw_text.split('\n') if l.strip()]
 
-    # Remove pure header/title lines
+    # Remove pure header/title noise lines
     _NOISE = re.compile(
-        r'^(vision,?\s*mission|core values?|university vision|university mission|'
+        r'^(vision,?\s*mission|university vision|university mission|'
         r'university core values?|frequently asked|batangas state university|'
-        r'don claro|the national engineering|page \d+|\d+\s*of\s*\d+)\.?$',
+        r'don claro|the national engineering|page \d+|\d+\s*of\s*\d+|'
+        r'lipa campus|lipa city|leading innovations)\.?$',
         re.IGNORECASE
     )
     lines = [l for l in lines if not _NOISE.match(l)]
-
     if not lines:
         return raw_text[:600]
 
-    # Detect if this is a Q&A formatted chunk
+    # ── Detect content type ────────────────────────────────────────────────────
     has_qa = any(re.match(r'^Q\s*[\d.:]\s*|^Q:\s*', l, re.IGNORECASE) for l in lines)
 
+    # Core value keywords — ALL CAPS headings like PATRIOTISM, SERVICE, etc.
+    _CV_KEYWORDS = {'PATRIOTISM', 'SERVICE', 'INTEGRITY', 'RESILIENCE', 'FAITH',
+                    'EXCELLENCE', 'INNOVATION', 'ACCOUNTABILITY', 'TRANSPARENCY'}
+    has_core_values = any(l.upper() in _CV_KEYWORDS or
+                          any(kw in l.upper() for kw in _CV_KEYWORDS)
+                          for l in lines)
+
+    # ── Q&A format ─────────────────────────────────────────────────────────────
     if has_qa:
-        # Parse Q&A pairs
         result_parts = []
         i = 0
         query_lower = query.lower()
@@ -2775,9 +2854,10 @@ def _format_faq_response(raw_text: str, query: str, lang: str = 'en') -> str:
                     i += 1
                 answer = ' '.join(answer_lines).strip()
                 if answer:
-                    q_words = set(re.findall(r'\w+', q_text.lower()))
+                    q_words   = set(re.findall(r'\w+', q_text.lower()))
+                    q_words_a = set(re.findall(r'\w+', answer.lower()))
                     query_words = set(re.findall(r'\w+', query_lower))
-                    overlap = len(q_words & query_words)
+                    overlap = len(q_words & query_words) + len(q_words_a & query_words) * 0.3
                     entry = (f"**Q: {q_text}**\n{answer}", overlap)
                     if overlap > 0:
                         best_qa.append(entry)
@@ -2792,25 +2872,95 @@ def _format_faq_response(raw_text: str, query: str, lang: str = 'en') -> str:
             final_parts = [other_qa[0][0]]
         return '\n\n'.join(final_parts) if final_parts else '\n'.join(lines[:8])
 
-    else:
-        # Plain paragraph text — join broken lines into proper sentences
-        paragraphs = []
-        buf = ''
-        for line in lines:
-            # Start new paragraph if line starts with capital and buf is complete sentence
-            if buf and line and line[0].isupper() and buf.endswith('.'):
-                paragraphs.append(buf.strip())
-                buf = line
-            elif buf:
-                # Check if buf ends mid-sentence (no period) — join with space
-                buf = buf + (' ' if not buf.endswith('-') else '') + line
+    # ── Core Values format ─────────────────────────────────────────────────────
+    if has_core_values:
+        # Parse value name + description pairs
+        values_found = []
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            # A core value heading: ALL CAPS, 1-3 words, short
+            words = line.split()
+            is_value_heading = (
+                1 <= len(words) <= 4 and
+                line == line.upper() and
+                len(line) <= 30 and
+                any(kw in line.upper() for kw in _CV_KEYWORDS)
+            )
+            if is_value_heading:
+                desc_lines = []
+                i += 1
+                while i < len(lines):
+                    next_words = lines[i].split()
+                    next_is_heading = (
+                        1 <= len(next_words) <= 4 and
+                        lines[i] == lines[i].upper() and
+                        len(lines[i]) <= 30
+                    )
+                    if next_is_heading:
+                        break
+                    desc_lines.append(lines[i])
+                    i += 1
+                desc = ' '.join(desc_lines).strip()
+                if desc:
+                    values_found.append((line.title(), desc))
             else:
-                buf = line
-        if buf:
-            paragraphs.append(buf.strip())
+                i += 1
 
-        # Return max 4 clean paragraphs
-        return '\n\n'.join(paragraphs[:4]) if paragraphs else '\n'.join(lines[:6])
+        if values_found:
+            query_lower = query.lower()
+            # If asking about a specific value, show just that one
+            specific = [(name, desc) for name, desc in values_found
+                        if name.lower() in query_lower]
+            to_show = specific if specific else values_found
+
+            parts = [f"**{name}**\n{desc}" for name, desc in to_show[:5]]
+            header = ""
+            if 'core value' in query_lower or 'values' in query_lower:
+                header = ("🏛️ **Core Values ng BSU Lipa:**\n\n"
+                          if lang == 'tl' else
+                          "🏛️ **BSU Lipa Core Values:**\n\n")
+            return header + '\n\n'.join(parts)
+
+    # ── Plain paragraph text (Vision, Mission, general prose) ─────────────────
+    # Check if this is vision/mission content
+    is_vision_mission = any(
+        kw in ' '.join(lines[:4]).lower()
+        for kw in ['vision', 'mission', 'globally recognized', 'holistic development']
+    )
+
+    paragraphs = []
+    buf = ''
+    for line in lines:
+        # Skip section labels we'll add ourselves
+        if re.match(r'^university\s+(vision|mission|core values?)$', line, re.IGNORECASE):
+            if buf:
+                paragraphs.append(buf.strip())
+                buf = ''
+            paragraphs.append(f'**{line.title()}**')
+            continue
+        if buf and line and line[0].isupper() and buf.rstrip().endswith('.'):
+            paragraphs.append(buf.strip())
+            buf = line
+        elif buf:
+            buf = buf + (' ' if not buf.endswith('-') else '') + line
+        else:
+            buf = line
+    if buf:
+        paragraphs.append(buf.strip())
+
+    # Limit output length
+    result = '\n\n'.join(paragraphs[:5])
+
+    # Add a helpful header for vision/mission queries
+    if is_vision_mission:
+        query_lower = query.lower()
+        if 'vision' in query_lower and 'mission' not in query_lower:
+            result = "🎯 **University Vision**\n\n" + result
+        elif 'mission' in query_lower and 'vision' not in query_lower:
+            result = "🎯 **University Mission**\n\n" + result
+
+    return result
 
 
 def is_nonsense(message: str) -> bool:
