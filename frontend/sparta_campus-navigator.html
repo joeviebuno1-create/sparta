@@ -312,6 +312,12 @@
 
 <!-- ============ MAIN MAP ============ -->
 <div class="map-container" id="mapContainer">
+    <!-- Edge toggle: always visible when sidebar is collapsed -->
+    <button class="sidebar-edge-tab" id="sidebarEdgeTab" onclick="toggleSidebar()" title="Open sidebar">
+        <span class="edge-tab-icon">☰</span>
+        <span class="edge-tab-label">Search</span>
+    </button>
+
     <div class="top-nav">
         <div class="nav-left">
             <button class="toggle-sb" onclick="toggleSidebar()">☰</button>

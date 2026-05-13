@@ -61,6 +61,10 @@ COLLEGE_ALIASES = {
     'informatics and computing sciences': 'CICS',
     'informatics and computing': 'CICS',
     'college of informatics and computing sciences': 'CICS',
+    'ict': 'CICS',
+    'information and communications technology': 'CICS',
+    'information technology': 'CICS',
+    'it department': 'CICS',
     # CAS
     'cas': 'CAS',
     'arts and sciences': 'CAS',
@@ -126,21 +130,49 @@ def extract_college_from_query(original_query: str) -> Tuple[List[str], List[str
                     keywords.append(kw)
 
     # ── Priority 1: exact abbreviation (case-insensitive word boundary) ───────
-    m = re.search(r'\b(CET|CICS|CAS|CABE|CTE)\b', q, re.IGNORECASE)
+    m = re.search(r'\b(CET|CICS|CAS|CABE|CTE|ICT)\b', q, re.IGNORECASE)
     if m:
-        add_code(m.group(1).upper())
+        raw = m.group(1).upper()
+        if raw == 'ICT':
+            # "ICT" alone could mean the CICS college OR an ICT Services/unit position.
+            # If the query contains position/service context words, treat it as a
+            # position keyword (NOT a college filter) so the dept filter doesn't
+            # wrongly exclude people like the Head of ICT Services.
+            _ict_position_ctx = ['services', 'planning', 'development', 'unit',
+                                  'office', 'division', 'center', 'head of ict',
+                                  'director of ict', 'chief of ict']
+            _is_position_ctx = any(w in ql for w in _ict_position_ctx)
+            if not _is_position_ctx:
+                add_code('CICS')
+            # else: skip college mapping — let the role filter find the person
+        else:
+            add_code(raw)
 
     # ── Priority 2: Filipino "ng <abbrev>" e.g. "dean ng CET" ─────────────────
     if not codes:
-        m = re.search(r'\bng\s+(CET|CICS|CAS|CABE|CTE)\b', q, re.IGNORECASE)
+        m = re.search(r'\bng\s+(CET|CICS|CAS|CABE|CTE|ICT)\b', q, re.IGNORECASE)
         if m:
-            add_code(m.group(1).upper())
+            raw = m.group(1).upper()
+            if raw == 'ICT':
+                _ict_position_ctx = ['services', 'planning', 'development', 'unit',
+                                      'office', 'division', 'center']
+                if not any(w in ql for w in _ict_position_ctx):
+                    add_code('CICS')
+            else:
+                add_code(raw)
 
     # ── Priority 3: "of <abbrev>" e.g. "dean of CET" ──────────────────────────
     if not codes:
-        m = re.search(r'\bof\s+(CET|CICS|CAS|CABE|CTE)\b', q, re.IGNORECASE)
+        m = re.search(r'\bof\s+(CET|CICS|CAS|CABE|CTE|ICT)\b', q, re.IGNORECASE)
         if m:
-            add_code(m.group(1).upper())
+            raw = m.group(1).upper()
+            if raw == 'ICT':
+                _ict_position_ctx = ['services', 'planning', 'development', 'unit',
+                                      'office', 'division', 'center']
+                if not any(w in ql for w in _ict_position_ctx):
+                    add_code('CICS')
+            else:
+                add_code(raw)
 
     # ── Priority 4: Full college name patterns ─────────────────────────────────
     if not codes:
@@ -660,9 +692,7 @@ class EnhancedDatabaseRAG:
                 )
                 m = re.search(plain_pat, _q, re.IGNORECASE)
                 if m:
-                    raw = re.sub(r'[?.!,]+$', m.group(1).strip(), '').strip()
-                    raw = m.group(1).strip()
-                    raw = re.sub(r'[?.!,]+$', '', raw)
+                    raw = re.sub(r'[?.!,]+$', '', m.group(1).strip()).strip()
                     name = raw.title()
                     if name.lower() not in skip_lower and len(name) > 2:
                         entities['first_names'].append(name)
@@ -926,6 +956,35 @@ class EnhancedDatabaseRAG:
 
         scored_docs.sort(key=lambda x: x[1], reverse=True)
 
+        # ── Name-query minimum score guard ────────────────────────────────────
+        # When searching by person name, require a meaningful fuzzy match.
+        # Prevents "Dioneces" fuzzy-matching "GENETA," (score 0.267) from winning
+        # when the target person isn't in the fetched results at all.
+        if (intent == 'authority_query'
+                and entities.get('first_names')
+                and not entities.get('specific_role')):
+            # Keep only docs where the name actually appears or scores strongly
+            name_filtered = []
+            for doc, score in scored_docs:
+                if not hasattr(doc, 'name'):
+                    continue
+                doc_lower = doc.name.lower()
+                # Accept if ANY extracted name word appears as substring in doc name
+                name_hit = any(
+                    w.lower() in doc_lower
+                    for fn in entities['first_names']
+                    for w in fn.split()
+                    if len(re.sub(r'[^a-zA-Z]', '', w)) >= 3
+                    and re.sub(r'[^a-zA-Z]', '', w).lower() not in
+                        {'dr', 'mr', 'ms', 'mrs', 'prof', 'engr', 'atty', 'sir', 'maam'}
+                )
+                if name_hit or score >= 3.0:  # score>=3 means name_exact_boost fired
+                    name_filtered.append((doc, score))
+            # CRITICAL FIX: always use name_filtered result (even if empty).
+            # When empty, return [] so generate_response fires the fallback message
+            # instead of silently returning wrong/unrelated people from scored_docs.
+            scored_docs = name_filtered
+
         if len(scored_docs) > max_results:
             scored_docs = self._apply_diversity(scored_docs, max_results)
 
@@ -998,9 +1057,27 @@ class EnhancedDatabaseRAG:
                             ).all()
 
                         if not results:
-                            # Last resort: fetch all, let scorer sort it out
-                            print(f"[authority] No name match found — fetching all for scorer")
-                            results = db.query(models.Authority).all()
+                            # Try broader OR search across ALL name words individually
+                            results = db.query(models.Authority).filter(
+                                or_(*word_filters)
+                            ).all()
+                        if not results:
+                            # Try stripping punctuation from each word
+                            # Handles names stored with different punctuation/formatting
+                            clean_filters = [
+                                models.Authority.name.ilike(
+                                    f'%{re.sub(r"[^a-zA-Z]", "", w)}%'
+                                )
+                                for w in _all_name_words
+                                if len(re.sub(r'[^a-zA-Z]', '', w)) >= 3
+                            ]
+                            if clean_filters:
+                                results = db.query(models.Authority).filter(
+                                    or_(*clean_filters)
+                                ).all()
+                        # Never fall back to ALL authorities — that returns wrong people.
+                        # Return whatever we have (even empty); scorer/fallback handles it.
+                        print(f"[authority] name search returned {len(results)} result(s)")
                         return results
 
                 # ── Role filter ────────────────────────────────────────────
@@ -1057,12 +1134,38 @@ class EnhancedDatabaseRAG:
                 dept_kws = entities.get('dept_keywords', [])
                 all_dept_terms = list(set(dept_codes + dept_kws))
 
+                # ── Position-context keyword filter ────────────────────────
+                # When the query contains specific unit/service keywords (e.g. "ict",
+                # "ict services") but NO college was extracted (dept_codes is empty),
+                # search the position field directly so Alimoren-type records are found.
+                _ql_lower = (original_query or '').lower()
+                _pos_ctx_terms = []
+                _pos_ctx_map = {
+                    'ict services': 'ICT Services',
+                    'ict': 'ICT',
+                    'planning': 'Planning',
+                    'research': 'Research',
+                    'extension': 'Extension',
+                }
+                if not dept_codes:  # only when no college filter applies
+                    for trigger, pos_kw in _pos_ctx_map.items():
+                        if trigger in _ql_lower:
+                            _pos_ctx_terms.append(pos_kw)
+                            break  # one match is enough
+
                 if all_dept_terms:
                     dept_conditions = [
                         models.Authority.department.ilike(f'%{term}%')
                         for term in all_dept_terms
                     ]
                     query = query.filter(or_(*dept_conditions))
+                elif _pos_ctx_terms:
+                    # Search in position field instead of department
+                    pos_conditions = [
+                        models.Authority.position.ilike(f'%{term}%')
+                        for term in _pos_ctx_terms
+                    ]
+                    query = query.filter(or_(*pos_conditions))
 
                 return query.all()
 
@@ -1505,6 +1608,20 @@ class EnhancedDatabaseRAG:
         if (specific_role in multi_college_roles
                 and not has_department
                 and not has_first_name):
+            # If the query already contains specific position/unit context words,
+            # the user is asking about a specific person (e.g. "head of ict services"),
+            # not a college-level role — skip clarification and let scoring find them.
+            _position_specifics = [
+                'ict', 'ict services', 'planning', 'development', 'research',
+                'extension', 'finance', 'administration', 'procurement',
+                'budget', 'legal', 'audit', 'records', 'security',
+                'maintenance', 'library', 'guidance', 'alumni', 'sports',
+                'cultural', 'publication', 'health', 'welfare',
+            ]
+            _ql = original_query.lower()
+            if any(w in _ql for w in _position_specifics):
+                print(f"[clarification?] skipped — position-specific context found in query")
+                return False
             # Show picker if multiple results OR no results (DB may just be empty for that dept)
             return True
         return False
@@ -2024,6 +2141,112 @@ class EnhancedDatabaseRAG:
             lang = forced_lang if forced_lang else detect_language(original_query)
             print(f"[process_query] forced_lang='{forced_lang}' → lang='{lang}' | query='{original_query[:60]}'")
 
+            # Step 0.4: Direct person lookup — "Who is [Honorific] [FULLNAME]?"
+            # Bypasses all intent/scoring logic for exact name queries.
+            # Handles: "Who is Dr. VANESSAH V. CASTILLO?"
+            #          "Who is Mr. DIONECES O. ALIMOREN?"
+            _HONOR_PAT = r'(?:sir|maam|ma[\'`]?am|dr\.?|prof\.?|mr\.?|ms\.?|mrs\.?|engr\.?|atty\.?|asst\.?)'
+            _direct_name_pat = (
+                rf'(?:who\s+is\s+|about\s+|find\s+|contact\s+)'
+                rf'{_HONOR_PAT}\s+'
+                rf'([A-Za-z][A-Za-z.\'\\-]{{2,}}(?:\s+[A-Za-z.\'\\-]{{1,}})*)'
+            )
+            _direct_match = re.search(_direct_name_pat, original_query, re.IGNORECASE)
+            if _direct_match:
+                _raw_name = re.sub(r'[?.!,]+$', '', _direct_match.group(1).strip())
+                _name_words = [
+                    w for w in _raw_name.split()
+                    if len(re.sub(r'[^a-zA-Z]', '', w)) >= 3
+                    and re.sub(r'[^a-zA-Z]', '', w).lower() not in
+                        {'dr', 'mr', 'ms', 'mrs', 'prof', 'engr', 'atty', 'sir', 'maam', 'asst', 'the', 'and'}
+                ]
+                if _name_words:
+                    # Try AND (all words must match) then OR (any word)
+                    _and_filters = [models.Authority.name.ilike(f'%{w}%') for w in _name_words]
+                    _or_filters  = [models.Authority.name.ilike(f'%{w}%') for w in _name_words]
+                    _direct_results = db.query(models.Authority).filter(and_(*_and_filters)).all()
+                    if not _direct_results and len(_name_words) >= 2:
+                        # Try with just the 2 longest words
+                        _sorted = sorted(_name_words, key=len, reverse=True)
+                        _two_filters = [models.Authority.name.ilike(f'%{w}%') for w in _sorted[:2]]
+                        _direct_results = db.query(models.Authority).filter(and_(*_two_filters)).all()
+                    if not _direct_results:
+                        _direct_results = db.query(models.Authority).filter(or_(*_or_filters)).all()
+                    # Validate: keep only results where at least one name word appears
+                    _direct_results = [
+                        r for r in _direct_results
+                        if any(w.lower() in r.name.lower() for w in _name_words)
+                    ]
+                    if _direct_results:
+                        _doc = _direct_results[0]
+                        _resp = self.format_authority_response(_doc, original_query, 1.0, [(r, 1.0) for r in _direct_results], lang)
+                        return {
+                            'response': _resp,
+                            'confidence': 1.0,
+                            'intent': 'authority_query',
+                            'suggestions': [r.name for r in _direct_results[1:4]],
+                            'context_used': len(_direct_results),
+                            'entities_found': {'first_names': [_raw_name.title()]}
+                        }
+                    else:
+                        # Person not found — return clean fallback immediately
+                        _fb = (
+                            f"Paumanhin, wala akong impormasyon tungkol kay **{_raw_name.title()}** sa aking database."
+                            if lang == 'tl' else
+                            f"Sorry, I don't have information about **{_raw_name.title()}** in my database."
+                        )
+                        return {
+                            'response': _fb,
+                            'confidence': 1.0,
+                            'intent': 'authority_query',
+                            'suggestions': [],
+                            'context_used': 0,
+                            'entities_found': {'first_names': [_raw_name.title()]}
+                        }
+
+            # Step 0.45: Direct position-keyword search — "head of ict", "director of ict services"
+            # Catches unit-head queries that don't match a college, bypassing scoring noise.
+            _pos_kw_pat = r'\b(head|director|chief|coordinator)\s+of\s+([a-zA-Z][a-zA-Z\s]{2,30})'
+            _pos_kw_match = re.search(_pos_kw_pat, original_query, re.IGNORECASE)
+            if _pos_kw_match:
+                _role_kw   = _pos_kw_match.group(1).lower()   # e.g. "head"
+                _unit_kw   = _pos_kw_match.group(2).strip()   # e.g. "ict services"
+                _unit_kw_clean = re.sub(r'[^a-zA-Z\s]', '', _unit_kw).strip()
+                # Only proceed when unit keyword is NOT a college name (colleges are handled later)
+                _college_words = {'cet', 'cics', 'cas', 'cabe', 'cte', 'engineering',
+                                  'informatics', 'computing', 'accountancy', 'business',
+                                  'economics', 'teacher', 'arts', 'sciences', 'education'}
+                _unit_words = [w.lower() for w in _unit_kw_clean.split()]
+                _is_college = any(w in _college_words for w in _unit_words)
+                if not _is_college and _unit_kw_clean:
+                    # Search DB: position must contain the role AND any unit word
+                    _unit_filters = [
+                        models.Authority.position.ilike(f'%{w}%')
+                        for w in _unit_words if len(w) >= 3
+                    ]
+                    _role_filter = models.Authority.position.ilike(f'%{_role_kw}%')
+                    if _unit_filters:
+                        _pos_results = (
+                            db.query(models.Authority)
+                            .filter(_role_filter)
+                            .filter(or_(*_unit_filters))
+                            .all()
+                        )
+                        if _pos_results:
+                            _doc = _pos_results[0]
+                            _resp = self.format_authority_response(
+                                _doc, original_query, 1.0,
+                                [(r, 1.0) for r in _pos_results], lang
+                            )
+                            return {
+                                'response': _resp,
+                                'confidence': 1.0,
+                                'intent': 'authority_query',
+                                'suggestions': [r.name for r in _pos_results[1:4]],
+                                'context_used': len(_pos_results),
+                                'entities_found': {}
+                            }
+
             # Step 0.5: Check custom responses FIRST — highest priority
             custom = self.check_custom_response(original_query, db, lang=lang)
             if custom:
@@ -2087,7 +2310,16 @@ class EnhancedDatabaseRAG:
                     '1', '2', '3', '4', '5',
                     'engineering', 'informatics', 'accountancy', 'teacher',
                 ]
-                if not any(h in _q_stripped for h in _campus_hints):
+                # Allow short queries that look like a bare name search:
+                # any non-honorific word >=4 letters is treated as a potential surname
+                _HONORIFICS_BARE = {'sir', 'maam', 'mam', 'dr', 'mr', 'ms', 'mrs',
+                                    'prof', 'engr', 'atty', 'asst'}
+                _has_name_word = any(
+                    len(re.sub(r'[^a-z]', '', w)) >= 4
+                    and re.sub(r'[^a-z]', '', w) not in _HONORIFICS_BARE
+                    for w in _q_stripped.split()
+                )
+                if not any(h in _q_stripped for h in _campus_hints) and not _has_name_word:
                     _is_vague = True
 
             if _is_vague:
@@ -2123,6 +2355,34 @@ class EnhancedDatabaseRAG:
 
             # Step 2: Intent Detection (on normalized query)
             intent, intent_confidence = self.detect_intent(normalized_query)
+
+            # Step 2.2: Bare-name authority override
+            # Handles: "sulit", "maam sulit", "sir garcia", "alimoren",
+            #          "maam dela cruz", "prof santos", first-name-only, surname-only.
+            # When the entire query is an honorific + name (or just a name),
+            # force authority_query so it hits the person DB instead of FAQ.
+            _BARE_HONORIFICS = {'sir', 'maam', 'mam', 'dr', 'mr', 'ms', 'mrs',
+                                 'prof', 'engr', 'atty', 'asst', 'assoc'}
+            _bare_words = [re.sub(r"[^a-z]", '', w)
+                           for w in original_query.strip().lower().split()]
+            _name_words = [w for w in _bare_words
+                           if w and w not in _BARE_HONORIFICS and len(w) >= 2]
+            _only_honorific_and_names = (
+                len(_bare_words) >= 1
+                and all(w in _BARE_HONORIFICS or (len(w) >= 2) for w in _bare_words)
+                and _name_words  # at least one non-honorific word
+                # query must NOT contain intent keywords that already gave a strong signal
+                and intent_confidence < 0.55
+                and not any(kw in original_query.lower() for kw in [
+                    'where', 'location', 'history', 'org', 'organization',
+                    'announcement', 'when', 'founded', 'club', 'building',
+                    'room', 'floor', 'saan', 'kailan', 'kasaysayan'
+                ])
+            )
+            if _only_honorific_and_names and intent != 'authority_query':
+                print(f"[intent_override] bare-name query '{original_query}' -> authority_query")
+                intent = 'authority_query'
+                intent_confidence = 0.70
 
             # Step 2.3: Org acronym / name override
             # Catches queries like "who is SETS", "SETS", "tell me about SETS"

@@ -1750,7 +1750,10 @@
         el.className = `alert alert-${type}`;
         el.textContent = msg;
         el.style.display = 'block';
-        setTimeout(() => el.style.display = 'none', 4000);
+        el.style.fontSize = '14px';
+        el.style.padding = '12px 16px';
+        // Errors stay for 10s, success for 4s
+        setTimeout(() => el.style.display = 'none', type === 'error' ? 10000 : 4000);
     }
 
     async function loadFaqDocs() {
@@ -1777,7 +1780,10 @@
                         <button class="btn btn-sm" onclick="toggleFaqDoc(${d.id},this)" style="background:#f39c12;padding:4px 10px;font-size:0.8em">
                             ${d.is_active ? '⏸ Disable' : '▶ Enable'}
                         </button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteFaqDoc(${d.id},'${escHtml(d.title)}')" style="padding:4px 10px;font-size:0.8em;margin-left:4px">
+                        <button class="btn btn-sm btn-danger faq-delete-btn"
+                            data-id="${d.id}"
+                            data-title="${escHtml(d.title).replace(/"/g,'&quot;')}"
+                            style="padding:4px 10px;font-size:0.8em;margin-left:4px">
                             🗑 Delete
                         </button>
                     </td>
@@ -1799,11 +1805,38 @@
     async function deleteFaqDoc(id, title) {
         if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
         try {
-            await faqFetch(`${FAQ_API}/${id}`, { method: 'DELETE' });
-            faqAlert('FAQ document deleted.');
+            const url = `${FAQ_API}/${id}`;
+            console.log('[deleteFaqDoc] DELETE', url);
+            const res = await fetch(url, {
+                method: 'DELETE',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            console.log('[deleteFaqDoc] status:', res.status);
+            if (!res.ok) {
+                const text = await res.text().catch(() => res.statusText);
+                let detail = text;
+                try { detail = JSON.parse(text).detail || text; } catch (_) {}
+                console.error('[deleteFaqDoc] Error:', detail);
+                faqAlert(`❌ Delete failed (${res.status}): ${detail}`, 'error');
+                return;
+            }
+            faqAlert('✅ FAQ document deleted.');
             loadFaqDocs();
-        } catch (e) { faqAlert(e.message, 'error'); }
+        } catch (e) {
+            console.error('[deleteFaqDoc] Exception:', e);
+            faqAlert(`❌ Delete failed: ${e.message}`, 'error');
+        }
     }
+
+    // Event delegation for delete buttons — avoids apostrophe issues in onclick
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.faq-delete-btn');
+        if (!btn) return;
+        const id = btn.dataset.id;
+        const title = btn.dataset.title;
+        deleteFaqDoc(id, title);
+    });
 
     // Upload handler + initial load
     document.addEventListener('DOMContentLoaded', () => {

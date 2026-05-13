@@ -528,9 +528,33 @@ function clearViewingStrip() {
 
 // ============ SIDEBAR ============
 function toggleSidebar() {
-    const sb=document.getElementById('sidebar'), mc=document.getElementById('mapContainer');
-    sb.classList.toggle('open'); sb.classList.toggle('collapsed');
-    if(window.innerWidth>768) mc.classList.toggle('expanded');
+    const sb  = document.getElementById('sidebar');
+    const mc  = document.getElementById('mapContainer');
+    const tab = document.getElementById('sidebarEdgeTab');
+    const isMobile = window.innerWidth <= 768;
+
+    sb.classList.toggle('open');
+    sb.classList.toggle('collapsed');
+
+    const isNowCollapsed = sb.classList.contains('collapsed');
+
+    // Desktop: shift map container
+    if (!isMobile) mc.classList.toggle('expanded', isNowCollapsed);
+
+    // Show/hide edge tab on both mobile and desktop
+    if (tab) tab.classList.toggle('edge-tab-visible', isNowCollapsed);
+
+    // Resize renderer after sidebar CSS transition completes
+    setTimeout(() => {
+        if (renderer && camera) {
+            const container = renderer.domElement.parentElement;
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        }
+    }, 320);
 }
 function closeInfo(){ document.getElementById('infoPanel').classList.remove('show'); }
 function resetView(){ 
@@ -959,6 +983,38 @@ function resetOrientation() {
     document.getElementById('pathStats').classList.remove('show');
 }
 
+function focusOn3D() {
+    // Close the info panel
+    document.getElementById('infoPanel').classList.remove('show');
+
+    const sb  = document.getElementById('sidebar');
+    const mc  = document.getElementById('mapContainer');
+    const tab = document.getElementById('sidebarEdgeTab');
+    const isMobile = window.innerWidth <= 768;
+
+    // Collapse the sidebar if not already
+    if (!sb.classList.contains('collapsed')) {
+        sb.classList.remove('open');
+        sb.classList.add('collapsed');
+        if (!isMobile) mc.classList.add('expanded');
+    }
+
+    // Always show the edge tab after directing — works on mobile & desktop
+    if (tab) tab.classList.add('edge-tab-visible');
+
+    // Resize renderer after sidebar transition completes
+    setTimeout(() => {
+        if (renderer && camera) {
+            const container = renderer.domElement.parentElement;
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        }
+    }, 320);
+}
+
 async function getDirections() {
     if (!selectedLocation || !selectedLocation.coordinates) {
         console.warn('No location selected or location has no coordinates');
@@ -987,6 +1043,8 @@ async function getDirections() {
                 if (route.waypoints && route.waypoints.length > 0) {
                     console.log('Drawing saved route with', route.waypoints.length, 'waypoints');
                     drawSavedRoute(route);
+                    // Auto-close panel and focus the 3D view
+                    focusOn3D();
                 } else {
                     console.log('Route has no waypoints');
                     alert('⚠️ This route has no waypoints. Please recreate it in the admin panel.');

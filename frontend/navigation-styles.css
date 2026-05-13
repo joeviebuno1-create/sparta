@@ -613,3 +613,97 @@ input, textarea, .info-content, .loc-panel-inner, .evac-panel-inner {
     .ctrl-btn{width:44px; height:44px;}
     .search-btn{padding:.42rem .75rem;}
 }
+/* ===================== SIDEBAR EDGE TAB ===================== */
+.sidebar-edge-tab {
+    display: none; /* hidden by default; shown via .edge-tab-visible */
+    position: fixed;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1200; /* above sidebar overlay */
+
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .28rem;
+
+    width: 36px;
+    padding: .85rem .18rem;
+    background: linear-gradient(180deg, var(--red), var(--red-dark));
+    color: #fff;
+    border: none;
+    border-radius: 0 12px 12px 0;
+    box-shadow: 3px 0 16px rgba(0,0,0,.22);
+    cursor: pointer;
+    transition: width .22s ease, background .22s ease, box-shadow .22s ease;
+    font-family: 'Poppins', sans-serif;
+    overflow: hidden;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+}
+/* Visible state — set by JS on both desktop & mobile */
+.sidebar-edge-tab.edge-tab-visible {
+    display: flex;
+}
+/* Hover / active expand (desktop) */
+.sidebar-edge-tab:hover,
+.sidebar-edge-tab:active {
+    width: 74px;
+    background: linear-gradient(180deg, #e03535, var(--red-dark));
+    box-shadow: 4px 0 20px rgba(201,48,48,.38);
+}
+.edge-tab-icon {
+    font-size: 1.15rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.edge-tab-label {
+    font-size: .56rem;
+    font-weight: 700;
+    letter-spacing: .55px;
+    text-transform: uppercase;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: opacity .18s ease, max-height .18s ease;
+}
+.sidebar-edge-tab:hover .edge-tab-label,
+.sidebar-edge-tab:active .edge-tab-label {
+    opacity: 1;
+    max-height: 60px;
+}
+
+/* ── Mobile overrides ── */
+@media (max-width: 768px) {
+    .sidebar-edge-tab {
+        width: 32px;
+        padding: .7rem .15rem;
+        border-radius: 0 10px 10px 0;
+        top: 50%;
+        /* Stay above the sidebar overlay (z-index 1000) */
+        z-index: 1200;
+    }
+    .sidebar-edge-tab:hover,
+    .sidebar-edge-tab:active {
+        width: 32px; /* don't expand on mobile — no hover; tap fires :active */
+    }
+    /* On touch devices show label always (no hover) */
+    .sidebar-edge-tab .edge-tab-label {
+        opacity: 1;
+        max-height: 60px;
+        font-size: .52rem;
+    }
+    .edge-tab-icon { font-size: 1rem; }
+}
+
+/* Touch-device: bigger tap target */
+@media (hover: none) and (pointer: coarse) {
+    .sidebar-edge-tab {
+        width: 38px;
+        min-height: 80px;
+        padding: 1rem .2rem;
+    }
+}
