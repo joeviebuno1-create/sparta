@@ -249,16 +249,6 @@ document.head.appendChild(fadeOutStyle);
 
 // ========== INITIALIZATION ==========
 window.onload = function() {
-    // Default to Statistics tab on load
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    const statsTab = document.getElementById('statistics');
-    if (statsTab) statsTab.classList.add('active');
-    const statsBtn = document.querySelector('.tab-btn[onclick*="statistics"]');
-    if (statsBtn) statsBtn.classList.add('active');
-
-    loadStatistics();
-    loadNavigationStatistics();
     setupEventListeners();
 };
 
@@ -582,11 +572,11 @@ async function loadNavigationStatistics() {
             locDiv.innerHTML = navData.top_locations.map(item => {
                 const pct = maxL > 0 ? (item.count / maxL * 100).toFixed(0) : 0;
                 return `<div style="margin-bottom:10px;">
-                    <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:#475569;margin-bottom:3px;">
-                        <span>📍 ${escapeHtml(item.name)}</span><span><strong>${item.count}</strong></span>
+                    <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:rgba(255,255,255,0.85);margin-bottom:3px;">
+                        <span>📍 ${escapeHtml(item.name)}</span><span><strong style="color:#F4D03F;">${item.count}</strong></span>
                     </div>
-                    <div style="background:#e2e8f0;border-radius:99px;height:10px;overflow:hidden;">
-                        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#7c3aed,#5b21b6);border-radius:99px;transition:width 0.6s ease;"></div>
+                    <div style="background:rgba(255,255,255,0.08);border-radius:99px;height:10px;overflow:hidden;">
+                        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#c93030,#F4D03F);border-radius:99px;transition:width 0.6s ease;"></div>
                     </div>
                 </div>`;
             }).join('');
@@ -609,10 +599,10 @@ async function loadNavigationStatistics() {
                 const color = typeColors[item.type] || '#94a3b8';
                 const icon = ICON_MAP[item.type] || '📌';
                 return `<div style="margin-bottom:10px;">
-                    <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:#475569;margin-bottom:3px;">
-                        <span>${icon} ${item.type.charAt(0).toUpperCase() + item.type.slice(1)}</span><span><strong>${item.count}</strong></span>
+                    <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:rgba(255,255,255,0.85);margin-bottom:3px;">
+                        <span>${icon} ${item.type.charAt(0).toUpperCase() + item.type.slice(1)}</span><span><strong style="color:#F4D03F;">${item.count}</strong></span>
                     </div>
-                    <div style="background:#e2e8f0;border-radius:99px;height:10px;overflow:hidden;">
+                    <div style="background:rgba(255,255,255,0.08);border-radius:99px;height:10px;overflow:hidden;">
                         <div style="height:100%;width:${pct}%;background:${color};border-radius:99px;transition:width 0.6s ease;"></div>
                     </div>
                 </div>`;
@@ -669,10 +659,10 @@ async function loadNavigationStatistics() {
                     const color = typeColors2[item.type] || '#94a3b8';
                     const icon = ICON_MAP[item.type] || '📌';
                     return `<div style="margin-bottom:10px;">
-                        <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:#475569;margin-bottom:3px;">
-                            <span>${icon} ${item.type.charAt(0).toUpperCase() + item.type.slice(1)}</span><span><strong>${item.count}</strong></span>
+                        <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:rgba(255,255,255,0.85);margin-bottom:3px;">
+                            <span>${icon} ${item.type.charAt(0).toUpperCase() + item.type.slice(1)}</span><span><strong style="color:#F4D03F;">${item.count}</strong></span>
                         </div>
-                        <div style="background:#e2e8f0;border-radius:99px;height:10px;overflow:hidden;">
+                        <div style="background:rgba(255,255,255,0.08);border-radius:99px;height:10px;overflow:hidden;">
                             <div style="height:100%;width:${pct}%;background:${color};border-radius:99px;transition:width 0.6s ease;"></div>
                         </div>
                     </div>`;
@@ -687,11 +677,11 @@ async function loadNavigationStatistics() {
                 document.getElementById('navLocationChart').innerHTML = topLocs.map(item => {
                     const pct = maxL2 > 0 ? (item.count / maxL2 * 100).toFixed(0) : 0;
                     return `<div style="margin-bottom:10px;">
-                        <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:#475569;margin-bottom:3px;">
-                            <span>📍 ${escapeHtml(item.name)}</span><span><strong>${item.count}</strong></span>
+                        <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:rgba(255,255,255,0.85);margin-bottom:3px;">
+                            <span>📍 ${escapeHtml(item.name)}</span><span><strong style="color:#F4D03F;">${item.count}</strong></span>
                         </div>
-                        <div style="background:#e2e8f0;border-radius:99px;height:10px;overflow:hidden;">
-                            <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#7c3aed,#5b21b6);border-radius:99px;transition:width 0.6s ease;"></div>
+                        <div style="background:rgba(255,255,255,0.08);border-radius:99px;height:10px;overflow:hidden;">
+                            <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#c93030,#F4D03F);border-radius:99px;transition:width 0.6s ease;"></div>
                         </div>
                     </div>`;
                 }).join('');
@@ -749,6 +739,11 @@ async function loadNavigationData() {
         
         displayLocations(allLocations);
         populateLocationDropdowns();
+
+        // Render paths table
+        if (typeof renderPathsTable === 'function') {
+            renderPathsTable(allPaths);
+        }
         
     } catch (error) {
         console.error('Error loading navigation data:', error);
@@ -756,6 +751,7 @@ async function loadNavigationData() {
     }
 }
 
+// Ensure paths table updates whenever locations are displayed
 function displayLocations(locations) {
     const tbody = document.querySelector('#locationsTable tbody');
     if (!tbody) return;
@@ -820,7 +816,7 @@ function displayLocations(locations) {
             <td><code>${coords}</code></td>
             <td>${relatedPaths.length} path(s)</td>
             <td>
-                <button class="btn btn-small" onclick="viewLocationOn3D(${loc.id})">👁️ View</button>
+                <button class="btn btn-icon btn-outline" title="View on 3D map" onclick="viewLocationSafe(${loc.id})" style="color:#6366f1;border-color:rgba(99,102,241,0.3);background:rgba(99,102,241,0.05);"><span class="ms">visibility</span></button>
                 <button class="btn btn-small" style="background:#f59e0b;color:#fff;" onclick="editLocation(${loc.id})">✏️ Edit</button>
                 <button class="btn btn-small btn-danger" onclick="deleteLocation(${loc.id})">🗑️</button>
             </td>
@@ -1033,20 +1029,86 @@ async function deleteLocation(locationId) {
     }
 }
 
+// Safe wrapper — switches to nav page and waits for 3D map before highlighting location
+window.viewLocationSafe = function(locationId) {
+    const navPage = document.getElementById('page-navigation');
+    const isActive = navPage && navPage.classList.contains('active');
+    const mapReady = typeof camera !== 'undefined' && camera &&
+                     typeof scene  !== 'undefined' && scene;
+
+    const doView = () => {
+        const canvas = document.getElementById('map3DCanvas');
+        if (canvas) canvas.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => {
+            viewLocationOn3D(locationId);
+            // Show info toast
+            const loc = allLocations.find(l => l.id === locationId);
+            if (loc && typeof toast === 'function') {
+                toast(`📍 Viewing: ${loc.name}${loc.floor_number ? ' (Floor '+loc.floor_number+')' : ''}`, 'info');
+            }
+        }, 350);
+    };
+
+    if (isActive && mapReady) {
+        doView();
+        return;
+    }
+
+    if (typeof spartaSwitchPage === 'function') {
+        spartaSwitchPage('navigation');
+    }
+
+    let attempts = 0;
+    const poll = setInterval(() => {
+        attempts++;
+        const ready = typeof camera !== 'undefined' && camera &&
+                      typeof scene  !== 'undefined' && scene;
+        if (ready) {
+            clearInterval(poll);
+            doView();
+        } else if (attempts >= 60) {
+            clearInterval(poll);
+            const loc = allLocations.find(l => l.id === locationId);
+            if (loc && typeof toast === 'function') {
+                toast(`📍 ${loc.name} — coords (${loc.coord_x?.toFixed(1)||'?'}, ${loc.coord_y?.toFixed(1)||'?'}, ${loc.coord_z?.toFixed(1)||'?'})`, 'info');
+            }
+        }
+    }, 100);
+};
+
 function viewLocationOn3D(locationId) {
     const location = allLocations.find(loc => loc.id === locationId);
     if (!location || !camera) return;
-    
-    // Clear existing markers
-    clearAllVisuals();
-    
-    // Add marker for this location
-    if (location.coord_x !== null) {
-        const marker = createMarker(
-            location.coord_x, 
-            location.coord_y, 
+
+    // Remove ONLY the previous location highlight marker — keep all other visuals
+    if (locationMarker) {
+        scene.remove(locationMarker);
+        locationMarker = null;
+    }
+
+    // Add pulsing highlight marker for this location
+    if (location.coord_x !== null && location.coord_x !== undefined) {
+        // Outer glow marker (larger, semi-transparent)
+        const glowMarker = createMarker(
+            location.coord_x,
+            location.coord_y,
             location.coord_z,
-            0x4A90E2, // Blue
+            0xFFD700, // Gold highlight
+            3.5
+        );
+        if (glowMarker && glowMarker.material) {
+            glowMarker.material.transparent = true;
+            glowMarker.material.opacity = 0.45;
+        }
+        scene.add(glowMarker);
+        waypointMarkers.push(glowMarker); // track so it's clearable
+
+        // Main location marker (solid blue)
+        const marker = createMarker(
+            location.coord_x,
+            location.coord_y,
+            location.coord_z,
+            0x4A90E2,
             2.0
         );
         locationMarker = marker;
@@ -1054,8 +1116,9 @@ function viewLocationOn3D(locationId) {
     }
     
     // Find and display all paths associated with this location
+    // Use == (not ===) to handle number/string ID type mismatches from the API
     const relatedPaths = allPaths.filter(p => 
-        p.start_location_id === locationId || p.end_location_id === locationId
+        p.start_location_id == locationId || p.end_location_id == locationId
     );
     
     if (relatedPaths.length > 0) {
@@ -1068,7 +1131,8 @@ function viewLocationOn3D(locationId) {
                 : path.start_location_id;
             const connectedLocation = allLocations.find(loc => loc.id === connectedLocationId);
             
-            if (connectedLocation && path.waypoints && path.waypoints.length > 0) {
+            if (connectedLocation) { // Draw even with 0 waypoints (direct line)
+                const wps = path.waypoints || [];
                 // Add marker for connected location
                 const connectedMarker = createMarker(
                     connectedLocation.coord_x,
@@ -1080,16 +1144,23 @@ function viewLocationOn3D(locationId) {
                 waypointMarkers.push(connectedMarker);
                 scene.add(connectedMarker);
                 
-                // Display path waypoints
-                path.waypoints.forEach(wp => {
-                    const wpMarker = createMarker(wp.x, wp.y, wp.z, 0xFF0000, 1.0);
-                    waypointMarkers.push(wpMarker);
-                    scene.add(wpMarker);
+                // Display intermediate waypoint markers
+                wps.forEach(wp => {
+                    if (wp && wp.x != null) {
+                        const wpMarker = createMarker(
+                            parseFloat(wp.x),
+                            parseFloat(wp.y),
+                            parseFloat(wp.z),
+                            0xFF6B6B, 1.0
+                        );
+                        waypointMarkers.push(wpMarker);
+                        scene.add(wpMarker);
+                    }
                 });
                 
-                // Draw the complete path
+                // Draw the complete path (works with 0 or more waypoints)
                 const pathColor = path.path_color || '#F4D03F';
-                drawCompletePath(location, connectedLocation, path.waypoints, pathColor);
+                drawCompletePath(location, connectedLocation, wps, pathColor);
             }
         });
     }
@@ -1420,24 +1491,44 @@ function clearAllMarkers() {
 // ========== COMPLETE PATH DRAWING ==========
 
 function drawCompletePath(startLocation, endLocation, waypoints, pathColor = '#F4D03F') {
-    if (!waypoints || waypoints.length < 2) return;
-    
-    // Convert waypoints to Vector3
+    // Always draw at minimum a direct line between start and end locations
     const points = [];
-    
-    // Add start location
-    if (startLocation.coord_x !== null) {
-        points.push(new THREE.Vector3(startLocation.coord_x, startLocation.coord_y, startLocation.coord_z));
+
+    // Add start location coords
+    if (startLocation && startLocation.coord_x != null) {
+        points.push(new THREE.Vector3(
+            parseFloat(startLocation.coord_x),
+            parseFloat(startLocation.coord_y),
+            parseFloat(startLocation.coord_z)
+        ));
     }
-    
-    // Add waypoints
-    waypoints.forEach(wp => {
-        points.push(new THREE.Vector3(wp.x, wp.y, wp.z));
-    });
-    
-    // Add end location
-    if (endLocation.coord_x !== null) {
-        points.push(new THREE.Vector3(endLocation.coord_x, endLocation.coord_y, endLocation.coord_z));
+
+    // Add intermediate waypoints (if any)
+    if (Array.isArray(waypoints)) {
+        waypoints.forEach(wp => {
+            if (wp && wp.x != null) {
+                points.push(new THREE.Vector3(
+                    parseFloat(wp.x),
+                    parseFloat(wp.y),
+                    parseFloat(wp.z)
+                ));
+            }
+        });
+    }
+
+    // Add end location coords
+    if (endLocation && endLocation.coord_x != null) {
+        points.push(new THREE.Vector3(
+            parseFloat(endLocation.coord_x),
+            parseFloat(endLocation.coord_y),
+            parseFloat(endLocation.coord_z)
+        ));
+    }
+
+    // Need at least 2 points to draw a line
+    if (points.length < 2) {
+        console.warn('[drawCompletePath] Not enough coordinate points to draw:', points.length);
+        return;
     }
     
     // Draw straight line segments between all points
@@ -2751,24 +2842,32 @@ function toggleLoginPassword() {
     }
 }
 
-// Check cookie validity on page load
-document.addEventListener('DOMContentLoaded', async () => {
-    const overlay = document.getElementById('loginOverlay');
-    if (!overlay) return;
-    try {
-        const response = await fetch(`${API_BASE}/credentials`, { credentials: 'include' });
-        if (response.ok) {
-            overlay.style.display = 'none';
-            loadStatistics(); 
-        }
-    } catch (e) { /* network error — show login */ }
+// Session is verified server-side before admin.html is served.
+// If the session expires while the page is open, API calls will 401
+// and the user will be redirected to /login.
+document.addEventListener('DOMContentLoaded', () => {
+    // Verify session is still valid; redirect to /login if expired
+    fetch(`${API_BASE}/credentials`, { credentials: 'include' })
+        .then(r => {
+            if (!r.ok) window.location.replace('/login?next=/admin');
+        })
+        .catch(() => {
+            // Network error — let the user stay, API calls will handle it
+        });
 });
 
 // Logout — clears HttpOnly cookie via server
 window.logout = function() {
     if (confirm('Are you sure you want to logout?')) {
         fetch(`${API_BASE}/logout`, { method: 'POST', credentials: 'include' })
-            .finally(() => { localStorage.removeItem('spartha_user'); location.reload(); });
+            .then(() => {
+                localStorage.removeItem('spartha_user');
+                window.location.replace('/login');
+            })
+            .catch(() => {
+                localStorage.removeItem('spartha_user');
+                window.location.replace('/login');
+            });
     }
 };
 
@@ -2862,30 +2961,48 @@ function renderPopupTable(popups) {
     const tbody = document.getElementById('popupTableBody');
     if (!tbody) return;
     if (!popups || popups.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:#64748b;">No popup announcements yet. Create one above.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:2rem;color:#64748b;">No popup announcements yet. Create one using the button above.</td></tr>`;
         return;
     }
     tbody.innerHTML = popups.map(p => {
         const dateStr = p.created_at
             ? new Date(p.created_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
             : 'N/A';
-        const statusBadge = p.is_active
-            ? `<span style="background:#d1fae5;color:#065f46;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">Active</span>`
-            : `<span style="background:#f1f5f9;color:#64748b;padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700;">Inactive</span>`;
+        let statusBadge;
+        if (p.is_archived) {
+            statusBadge = `<span class="badge" style="background:#fef3c7;color:#92400e;">Archived</span>`;
+        } else if (p.is_active) {
+            statusBadge = `<span class="badge b-active">Active</span>`;
+        } else {
+            statusBadge = `<span class="badge b-inactive">Inactive</span>`;
+        }
         const imgPreview = p.image_data
             ? `<img src="${p.image_data}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:6px;">`
             : '';
+        const scheduledStr = p.scheduled_at
+            ? new Date(p.scheduled_at).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : '—';
+        const expiresStr = p.expires_at
+            ? new Date(p.expires_at).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : '—';
+        const schedBadge = p.scheduled_at || p.expires_at
+            ? `<span style="font-size:0.75rem;color:#6366f1;"><span class="ms" style="font-size:0.9rem;vertical-align:-3px;">schedule</span> ${scheduledStr}</span>`
+            : `<span style="font-size:0.78rem;color:#94a3b8;">Immediate</span>`;
         return `<tr>
-            <td>${imgPreview}<strong>${escapeHtml(p.title)}</strong></td>
-            <td>${escapeHtml(p.category)}</td>
-            <td>${p.image_data ? '<span style="color:#065f46;">✅ Yes</span>' : '<span style="color:#94a3b8;">— No</span>'}</td>
-            <td style="text-align:center;">${p.priority}</td>
+            <td>${imgPreview}</td>
+            <td><strong>${escapeHtml(p.title)}</strong></td>
+            <td><span class="badge" style="background:#f1f5f9;color:#475569;">${escapeHtml(p.category)}</span></td>
+            <td style="text-align:center;">${p.image_data ? '<span class="ms" style="color:#065f46;">check_circle</span>' : '<span class="ms" style="color:#cbd5e1;">remove_circle_outline</span>'}</td>
+            <td style="text-align:center;font-weight:600;">${p.priority}</td>
             <td>${statusBadge}</td>
+            <td>${schedBadge}</td>
             <td style="font-size:0.82rem;color:#64748b;">${dateStr}</td>
             <td>
-                <button class="btn btn-small" onclick="editPopupAnn(${p.id})" style="margin-right:4px;">✏️ Edit</button>
-                <button class="btn btn-small" style="background:#6366f1;color:#fff;margin-right:4px;" onclick="togglePopupAnn(${p.id})">${p.is_active ? '🔕 Hide' : '🔔 Show'}</button>
-                <button class="btn btn-small btn-danger" onclick="deletePopupAnn(${p.id})">🗑️</button>
+                <div class="act-btns">
+                    <button class="btn btn-icon btn-outline" title="Edit" onclick="openPopupEditModal(${p.id})"><span class="ms">edit</span></button>
+                    <button class="btn btn-icon" title="${p.is_active ? 'Deactivate' : 'Activate'}" onclick="togglePopupAnn(${p.id})" style="background:rgba(99,102,241,0.1);color:#6366f1;border:1px solid rgba(99,102,241,0.3);"><span class="ms">${p.is_active ? 'visibility_off' : 'visibility'}</span></button>
+                    <button class="btn btn-icon" title="Archive" onclick="archivePopupAnn(${p.id})" style="background:rgba(245,158,11,0.1);color:#92400e;border:1px solid rgba(245,158,11,0.3);"><span class="ms">archive</span></button>
+                </div>
             </td>
         </tr>`;
     }).join('');
@@ -2944,7 +3061,7 @@ async function editPopupAnn(id) {
         }
         const btn = document.querySelector('#popupForm .btn');
         if (btn) btn.textContent = '✓ Update Popup Announcement';
-        document.getElementById('popupAnnouncements').scrollIntoView({ behavior: 'smooth' });
+        // scroll removed - use modal flow instead
     } catch (error) { console.error('Error loading popup for edit:', error); }
 }
 
@@ -2963,6 +3080,66 @@ async function deletePopupAnn(id) {
         if (!response.ok) throw new Error('Delete failed');
         loadPopupAnnouncements();
     } catch (error) { showAlert('popupAlert', '❌ Error deleting popup', 'error'); }
+}
+
+async function archivePopupAnn(id) {
+    try {
+        const response = await apiFetch(`/announcement-popups/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ is_archived: true, is_active: false })
+        });
+        if (!response || !response.ok) throw new Error('Archive failed');
+        loadPopupAnnouncements();
+    } catch (error) { showAlert('popupAlert', '❌ Error archiving popup', 'error'); }
+}
+
+// Open popup edit modal (wired to popup-add-modal)
+async function openPopupEditModal(id) {
+    try {
+        const response = await apiFetch('/announcement-popups');
+        if (!response) return;
+        const all = await response.json();
+        const popup = all.find(p => p.id === id);
+        if (!popup) return;
+        // Fill modal fields
+        document.getElementById('m-popup-title').value    = popup.title || '';
+        document.getElementById('m-popup-content').value  = popup.content || '';
+        document.getElementById('m-popup-category').value = popup.category || 'General';
+        document.getElementById('m-popup-priority').value = popup.priority ?? 0;
+        document.getElementById('m-popup-status').value   = popup.is_active ? 'true' : 'false';
+        if (popup.scheduled_at) {
+            const d = new Date(popup.scheduled_at);
+            document.getElementById('m-popup-scheduled-at').value = d.toISOString().slice(0,16);
+        }
+        if (popup.expires_at) {
+            const d = new Date(popup.expires_at);
+            document.getElementById('m-popup-expires-at').value = d.toISOString().slice(0,16);
+        }
+        if (popup.image_data) {
+            document.getElementById('m-popup-img-prev-img').src = popup.image_data;
+            document.getElementById('m-popup-img-preview').style.display = 'block';
+        }
+        document.querySelector('#popup-add-modal .modal-head h3').textContent = 'Edit Popup Announcement';
+        document.getElementById('popup-modal-submit').dataset.editId = id;
+        spartaOpenModal('popup-add-modal');
+    } catch (error) { console.error('Error loading popup for edit:', error); }
+}
+
+function handlePopupModalImagePreview(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        document.getElementById('m-popup-img-prev-img').src = e.target.result;
+        document.getElementById('m-popup-img-preview').style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+}
+
+function clearPopupModalImage() {
+    document.getElementById('m-popup-img-file').value = '';
+    document.getElementById('m-popup-img-prev-img').src = '';
+    document.getElementById('m-popup-img-preview').style.display = 'none';
 }
 
 function escapeHtml(str) {
@@ -3023,11 +3200,11 @@ async function loadStatistics() {
                 const pct = max > 0 ? (item.count / max * 100).toFixed(0) : 0;
                 const label = item.intent.replace('_query','').replace(/_/g,' ');
                 return `<div style="margin-bottom:10px;">
-                    <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:#475569;margin-bottom:3px;">
-                        <span style="text-transform:capitalize;">${label}</span><span><strong>${item.count}</strong></span>
+                    <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:rgba(255,255,255,0.85);margin-bottom:3px;">
+                        <span style="text-transform:capitalize;">${label}</span><span><strong style="color:#F4D03F;">${item.count}</strong></span>
                     </div>
-                    <div style="background:#e2e8f0;border-radius:99px;height:10px;overflow:hidden;">
-                        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#c41e3a,#9b1530);border-radius:99px;transition:width 0.6s ease;"></div>
+                    <div style="background:rgba(255,255,255,0.08);border-radius:99px;height:10px;overflow:hidden;">
+                        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#c93030,#F4D03F);border-radius:99px;transition:width 0.6s ease;"></div>
                     </div>
                 </div>`;
             }).join('');
@@ -3042,11 +3219,11 @@ async function loadStatistics() {
             entityDiv.innerHTML = data.top_entities.map(item => {
                 const pct = maxE > 0 ? (item.count / maxE * 100).toFixed(0) : 0;
                 return `<div style="margin-bottom:10px;">
-                    <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:#475569;margin-bottom:3px;">
-                        <span>${item.entity}</span><span><strong>${item.count}</strong></span>
+                    <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:rgba(255,255,255,0.85);margin-bottom:3px;">
+                        <span>${item.entity}</span><span><strong style="color:#F4D03F;">${item.count}</strong></span>
                     </div>
-                    <div style="background:#e2e8f0;border-radius:99px;height:10px;overflow:hidden;">
-                        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#3b82f6,#1d4ed8);border-radius:99px;transition:width 0.6s ease;"></div>
+                    <div style="background:rgba(255,255,255,0.08);border-radius:99px;height:10px;overflow:hidden;">
+                        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#c93030,#e85d04);border-radius:99px;transition:width 0.6s ease;"></div>
                     </div>
                 </div>`;
             }).join('');
@@ -3081,13 +3258,72 @@ async function loadStatistics() {
 }
 window.loadStatistics = loadStatistics;
 
+// ========== ACTIVITY LOG ==========
+async function loadActivityLog(resource = null) {
+    try {
+        const endpoint = resource ? `/activity-logs?resource=${resource}&limit=60` : '/activity-logs?limit=60';
+        const response = await apiFetch(endpoint);
+        if (!response || !response.ok) return;
+        const logs = await response.json();
+        renderActivityLog(logs);
+    } catch (err) {
+        console.error('Activity log error:', err);
+    }
+}
+window.loadActivityLog = loadActivityLog;
+
+function renderActivityLog(logs) {
+    const tbody = document.getElementById('activityLogBody');
+    if (!tbody) return;
+
+    if (!logs || logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:2rem;">No activity recorded yet. Actions like adding announcements, updating members, or uploading maps will appear here.</td></tr>';
+        return;
+    }
+
+    const actionIcon = { created: '✅', updated: '✏️', deleted: '🗑️' };
+    const actionColor = { created: '#10b981', updated: '#f59e0b', deleted: '#ef4444' };
+    const resourceLabel = {
+        authority: '👤 Authority', announcement: '📢 Announcement',
+        history: '🏛️ History', location: '📍 Location',
+        organization: '🏢 Organization', member: '👥 Member',
+        custom_response: '💬 Custom Response', '3d_map': '🗺️ 3D Map',
+        popup_announcement: '🔔 Popup'
+    };
+
+    tbody.innerHTML = logs.map(log => {
+        const icon  = actionIcon[log.action]  || '•';
+        const color = actionColor[log.action] || '#64748b';
+        const label = resourceLabel[log.resource] || log.resource;
+        const dt = log.performed_at
+            ? new Date(log.performed_at).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : '—';
+        return `<tr>
+            <td style="font-size:1.1rem;text-align:center;">${icon}</td>
+            <td><span style="font-weight:600;color:${color};text-transform:capitalize;">${log.action}</span></td>
+            <td><span style="font-size:0.82rem;background:#f1f5f9;padding:2px 8px;border-radius:20px;">${label}</span></td>
+            <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(log.detail || '—')}</td>
+            <td style="color:#64748b;font-size:0.82rem;white-space:nowrap;">${dt}</td>
+        </tr>`;
+    }).join('');
+}
+
+
 // Load stats automatically when statistics tab is opened
 const _origSwitchTab = window.switchTab;
 window.switchTab = function(tabName, event) {
     if (_origSwitchTab) _origSwitchTab(tabName, event);
     if (tabName === 'statistics') {
         loadStatistics();
-        loadNavigationStatistics();
+        // Navigation stats are now unified in the dashboard
+        // Call the dashboard loader only if we're on the dashboard page,
+        // otherwise just load the data tables
+        if (typeof _loadNavStatsForDashboard === 'function') {
+          _loadNavStatsForDashboard();
+        } else {
+          loadNavigationStatistics();
+        }
+        loadActivityLog();
     }
 };
 // ========== EDIT ORGANIZATION MODAL ==========
@@ -3267,4 +3503,47 @@ async function submitEditMember(memberId) {
         alertEl.textContent = '❌ Error updating member';
         alertEl.style.display = 'block';
     }
+}
+// ============================================================
+//  SPARTA Shell Helpers (from zip app.js)
+// ============================================================
+
+/* Toast notifications */
+function toast(msg, type = 'info') {
+  let wrap = document.querySelector('.toast-wrap');
+  if (!wrap) { wrap = document.createElement('div'); wrap.className = 'toast-wrap'; document.body.appendChild(wrap); }
+  const icons = { success: 'check_circle', error: 'error', warn: 'warning', info: 'info' };
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span class="ms">${icons[type]||icons.info}</span>${msg}`;
+  wrap.appendChild(t);
+  setTimeout(() => { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000);
+}
+
+/* Confirm action dialog */
+function confirmAction({ title, message, btnLabel = 'Delete', onConfirm }) {
+  document.getElementById('confirm-title').textContent = title || 'Confirm Action';
+  document.getElementById('confirm-message').textContent = message || 'Are you sure?';
+  const btn = document.getElementById('confirm-ok');
+  btn.textContent = btnLabel;
+  const clone = btn.cloneNode(true);
+  btn.parentNode.replaceChild(clone, btn);
+  clone.addEventListener('click', () => {
+    spartaCloseModal('confirm-modal');
+    if (onConfirm) onConfirm();
+  });
+  spartaOpenModal('confirm-modal');
+}
+
+/* Table search helper */
+function initTableSearch(inputId, tableId) {
+  const input = document.getElementById(inputId);
+  const table = document.getElementById(tableId);
+  if (!input || !table) return;
+  input.addEventListener('input', () => {
+    const q = input.value.toLowerCase();
+    table.querySelectorAll('tbody tr').forEach(r => {
+      r.style.display = q && !r.textContent.toLowerCase().includes(q) ? 'none' : '';
+    });
+  });
 }

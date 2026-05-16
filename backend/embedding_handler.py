@@ -1,87 +1,68 @@
 """
-EMBEDDING HANDLER — Gemini API
-================================
-Replaces sentence-transformers + torch entirely.
-Uses google-genai's embed_content API (zero RAM for local model).
+EMBEDDING HANDLER — Sentence Transformers (CPU-only)
+=====================================================
+Replaces Gemini embedding API entirely.
+Uses all-MiniLM-L6-v2 — lightweight, fast on CPU, zero API cost.
 
-NOTE: contents must be passed as a LIST per SDK v1.x requirement.
-Model: gemini-embedding-001 (stable, available on free tier v1beta)
+Install (requirements.txt):
+    --extra-index-url https://download.pytorch.org/whl/cpu
+    torch==2.2.2+cpu
+    sentence-transformers==2.7.0
 """
 
-import os
 import numpy as np
 from typing import List, Optional
-from dotenv import load_dotenv
+from collections import OrderedDict
 
-load_dotenv()
-
-_client = None
 EMBEDDING_ENABLED = False
-_EMBED_MODEL = None
-
-# Correct order for google-genai SDK v1.x on v1beta endpoint
-_MODEL_CANDIDATES = [
-    "gemini-embedding-001",       # newest stable, free tier
-    "text-embedding-004",         # older stable
-    "embedding-001",              # legacy fallback
-]
-
-
-def _detect_working_model(client) -> Optional[str]:
-    """Try each candidate. contents MUST be a list for this SDK version."""
-    for model in _MODEL_CANDIDATES:
-        try:
-            result = client.models.embed_content(
-                model=model,
-                contents=["test"],   # list, not bare string
-            )
-            if result.embeddings and result.embeddings[0].values:
-                print(f"[embedding] Using model: {model}")
-                return model
-        except Exception as e:
-            print(f"[embedding] Model '{model}' not available: {e}")
-    return None
-
+_model = None
 
 try:
-    from google import genai
-    _key = os.getenv("GEMINI_API_KEY", "")
-    if _key:
-        _client = genai.Client(api_key=_key)
-        _EMBED_MODEL = _detect_working_model(_client)
-        if _EMBED_MODEL:
-            EMBEDDING_ENABLED = True
-            print("✓ Gemini embedding handler loaded.")
-        else:
-            print("[embedding] No working embedding model — using keyword matching only.")
-    else:
-        print("[embedding] No GEMINI_API_KEY — using keyword matching only.")
+    from sentence_transformers import SentenceTransformer
+    _model = SentenceTransformer("all-MiniLM-L6-v2")
+    EMBEDDING_ENABLED = True
+    print("✓ Sentence-transformers embedding handler loaded (all-MiniLM-L6-v2).")
 except ImportError as e:
-    print(f"[embedding] google-genai not installed ({e}) — using keyword matching only.")
+    print(f"[embedding] sentence-transformers not installed ({e}) — using keyword matching only.")
 except Exception as e:
-    print(f"[embedding] Could not initialize ({e}) — using keyword matching only.")
+    print(f"[embedding] Could not load model ({e}) — using keyword matching only.")
 
 
-# ── LRU embedding cache — capped at 300 entries (~900 KB max) ─────────────────
-# Each 768-dim float32 vector ≈ 3 KB.  Unbounded dict grows forever on Railway.
-from collections import OrderedDict as _OD
+# ── LRU embedding cache — capped at 300 entries ───────────────────────────────
 class _EmbedLRU:
-    def __init__(self, n=300): self._c = _OD(); self._n = n
+    def __init__(self, n=300):
+        self._c = OrderedDict()
+        self._n = n
+
     def get(self, k):
-        if k not in self._c: return None
-        self._c.move_to_end(k); return self._c[k]
+        if k not in self._c:
+            return None
+        self._c.move_to_end(k)
+        return self._c[k]
+
     def set(self, k, v):
-        if k in self._c: self._c.move_to_end(k)
-        elif len(self._c) >= self._n: self._c.popitem(last=False)
+        if k in self._c:
+            self._c.move_to_end(k)
+        elif len(self._c) >= self._n:
+            self._c.popitem(last=False)
         self._c[k] = v
-    def clear(self): self._c.clear()
-    def __len__(self): return len(self._c)
+
+    def clear(self):
+        self._c.clear()
+
+    def __len__(self):
+        return len(self._c)
+
+    def __contains__(self, k):
+        return k in self._c
+
+
 _embed_cache = _EmbedLRU(300)
 
 
 def embed_text(text: str) -> Optional[np.ndarray]:
-    """Embed a single string. Cached in memory to avoid duplicate API calls."""
-    if not EMBEDDING_ENABLED or not _EMBED_MODEL or not text.strip():
+    """Embed a single string. Cached in memory to avoid duplicate calls."""
+    if not EMBEDDING_ENABLED or not _model or not text.strip():
         return None
 
     key = text.strip()[:500]
@@ -90,12 +71,8 @@ def embed_text(text: str) -> Optional[np.ndarray]:
         return cached
 
     try:
-        # contents must be a list
-        result = _client.models.embed_content(
-            model=_EMBED_MODEL,
-            contents=[key],
-        )
-        vec = np.array(result.embeddings[0].values, dtype=np.float32)
+        vec = _model.encode(key, convert_to_numpy=True, normalize_embeddings=True)
+        vec = vec.astype(np.float32)
         _embed_cache.set(key, vec)
         return vec
     except Exception as e:
@@ -105,42 +82,53 @@ def embed_text(text: str) -> Optional[np.ndarray]:
 
 def embed_batch(texts: List[str]) -> List[Optional[np.ndarray]]:
     """Embed a list of strings, using cache for already-seen texts."""
-    if not EMBEDDING_ENABLED:
+    if not EMBEDDING_ENABLED or not _model:
         return [None] * len(texts)
 
     results: List[Optional[np.ndarray]] = [None] * len(texts)
-    to_fetch = []
+    to_fetch_indices = []
+    to_fetch_texts = []
 
     for i, text in enumerate(texts):
         key = text.strip()[:500]
-        if key in _embed_cache:
-            results[i] = _embed_cache[key]
+        cached = _embed_cache.get(key)
+        if cached is not None:
+            results[i] = cached
         else:
-            to_fetch.append((i, key))
+            to_fetch_indices.append(i)
+            to_fetch_texts.append(key)
 
-    for i, key in to_fetch:
-        results[i] = embed_text(key)
+    if to_fetch_texts:
+        try:
+            vecs = _model.encode(
+                to_fetch_texts,
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+                batch_size=32,
+            )
+            for i, (idx, key) in enumerate(zip(to_fetch_indices, to_fetch_texts)):
+                vec = vecs[i].astype(np.float32)
+                _embed_cache.set(key, vec)
+                results[idx] = vec
+        except Exception as e:
+            print(f"[embedding] embed_batch failed: {e}")
 
     return results
 
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-    norm_a = np.linalg.norm(a)
-    norm_b = np.linalg.norm(b)
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    return float(np.dot(a, b) / (norm_a * norm_b))
+    """Since we use normalize_embeddings=True, dot product == cosine similarity."""
+    return float(np.dot(a, b))
 
 
 def cosine_sim_matrix(query_vec: np.ndarray, doc_vecs: List[np.ndarray]) -> List[float]:
     if not doc_vecs:
         return []
     doc_matrix = np.stack(doc_vecs)
-    query_norm = query_vec / (np.linalg.norm(query_vec) + 1e-9)
-    doc_norms = doc_matrix / (np.linalg.norm(doc_matrix, axis=1, keepdims=True) + 1e-9)
-    return (doc_norms @ query_norm).tolist()
+    # Vectors are already normalized — dot product is cosine similarity
+    return (doc_matrix @ query_vec).tolist()
 
 
 def clear_embed_cache():
     _embed_cache.clear()
-    print('[embedding] Cache cleared.')
+    print("[embedding] Cache cleared.")

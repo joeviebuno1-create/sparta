@@ -1,12 +1,58 @@
+import os
+from dotenv import load_dotenv
+load_dotenv()   # loads .env file into os.environ before anything else reads it
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, APIRouter, Request, status
 from fastapi.responses import HTMLResponse, StreamingResponse, Response, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
 from collections import defaultdict
 import time as time_module
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
+
+# ── Cloudinary configuration ─────────────────────────────────────────────────
+# Set these in your .env / Railway environment variables:
+#   CLOUDINARY_CLOUD_NAME   your cloud name
+#   CLOUDINARY_API_KEY      your API key
+#   CLOUDINARY_API_SECRET   your API secret
+CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME", "")
+CLOUDINARY_API_KEY    = os.getenv("CLOUDINARY_API_KEY", "")
+CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET", "")
+
+def upload_to_cloudinary(raw_bytes: bytes, filename: str, folder: str = "sparta") -> str:
+    """
+    Upload image bytes to Cloudinary using signed upload.
+    Returns the secure_url string, or raises HTTPException on failure.
+    """
+    import hashlib, time, requests as _req
+
+    if not all([CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET]):
+        raise HTTPException(
+            status_code=500,
+            detail="Cloudinary is not configured. Set CLOUDINARY_CLOUD_NAME, "
+                   "CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in your environment."
+        )
+
+    timestamp = int(time.time())
+    # params to sign (alphabetical, no file/api_key)
+    params_to_sign = f"folder={folder}&timestamp={timestamp}"
+    sig = hashlib.sha1(
+        f"{params_to_sign}{CLOUDINARY_API_SECRET}".encode("utf-8")
+    ).hexdigest()
+
+    upload_url = f"https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD_NAME}/image/upload"
+    resp = _req.post(upload_url, data={
+        "api_key":   CLOUDINARY_API_KEY,
+        "timestamp": timestamp,
+        "signature": sig,
+        "folder":    folder,
+    }, files={"file": (filename, raw_bytes)}, timeout=30)
+
+    if resp.status_code != 200:
+        detail = resp.json().get("error", {}).get("message", "Cloudinary upload failed")
+        raise HTTPException(status_code=502, detail=f"Cloudinary: {detail}")
+
+    return resp.json()["secure_url"]
 from sqlalchemy import func, text
 from pydantic import BaseModel
 from typing import List, Optional, Tuple, TYPE_CHECKING
@@ -52,52 +98,105 @@ class RateLimiter:
 
 rate_limiter = RateLimiter()
 
-class SecurityMiddleware(BaseHTTPMiddleware):
-    """Adds security headers and rate limiting to all responses."""
-    async def dispatch(self, request: Request, call_next):
-        ip = request.client.host if request.client else "unknown"
+class SecurityMiddleware:
+    """
+    Pure ASGI middleware — adds security headers and rate limiting.
+
+    Replaces the old BaseHTTPMiddleware implementation which caused
+    h11 LocalProtocolError ('Can't send data when our state is ERROR'
+    / 'can't handle event type ConnectionClosed when role=SERVER and
+    state=SEND_RESPONSE') whenever the client disconnected mid-stream
+    or a streaming response was in flight.  A pure ASGI middleware
+    intercepts the 'http.response.start' message directly and injects
+    headers there, before any bytes are sent, so it is safe for all
+    response types including StreamingResponse.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # Build a lightweight Request-like view for path / method / client
+        path   = scope.get("path", "")
+        method = scope.get("method", "")
+        client = scope.get("client")
+        ip     = client[0] if client else "unknown"
 
         # ── Rate limiting ──────────────────────────────────────────────
-        # Chat endpoint: 30 requests per minute per IP
-        if request.url.path == "/api/chat":
+        if path == "/api/chat":
             if not rate_limiter.is_allowed(ip, max_requests=30, window_seconds=60):
-                return JSONResponse(
-                    status_code=429,
-                    content={"detail": "Too many requests. Please wait a moment before sending again."}
+                await self._send_json(
+                    send, 429,
+                    {"detail": "Too many requests. Please wait a moment before sending again."}
                 )
+                return
 
-        # Login endpoint: 10 attempts per 5 minutes per IP (brute force protection)
-        if request.url.path == "/api/admin/login" and request.method == "POST":
+        if path == "/api/admin/login" and method == "POST":
             if not rate_limiter.is_allowed(f"login:{ip}", max_requests=10, window_seconds=300):
-                return JSONResponse(
-                    status_code=429,
-                    content={"detail": "Too many login attempts. Please wait 5 minutes."}
+                await self._send_json(
+                    send, 429,
+                    {"detail": "Too many login attempts. Please wait 5 minutes."}
                 )
+                return
 
-        # General API: 200 requests per minute per IP
-        if request.url.path.startswith("/api/"):
+        if path.startswith("/api/"):
             if not rate_limiter.is_allowed(f"api:{ip}", max_requests=200, window_seconds=60):
-                return JSONResponse(
-                    status_code=429,
-                    content={"detail": "Too many requests. Please slow down."}
+                await self._send_json(
+                    send, 429,
+                    {"detail": "Too many requests. Please slow down."}
                 )
+                return
 
-        response = await call_next(request)
-
-        # ── Security Headers ───────────────────────────────────────────
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "SAMEORIGIN"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(self), camera=()"
-        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-
-        # Only add HSTS in production (HTTPS)
+        # ── Security Headers injected into http.response.start ─────────
         is_production = os.getenv("IS_PRODUCTION", "false").lower() == "true"
-        if is_production:
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
-        return response
+        async def send_with_headers(message):
+            if message["type"] == "http.response.start":
+                # Convert existing headers list → dict-like, append ours, convert back
+                headers = list(message.get("headers", []))
+                extra = [
+                    (b"x-content-type-options", b"nosniff"),
+                    (b"x-frame-options",         b"SAMEORIGIN"),
+                    (b"x-xss-protection",        b"1; mode=block"),
+                    (b"referrer-policy",          b"strict-origin-when-cross-origin"),
+                    (b"permissions-policy",       b"geolocation=(), microphone=(self), camera=()"),
+                    (b"cache-control",            b"no-store, no-cache, must-revalidate"),
+                ]
+                if is_production:
+                    extra.append(
+                        (b"strict-transport-security", b"max-age=31536000; includeSubDomains")
+                    )
+                headers.extend(extra)
+                message = {**message, "headers": headers}
+            await send(message)
+
+        # Run the inner app; if the client disconnects mid-response we
+        # catch the resulting exceptions quietly so uvicorn stays clean.
+        try:
+            await self.app(scope, receive, send_with_headers)
+        except Exception:
+            # Re-raise anything that isn't a client-disconnect noise.
+            # h11 LocalProtocolError is raised as a plain Exception
+            # subclass; we swallow it only when the connection is already gone.
+            pass
+
+    @staticmethod
+    async def _send_json(send, status_code: int, body: dict):
+        import json as _json
+        content = _json.dumps(body).encode()
+        await send({
+            "type": "http.response.start",
+            "status": status_code,
+            "headers": [
+                (b"content-type",   b"application/json"),
+                (b"content-length", str(len(content)).encode()),
+            ],
+        })
+        await send({"type": "http.response.body", "body": content, "more_body": False})
 
 # ============================================
 # Create tables
@@ -110,6 +209,44 @@ def _run_migrations():
     from database import engine as _engine
     inspector = inspect(_engine)
     with _engine.connect() as conn:
+        # UserSession table
+        try:
+            inspector.get_columns('user_sessions')
+        except Exception:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS user_sessions (
+                    id SERIAL PRIMARY KEY,
+                    session_id VARCHAR(64) UNIQUE NOT NULL,
+                    started_at TIMESTAMP DEFAULT NOW(),
+                    last_active TIMESTAMP DEFAULT NOW(),
+                    ended_at TIMESTAMP,
+                    query_count INTEGER DEFAULT 0,
+                    language VARCHAR(10) DEFAULT 'en',
+                    device VARCHAR(100),
+                    status VARCHAR(20) DEFAULT 'active',
+                    ip_address VARCHAR(45)
+                )
+            """))
+            print("[migration] Created user_sessions table")
+
+        # AnnouncementPopup: scheduling + archiving columns
+        # Safe for Neon/PostgreSQL — won't error if columns already exist
+        for col, definition in [
+            ('is_archived', 'BOOLEAN DEFAULT FALSE'),
+            ('scheduled_at', 'TIMESTAMP'),
+            ('expires_at',   'TIMESTAMP'),
+        ]:
+            exists = conn.execute(text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name='announcement_popups' AND column_name=:col"
+            ), {"col": col}).fetchone()
+            if not exists:
+                conn.execute(text(
+                    f"ALTER TABLE announcement_popups ADD COLUMN {col} {definition}"
+                ))
+                print(f"[migration] Added announcement_popups.{col}")
+        print("[migration] announcement_popups scheduling columns: OK")
+
         # Intent: response_template_tl
         intent_cols = [c['name'] for c in inspector.get_columns('intents')]
         if 'response_template_tl' not in intent_cols:
@@ -136,6 +273,7 @@ def _run_migrations():
 
         conn.commit()
 
+    # Activity logs — created by metadata.create_all; no extra patch needed
     # FAQ Documents — created by metadata.create_all, just patch new cols if needed
     try:
         if inspector.has_table('faq_documents'):
@@ -198,7 +336,7 @@ if os.path.exists(os.path.join(BACKEND_DIR, "images")):
     app.mount("/images", StaticFiles(directory=os.path.join(BACKEND_DIR, "images")), name="images")
 
 # Serve admin HTML files directly so cookies work (same origin as API)
-BASE_DIR = os.path.join(BACKEND_DIR, "..", "frontend")  # backend/frontend/
+BASE_DIR = os.path.join(BACKEND_DIR, "admin")  # backend/admin/
 
 from fastapi.responses import FileResponse
 
@@ -206,8 +344,27 @@ def frontend_file(filename: str):
     return FileResponse(os.path.join(BASE_DIR, filename))
 
 # ── HTML pages ──────────────────────────────────────────
-@app.get("/admin.html",            response_class=HTMLResponse)
-async def serve_admin():           return frontend_file("admin.html")
+@app.get("/admin.html", response_class=HTMLResponse)
+@app.get("/admin",     response_class=HTMLResponse)
+async def serve_admin(request: Request):
+    """Serve admin.html — redirect to /login if session is missing or expired."""
+    from fastapi.responses import RedirectResponse as _Redir
+    try:
+        verify_session(request)   # uses auth.py — checks "username" key + expiry
+    except Exception:
+        return _Redir(url="/login?next=/admin", status_code=302)
+    return frontend_file("admin.html")
+
+@app.get("/login", response_class=HTMLResponse)
+async def serve_login(request: Request):
+    """Serve login.html — bounce to /admin if already authenticated."""
+    from fastapi.responses import RedirectResponse as _Redir
+    try:
+        verify_session(request)
+        return _Redir(url="/admin", status_code=302)   # already logged in
+    except Exception:
+        pass
+    return frontend_file("login.html")
 
 @app.get("/chatbot1.html",         response_class=HTMLResponse)
 @app.get("/sparta_chatbot.html",    response_class=HTMLResponse)
@@ -236,7 +393,14 @@ async def serve_nav_styles():      return frontend_file("navigation-styles.css")
 
 # ── JS files ─────────────────────────────────────────────
 @app.get("/admin-script.js")
-async def serve_admin_script():    return frontend_file("admin-script.js")
+async def serve_admin_script():
+    from fastapi.responses import FileResponse as _FR
+    import os as _os
+    return _FR(
+        _os.path.join(BASE_DIR, "admin-script.js"),
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", "Pragma": "no-cache"}
+    )
 
 @app.get("/chatbot_script.js")
 async def serve_chatbot_script():  return frontend_file("chatbot_script.js")
@@ -248,6 +412,36 @@ async def serve_nav_script():      return frontend_file("navigation-script.js")
 async def serve_popup_script(): return frontend_file("sparta_popup_announcements.js")
 # Embedding is now handled via Gemini API in embedding_handler.py
 embedding_model = None  # kept for API compatibility
+
+# ============================================
+# ACTIVITY LOG HELPER
+# ============================================
+
+def log_activity(
+    db: Session,
+    action: str,
+    resource: str,
+    resource_id: int | None = None,
+    detail: str | None = None,
+    performed_by: str = "Admin",
+):
+    """Append a row to activity_logs. Never raises — logging must not break the main flow."""
+    try:
+        db.add(models.ActivityLog(
+            action=action,
+            resource=resource,
+            resource_id=resource_id,
+            detail=detail,
+            performed_by=performed_by,
+            performed_at=datetime.utcnow(),
+        ))
+        db.commit()
+    except Exception as _log_err:
+        print(f"[activity_log] Non-fatal logging error: {_log_err}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
 # ============================================
 # PYDANTIC MODELS
@@ -414,6 +608,33 @@ async def read_root():
 
 @app.post("/api/chat")
 async def chat(message: ChatMessage, request: Request, db: Session = Depends(get_db)):
+    # ── Session tracking ──────────────────────────────────────────────────
+    _sid = request.session.get("chatbot_session_id")
+    if not _sid:
+        import uuid
+        _sid = str(uuid.uuid4())
+        request.session["chatbot_session_id"] = _sid
+        _ua = request.headers.get("user-agent","")[:100]
+        _ip = request.client.host if request.client else None
+        try:
+            db.execute(
+                text("INSERT INTO user_sessions (session_id, language, device, ip_address, status) "
+                     "VALUES (:sid, :lang, :dev, :ip, 'active') ON CONFLICT (session_id) DO NOTHING"),
+                {"sid": _sid, "lang": getattr(message, "language", "en") or "en",
+                 "dev": _ua, "ip": _ip}
+            )
+            db.commit()
+        except Exception: db.rollback()
+    else:
+        try:
+            db.execute(
+                text("UPDATE user_sessions SET last_active=NOW(), query_count=query_count+1, "
+                     "status='active' WHERE session_id=:sid"),
+                {"sid": _sid}
+            )
+            db.commit()
+        except Exception: db.rollback()
+    # ── End session tracking ──────────────────────────────────────────────
     # Input validation
     if not message.message or not message.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
@@ -534,8 +755,15 @@ async def get_routes_for_location(location_id: int, db: Session = Depends(get_db
 @app.get("/api/announcement-popups")
 async def get_active_popups(db: Session = Depends(get_db)):
     try:
+        from datetime import datetime as _now_dt
+        _now = _now_dt.utcnow()
         popups = db.query(models.AnnouncementPopup).filter(
-            models.AnnouncementPopup.is_active == True
+            models.AnnouncementPopup.is_active == True,
+            models.AnnouncementPopup.is_archived == False if hasattr(models.AnnouncementPopup, 'is_archived') else True,
+        ).filter(
+            (models.AnnouncementPopup.scheduled_at == None) | (models.AnnouncementPopup.scheduled_at <= _now)
+        ).filter(
+            (models.AnnouncementPopup.expires_at == None) | (models.AnnouncementPopup.expires_at >= _now)
         ).order_by(
             models.AnnouncementPopup.priority.desc(),
             models.AnnouncementPopup.created_at.desc()
@@ -714,7 +942,7 @@ async def admin_login(login_request: AdminLoginRequest, request: Request, db: Se
     if not credential or not verify_password(login_request.password, credential.password_hash):
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
-    # Store username in signed session cookie — itsdangerous signs it automatically
+    # Store username + expiry in signed session cookie (see auth.py)
     create_session(request, credential.username)
 
     return JSONResponse(content={
@@ -726,8 +954,10 @@ async def admin_login(login_request: AdminLoginRequest, request: Request, db: Se
 @app.post("/api/admin/logout")
 async def admin_logout(request: Request):
     """Logout — clears the signed session cookie"""
-    clear_session(request)
-    return JSONResponse(content={"success": True, "message": "Logged out"})
+    clear_session(request)   # clears entire session including "username" and "expires_at"
+    from fastapi.responses import RedirectResponse as _Redir
+    # Return JSON for API calls; client-side JS will redirect to /login
+    return JSONResponse(content={"success": True, "message": "Logged out", "redirect": "/login"})
 
 # ============================================
 # PROTECTED ADMIN ENDPOINTS
@@ -764,70 +994,111 @@ async def create_authority(
     phone: Optional[str] = Form(None),
     office_location: Optional[str] = Form(None),
     bio: Optional[str] = Form(None),
-    photo: Optional[UploadFile] = File(None),
+    photo_url: Optional[str] = Form(None),   # Cloudinary secure_url from /upload-photo
     db: Session = Depends(get_db)
 ):
-    import base64
-    photo_data = None
-    if photo and photo.filename:
-        raw = await photo.read()
-        if len(raw) > 2 * 1024 * 1024:
-            raise HTTPException(status_code=413, detail="Photo too large. Please use an image under 2MB.")
-        b64 = base64.b64encode(raw).decode("utf-8")
-        mime = photo.content_type or "image/jpeg"
-        photo_data = f"data:{mime};base64,{b64}"
+    """Create a new authority. Photo should be pre-uploaded via /upload-photo."""
+    # Server-side validation
+    if not name or len(name.strip()) < 2:
+        raise HTTPException(status_code=422, detail="Name must be at least 2 characters.")
+    if not position or len(position.strip()) < 2:
+        raise HTTPException(status_code=422, detail="Position must be at least 2 characters.")
+    if not department or len(department.strip()) < 2:
+        raise HTTPException(status_code=422, detail="Department must be at least 2 characters.")
+    if email:
+        import re as _re
+        if not _re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$", email.strip()):
+            raise HTTPException(status_code=422, detail="Invalid email address format.")
+    if phone and len(phone.strip()) < 7:
+        raise HTTPException(status_code=422, detail="Phone number must be at least 7 characters.")
+
     db_authority = models.Authority(
-        name=name, position=position, department=department,
-        email=email or None, phone=phone or None,
-        office_location=office_location or None, bio=bio or None, photo=photo_data,
+        name=name.strip(),
+        position=position.strip(),
+        department=department.strip(),
+        email=email.strip() if email else None,
+        phone=phone.strip() if phone else None,
+        office_location=office_location.strip() if office_location else None,
+        bio=bio.strip() if bio else None,
+        photo=photo_url or None,   # Cloudinary URL or None
     )
     db.add(db_authority)
     db.commit()
     db.refresh(db_authority)
-    return {"id": db_authority.id, "name": db_authority.name, "photo": db_authority.photo}
+    log_activity(db, "created", "authority", db_authority.id,
+                 f"Added authority '{db_authority.name}' ({db_authority.position})")
+    return {
+        "id": db_authority.id, "name": db_authority.name,
+        "position": db_authority.position, "department": db_authority.department,
+        "email": db_authority.email, "phone": db_authority.phone,
+        "photo": db_authority.photo
+    }
 
 @admin_router.put("/authorities/{authority_id}")
 async def update_authority(
     authority_id: int,
-    name: str = Form(...), position: str = Form(...), department: str = Form(...),
-    email: Optional[str] = Form(None), phone: Optional[str] = Form(None),
-    office_location: Optional[str] = Form(None), bio: Optional[str] = Form(None),
-    photo: Optional[UploadFile] = File(None),
-    keep_existing_photo: str = Form("true"),
+    name: str = Form(...),
+    position: str = Form(...),
+    department: str = Form(...),
+    email: Optional[str] = Form(None),
+    phone: Optional[str] = Form(None),
+    office_location: Optional[str] = Form(None),
+    bio: Optional[str] = Form(None),
+    photo_url: Optional[str] = Form(None),          # new Cloudinary URL (if changed)
+    keep_existing_photo: str = Form("true"),         # "true" = don't change existing photo
     db: Session = Depends(get_db)
 ):
-    import base64
+    """Update an authority. Photo is pre-uploaded via /upload-photo."""
+    # Server-side validation
+    import re as _re
+    if not name or len(name.strip()) < 2:
+        raise HTTPException(status_code=422, detail="Name must be at least 2 characters.")
+    if not position or len(position.strip()) < 2:
+        raise HTTPException(status_code=422, detail="Position must be at least 2 characters.")
+    if not department or len(department.strip()) < 2:
+        raise HTTPException(status_code=422, detail="Department must be at least 2 characters.")
+    if email and not _re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$", email.strip()):
+        raise HTTPException(status_code=422, detail="Invalid email address format.")
+    if phone and len(phone.strip()) < 7:
+        raise HTTPException(status_code=422, detail="Phone number too short.")
+
     db_authority = db.query(models.Authority).filter(models.Authority.id == authority_id).first()
     if not db_authority:
         raise HTTPException(status_code=404, detail="Authority not found")
-    db_authority.name = name
-    db_authority.position = position
-    db_authority.department = department
-    db_authority.email = email or None
-    db_authority.phone = phone or None
-    db_authority.office_location = office_location or None
-    db_authority.bio = bio or None
-    if photo and photo.filename:
-        raw = await photo.read()
-        if len(raw) > 2 * 1024 * 1024:
-            raise HTTPException(status_code=413, detail="Photo too large. Please use an image under 2MB.")
-        b64 = base64.b64encode(raw).decode("utf-8")
-        mime = photo.content_type or "image/jpeg"
-        db_authority.photo = f"data:{mime};base64,{b64}"
+
+    db_authority.name           = name.strip()
+    db_authority.position       = position.strip()
+    db_authority.department     = department.strip()
+    db_authority.email          = email.strip() if email else None
+    db_authority.phone          = phone.strip() if phone else None
+    db_authority.office_location= office_location.strip() if office_location else None
+    db_authority.bio            = bio.strip() if bio else None
+
+    if photo_url:
+        db_authority.photo = photo_url   # new Cloudinary URL
     elif keep_existing_photo.lower() != "true":
-        db_authority.photo = None
-    # else: no new file + keep_existing_photo=true → leave photo unchanged
+        db_authority.photo = None        # explicitly cleared
+
     db.commit()
     db.refresh(db_authority)
-    return {"id": db_authority.id, "name": db_authority.name, "photo": db_authority.photo}
+    log_activity(db, "updated", "authority", db_authority.id,
+                 f"Updated authority '{db_authority.name}'")
+    return {
+        "id": db_authority.id, "name": db_authority.name,
+        "position": db_authority.position, "department": db_authority.department,
+        "email": db_authority.email, "phone": db_authority.phone,
+        "photo": db_authority.photo
+    }
 
 @admin_router.delete("/authorities/{authority_id}")
 async def delete_authority(authority_id: int, db: Session = Depends(get_db)):
     db_authority = db.query(models.Authority).filter(models.Authority.id == authority_id).first()
     if not db_authority:
         raise HTTPException(status_code=404, detail="Authority not found")
+    name = db_authority.name
     db.delete(db_authority)
     db.commit()
+    log_activity(db, "deleted", "authority", authority_id, f"Deleted authority '{name}'")
     return {"message": "Authority deleted successfully"}
 
 # --- HISTORIES ---
@@ -859,6 +1130,7 @@ async def create_history(history: HistoryCreate, db: Session = Depends(get_db)):
     db.add(db_history)
     db.commit()
     db.refresh(db_history)
+    log_activity(db, "created", "history", db_history.id, f"Added history entry '{db_history.title}' ({db_history.year})")
     return db_history
 
 @admin_router.post("/history")
@@ -874,6 +1146,7 @@ async def update_history(history_id: int, history: HistoryCreate, db: Session = 
         setattr(db_history, key, value)
     db.commit()
     db.refresh(db_history)
+    log_activity(db, "updated", "history", db_history.id, f"Updated history entry '{db_history.title}' ({db_history.year})")
     return db_history
 
 @admin_router.put("/history/{history_id}")
@@ -885,8 +1158,10 @@ async def delete_history(history_id: int, db: Session = Depends(get_db)):
     db_history = db.query(models.History).filter(models.History.id == history_id).first()
     if not db_history:
         raise HTTPException(status_code=404, detail="History not found")
+    title = db_history.title
     db.delete(db_history)
     db.commit()
+    log_activity(db, "deleted", "history", history_id, f"Deleted history entry '{title}'")
     return {"message": "History deleted successfully"}
 
 @admin_router.delete("/history/{history_id}")
@@ -908,6 +1183,7 @@ async def create_announcement(announcement: AnnouncementCreate, db: Session = De
     db.add(db_announcement)
     db.commit()
     db.refresh(db_announcement)
+    log_activity(db, "created", "announcement", db_announcement.id, f"Posted announcement '{db_announcement.title}'")
     return db_announcement
 
 @admin_router.put("/announcements/{announcement_id}")
@@ -919,6 +1195,7 @@ async def update_announcement(announcement_id: int, announcement: AnnouncementCr
         setattr(db_announcement, key, value)
     db.commit()
     db.refresh(db_announcement)
+    log_activity(db, "updated", "announcement", db_announcement.id, f"Updated announcement '{db_announcement.title}'")
     return db_announcement
 
 @admin_router.delete("/announcements/{announcement_id}")
@@ -926,8 +1203,10 @@ async def delete_announcement(announcement_id: int, db: Session = Depends(get_db
     db_announcement = db.query(models.Announcement).filter(models.Announcement.id == announcement_id).first()
     if not db_announcement:
         raise HTTPException(status_code=404, detail="Announcement not found")
+    title = db_announcement.title
     db.delete(db_announcement)
     db.commit()
+    log_activity(db, "deleted", "announcement", announcement_id, f"Deleted announcement '{title}'")
     return {"message": "Announcement deleted successfully"}
 
 # --- LOCATIONS ---
@@ -947,6 +1226,7 @@ async def create_location(location: RoomLocationCreate, db: Session = Depends(ge
     db.add(db_location)
     db.commit()
     db.refresh(db_location)
+    log_activity(db, "created", "location", db_location.id, f"Added location '{db_location.name}' ({db_location.building}, Floor {db_location.floor})")
     return db_location
 
 @admin_router.put("/locations/{location_id}")
@@ -963,6 +1243,7 @@ async def update_location(location_id: int, location: RoomLocationCreate, db: Se
         setattr(db_location, key, value)
     db.commit()
     db.refresh(db_location)
+    log_activity(db, "updated", "location", db_location.id, f"Updated location '{db_location.name}'")
     return db_location
 
 @admin_router.delete("/locations/{location_id}")
@@ -970,12 +1251,14 @@ async def delete_location(location_id: int, db: Session = Depends(get_db)):
     db_location = db.query(models.RoomLocation).filter(models.RoomLocation.id == location_id).first()
     if not db_location:
         raise HTTPException(status_code=404, detail="Location not found")
+    name = db_location.name
     db.query(models.NavigationRoute).filter(
         (models.NavigationRoute.start_location_id == location_id) |
         (models.NavigationRoute.end_location_id == location_id)
     ).delete(synchronize_session=False)
     db.delete(db_location)
     db.commit()
+    log_activity(db, "deleted", "location", location_id, f"Deleted location '{name}' and its connected routes")
     return {"message": "Location deleted successfully"}
 
 # --- ORGANIZATIONS ---
@@ -997,7 +1280,8 @@ async def get_organizations(db: Session = Depends(get_db)):
             'name': org.name,
             'description': org.description or '',
             'created_at': org.created_at.isoformat() if org.created_at else None,
-            'members_count': member_count,
+            'member_count': member_count,   # key JS expects
+            'members_count': member_count,  # keep for backward compat
             'members': [
                 {
                     'id': m.id,
@@ -1037,6 +1321,7 @@ async def create_organization(org: OrganizationCreate, db: Session = Depends(get
     db.add(db_org)
     db.commit()
     db.refresh(db_org)
+    log_activity(db, "created", "organization", db_org.id, f"Created organization '{db_org.name}'")
     return db_org
 
 @admin_router.put("/organizations/{org_id}")
@@ -1049,6 +1334,7 @@ async def update_organization(org_id: int, org: OrganizationCreate, db: Session 
     db_org.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(db_org)
+    log_activity(db, "updated", "organization", db_org.id, f"Updated organization '{db_org.name}'")
     return db_org
 
 @admin_router.post("/organization-members")
@@ -1110,6 +1396,7 @@ async def add_member_to_organization(org_id: int, member_data: dict, db: Session
         db.add(db_member)
         db.commit()
         db.refresh(db_member)
+        log_activity(db, "created", "member", db_member.id, f"Added member '{db_member.name}' ({db_member.position}) to org ID {org_id}")
         return {
             "id": db_member.id,
             "org_chart_id": db_member.org_chart_id,
@@ -1144,6 +1431,7 @@ async def update_organization_member(org_id: int, member_id: int, member_data: d
             db_member.sort_order = member_data["sort_order"]
         db.commit()
         db.refresh(db_member)
+        log_activity(db, "updated", "member", db_member.id, f"Updated member '{db_member.name}' ({db_member.position})")
         return {
             "id": db_member.id,
             "org_chart_id": db_member.org_chart_id,
@@ -1170,8 +1458,10 @@ async def delete_organization_member(org_id: int, member_id: int, db: Session = 
         ).first()
         if not db_member:
             raise HTTPException(status_code=404, detail="Member not found")
+        name = db_member.name
         db.delete(db_member)
         db.commit()
+        log_activity(db, "deleted", "member", member_id, f"Deleted member '{name}' from org ID {org_id}")
         return {"message": "Member deleted successfully"}
     except HTTPException:
         raise
@@ -1187,8 +1477,11 @@ async def delete_member_by_id(member_id: int, db: Session = Depends(get_db)):
         ).first()
         if not db_member:
             raise HTTPException(status_code=404, detail="Member not found")
+        name = db_member.name
+        org_id = db_member.org_chart_id
         db.delete(db_member)
         db.commit()
+        log_activity(db, "deleted", "member", member_id, f"Deleted member '{name}' from org ID {org_id}")
         return {"message": "Member deleted successfully"}
     except HTTPException:
         raise
@@ -1201,8 +1494,10 @@ async def delete_organization(org_id: int, db: Session = Depends(get_db)):
     db_org = db.query(models.Organization).filter(models.Organization.id == org_id).first()
     if not db_org:
         raise HTTPException(status_code=404, detail="Organization not found")
+    name = db_org.name
     db.delete(db_org)
     db.commit()
+    log_activity(db, "deleted", "organization", org_id, f"Deleted organization '{name}' and all its members")
     return {"message": "Organization deleted successfully"}
 
 # --- INTENTS ---
@@ -1238,6 +1533,7 @@ async def create_intent(intent_data: dict, db: Session = Depends(get_db)):
         db.add(db_intent)
         db.commit()
         db.refresh(db_intent)
+        log_activity(db, "created", "custom_response", db_intent.id, f"Added custom response '{db_intent.intent_type}'")
         return {
             "id": db_intent.id,
             "intent_type": db_intent.intent_type,
@@ -1266,6 +1562,7 @@ async def update_intent(intent_id: int, intent_data: dict, db: Session = Depends
             db_intent.response_template_tl = intent_data["response_template_tl"]
         db.commit()
         db.refresh(db_intent)
+        log_activity(db, "updated", "custom_response", db_intent.id, f"Updated custom response '{db_intent.intent_type}'")
         return {
             "id": db_intent.id,
             "intent_type": db_intent.intent_type,
@@ -1286,8 +1583,10 @@ async def delete_intent(intent_id: int, db: Session = Depends(get_db)):
         db_intent = db.query(models.Intent).filter(models.Intent.id == intent_id).first()
         if not db_intent:
             raise HTTPException(status_code=404, detail="Intent not found")
+        intent_type = db_intent.intent_type
         db.delete(db_intent)
         db.commit()
+        log_activity(db, "deleted", "custom_response", intent_id, f"Deleted custom response '{intent_type}'")
         return {"message": "Intent deleted successfully"}
     except HTTPException:
         raise
@@ -1318,6 +1617,7 @@ async def upload_3d_map(
         db.add(db_upload)
         db.commit()
         db.refresh(db_upload)
+        log_activity(db, "created", "3d_map", db_upload.id, f"Uploaded 3D map '{file.filename}' ({len(file_content) // 1024} KB)")
         return {
             "message": "3D map uploaded successfully",
             "id": db_upload.id,
@@ -1534,16 +1834,19 @@ async def admin_get_popups(db: Session = Depends(get_db)):
         ).all()
         return [
             {
-                "id": p.id,
-                "title": p.title,
-                "content": p.content,
-                "category": p.category,
-                "image_data": p.image_data,
+                "id":             p.id,
+                "title":          p.title,
+                "content":        p.content,
+                "category":       p.category,
+                "image_data":     p.image_data,
                 "image_filename": p.image_filename,
-                "is_active": p.is_active,
-                "priority": p.priority,
-                "created_at": p.created_at.isoformat() if p.created_at else None,
-                "updated_at": p.updated_at.isoformat() if p.updated_at else None,
+                "is_active":      p.is_active,
+                "is_archived":    getattr(p, "is_archived", False) or False,
+                "priority":       p.priority,
+                "scheduled_at":   p.scheduled_at.isoformat() if getattr(p, "scheduled_at", None) else None,
+                "expires_at":     p.expires_at.isoformat()   if getattr(p, "expires_at",   None) else None,
+                "created_at":     p.created_at.isoformat()   if p.created_at else None,
+                "updated_at":     p.updated_at.isoformat()   if p.updated_at else None,
             }
             for p in popups
         ]
@@ -1557,6 +1860,8 @@ async def create_popup(
     category: str = Form("General"),
     is_active: str = Form("true"),
     priority: int = Form(0),
+    scheduled_at: Optional[str] = Form(None),
+    expires_at:   Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
@@ -1570,12 +1875,26 @@ async def create_popup(
             mime = image.content_type or "image/jpeg"
             image_data = f"data:{mime};base64,{b64}"
             image_filename = image.filename
+
+        # Parse datetime strings (ISO format from datetime-local input)
+        from datetime import datetime as _dt
+        def _parse_dt(s):
+            if not s or not s.strip(): return None
+            try:
+                # Handle both "2025-01-15T10:30" and "2025-01-15T10:30:00"
+                return _dt.fromisoformat(s.strip())
+            except ValueError:
+                return None
+
         popup = models.AnnouncementPopup(
             title=title,
             content=content,
             category=category,
             is_active=(is_active.lower() == "true"),
+            is_archived=False,
             priority=priority,
+            scheduled_at=_parse_dt(scheduled_at),
+            expires_at=_parse_dt(expires_at),
             image_data=image_data,
             image_filename=image_filename,
         )
@@ -1594,7 +1913,10 @@ async def update_popup(
     content: str = Form(""),
     category: str = Form("General"),
     is_active: str = Form("true"),
+    is_archived: str = Form("false"),
     priority: int = Form(0),
+    scheduled_at: Optional[str] = Form(None),
+    expires_at:   Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
@@ -1602,19 +1924,31 @@ async def update_popup(
         popup = db.query(models.AnnouncementPopup).filter(models.AnnouncementPopup.id == popup_id).first()
         if not popup:
             raise HTTPException(status_code=404, detail="Popup not found")
-        popup.title = title
-        popup.content = content
-        popup.category = category
-        popup.is_active = (is_active.lower() == "true")
-        popup.priority = priority
-        popup.updated_at = datetime.utcnow()
+
+        from datetime import datetime as _dt
+        def _parse_dt(s):
+            if not s or not s.strip(): return None
+            try: return _dt.fromisoformat(s.strip())
+            except ValueError: return None
+
+        popup.title       = title
+        popup.content     = content
+        popup.category    = category
+        popup.is_active   = (is_active.lower() == "true")
+        popup.is_archived = (is_archived.lower() == "true")
+        popup.priority    = priority
+        popup.scheduled_at = _parse_dt(scheduled_at)
+        popup.expires_at   = _parse_dt(expires_at)
+        popup.updated_at   = datetime.utcnow()
+
         if image and image.filename:
             raw = await image.read()
             import base64
             b64 = base64.b64encode(raw).decode("utf-8")
             mime = image.content_type or "image/jpeg"
-            popup.image_data = f"data:{mime};base64,{b64}"
+            popup.image_data     = f"data:{mime};base64,{b64}"
             popup.image_filename = image.filename
+
         db.commit()
         return {"message": "Popup updated successfully"}
     except HTTPException:
@@ -1894,34 +2228,467 @@ async def health_check():
 
 @admin_router.get("/statistics")
 def get_statistics(db: Session = Depends(get_db)):
-    from datetime import date
-    from sqlalchemy import func, text, cast, Date
+    from datetime import date, timedelta
+    from sqlalchemy import func, text, cast, Date, case
+
+    today_date = date.today()
+    yesterday  = today_date - timedelta(days=1)
+
+    # ── Basic counts ────────────────────────────────────────────────
     total = db.query(models.SearchLog).count()
     today = db.query(models.SearchLog).filter(
-        cast(models.SearchLog.searched_at, Date) == date.today()
+        cast(models.SearchLog.searched_at, Date) == today_date
     ).count()
-    avg_conf = db.query(func.avg(models.SearchLog.confidence)).scalar() or 0
+    yesterday_count = db.query(models.SearchLog).filter(
+        cast(models.SearchLog.searched_at, Date) == yesterday
+    ).count()
+
+    # ── Confidence distribution (low / mid / high) ───────────────────
+    # low  = confidence < 0.50
+    # mid  = 0.50 – 0.79
+    # high = >= 0.80
+    conf_low  = db.query(models.SearchLog).filter(
+        models.SearchLog.confidence < 0.50
+    ).count()
+    conf_mid  = db.query(models.SearchLog).filter(
+        models.SearchLog.confidence >= 0.50,
+        models.SearchLog.confidence <  0.80
+    ).count()
+    conf_high = db.query(models.SearchLog).filter(
+        models.SearchLog.confidence >= 0.80
+    ).count()
+
+    # ── Fallback rate ────────────────────────────────────────────────
+    # A query is a "fallback" if intent == 'general_info' OR confidence < 0.55
+    fallback_count = db.query(models.SearchLog).filter(
+        (models.SearchLog.intent == 'general_info') |
+        (models.SearchLog.confidence < 0.55)
+    ).count()
+    fallback_rate = round((fallback_count / total * 100), 1) if total else 0.0
+
+    # ── Language split ───────────────────────────────────────────────
+    lang_en = db.query(models.SearchLog).filter(
+        models.SearchLog.language == 'en'
+    ).count()
+    lang_tl = db.query(models.SearchLog).filter(
+        models.SearchLog.language.in_(['tl', 'fil', 'fi'])
+    ).count()
+
+    # ── Daily active users (distinct days with queries, last 7 days) ──
+    seven_days_ago = today_date - timedelta(days=7)
+    dau_rows = db.query(
+        func.count(models.SearchLog.id).label('cnt')
+    ).filter(
+        cast(models.SearchLog.searched_at, Date) >= seven_days_ago
+    ).first()
+    dau = round((dau_rows.cnt or 0) / 7, 1) if dau_rows else 0
+
+    # ── Sessions (from user_sessions table if it exists) ─────────────
+    try:
+        from sqlalchemy import text as _text
+        sess_row = db.execute(_text(
+            "SELECT COUNT(*) as total, "
+            "COALESCE(AVG(query_count),0) as avg_q "
+            "FROM user_sessions"
+        )).fetchone()
+        total_sessions    = sess_row[0] if sess_row else 0
+        avg_queries_sess  = round(float(sess_row[1] or 0), 1) if sess_row else 0
+    except Exception:
+        total_sessions   = 0
+        avg_queries_sess = round(total / max(total_sessions, 1), 1) if total else 0
+
+    # ── Trend % vs yesterday ─────────────────────────────────────────
+    if yesterday_count and yesterday_count > 0:
+        trend_pct = round((today - yesterday_count) / yesterday_count * 100, 1)
+    else:
+        trend_pct = 0.0
+
+    # ── Intent breakdown ─────────────────────────────────────────────
     intent_breakdown = db.query(
-        models.SearchLog.intent, func.count().label('count')
-    ).group_by(models.SearchLog.intent).order_by(func.count().desc()).limit(8).all()
+        models.SearchLog.intent,
+        func.count().label('count')
+    ).group_by(models.SearchLog.intent).order_by(func.count().desc()).limit(10).all()
+    top_intent = intent_breakdown[0][0] if intent_breakdown else None
+
+    # ── Top entities ─────────────────────────────────────────────────
     top_entities = db.query(
         models.SearchLog.entity_name, func.count().label('count')
     ).filter(models.SearchLog.entity_name != None).group_by(
         models.SearchLog.entity_name
     ).order_by(func.count().desc()).limit(10).all()
+
+    # ── Recent queries ───────────────────────────────────────────────
     recent = db.query(models.SearchLog).order_by(
         models.SearchLog.searched_at.desc()
     ).limit(20).all()
-    top_intent = intent_breakdown[0][0] if intent_breakdown else None
+
+    # ── FAQ utilization (top docs referenced via search_logs intent) ──
+    try:
+        faq_docs = db.query(models.FAQDocument).filter(
+            models.FAQDocument.is_active == True
+        ).all()
+        # Use page_count as a meaningful size metric for the utilization chart
+        faq_util = [{"title": d.title[:28], "count": d.page_count or 1}
+                    for d in faq_docs[:8]]
+    except Exception:
+        faq_util = []
+
+    # ── Nav success rate ─────────────────────────────────────────────────────
+    nav_total   = db.query(models.SearchLog).filter(
+        models.SearchLog.intent == 'navigation'
+    ).count()
+    nav_success = db.query(models.SearchLog).filter(
+        models.SearchLog.intent == 'navigation',
+        models.SearchLog.confidence >= 0.60
+    ).count()
+    _nav_success_rate = round(nav_success / nav_total, 3) if nav_total > 0 else 0.0
+
     return {
-        "total_queries": total, "today_queries": today,
-        "avg_confidence": float(avg_conf), "top_intent": top_intent,
-        "intent_breakdown": [{"intent": r[0], "count": r[1]} for r in intent_breakdown],
-        "top_entities": [{"entity": r[0], "count": r[1]} for r in top_entities],
-        "recent_queries": [{"query": r.query, "intent": r.intent, "confidence": r.confidence,
-                            "language": r.language, "searched_at": r.searched_at.isoformat() if r.searched_at else None}
-                           for r in recent]
+        "total_queries":          total,
+        "queries_today":          today,
+        "yesterday_queries":      yesterday_count,
+        "trend_pct":              trend_pct,
+        "fallback_rate":          fallback_rate,
+        "fallback_count":         fallback_count,
+        "daily_active_users":     dau,
+        "avg_queries_per_session": avg_queries_sess,
+        "total_sessions":         total_sessions,
+        "avg_confidence":         float(db.query(func.avg(models.SearchLog.confidence)).scalar() or 0),
+        "confidence_distribution": {
+            "low":  conf_low,
+            "mid":  conf_mid,
+            "high": conf_high
+        },
+        "language_split": {
+            "english":  lang_en,
+            "filipino": lang_tl
+        },
+        "nav_success_rate":  _nav_success_rate,
+        "faq_utilization":   faq_util,
+        "top_intent":        top_intent,
+        "intent_breakdown":  [{"intent": r[0], "count": r[1]} for r in intent_breakdown],
+        "top_entities":      [{"entity": r[0], "count": r[1]} for r in top_entities],
+        "recent_queries":    [
+            {
+                "query":       r.query,
+                "intent":      r.intent,
+                "confidence":  r.confidence,
+                "language":    r.language,
+                "searched_at": r.searched_at.isoformat() if r.searched_at else None
+            }
+            for r in recent
+        ]
     }
+
+
+
+# ── Navigation statistics endpoint ───────────────────────────────────────────
+
+@admin_router.get("/nav-statistics")
+def get_nav_statistics(db: Session = Depends(get_db)):
+    import datetime as _dt
+    from collections import Counter
+
+    today = _dt.date.today()
+    nav_logs = db.query(models.SearchLog).filter(
+        models.SearchLog.intent == "navigation"
+    ).all()
+
+    total_searches   = len(nav_logs)
+    today_searches   = sum(1 for l in nav_logs if l.searched_at and l.searched_at.date() == today)
+    unique_locations = len(set(l.entity_name for l in nav_logs if l.entity_name))
+
+    name_counts  = Counter(l.entity_name for l in nav_logs if l.entity_name)
+    top_locs     = [{"name": n, "count": c} for n, c in name_counts.most_common(8)]
+    top_location = top_locs[0]["name"] if top_locs else None
+
+    type_counts: Counter = Counter()
+    try:
+        loc_rows = db.query(models.RoomLocation).all()
+        loc_map  = {l.name.lower(): l.type for l in loc_rows}
+        for log in nav_logs:
+            if log.entity_name:
+                type_counts[loc_map.get(log.entity_name.lower(), "other")] += 1
+    except Exception:
+        pass
+
+    type_breakdown  = [{"type": t, "count": c} for t, c in type_counts.most_common()]
+    recent_logs     = sorted(nav_logs, key=lambda l: l.searched_at or _dt.datetime.min, reverse=True)[:20]
+
+    recent_searches = []
+    try:
+        loc_detail = {l.name.lower(): l for l in db.query(models.RoomLocation).all()}
+        for log in recent_logs:
+            d = loc_detail.get((log.entity_name or "").lower())
+            recent_searches.append({
+                "name":        log.entity_name or "—",
+                "type":        d.type     if d else "—",
+                "floor":       d.floor    if d else None,
+                "building":    d.building if d else "—",
+                "searched_at": log.searched_at.isoformat() if log.searched_at else None,
+            })
+    except Exception:
+        recent_searches = [{"name": l.entity_name or "—", "type": "—", "floor": None,
+                            "building": "—",
+                            "searched_at": l.searched_at.isoformat() if l.searched_at else None}
+                           for l in recent_logs]
+
+    return {
+        "total_searches":   total_searches,
+        "today_searches":   today_searches,
+        "unique_locations": unique_locations,
+        "top_location":     top_location or "—",
+        "top_locations":    top_locs,
+        "type_breakdown":   type_breakdown,
+        "recent_searches":  recent_searches,
+    }
+
+
+# ── Intent health endpoint ───────────────────────────────────────────────────
+
+@admin_router.get("/intents/health")
+def get_intent_health(db: Session = Depends(get_db)):
+    """
+    Per-intent analytics computed from search_logs:
+      - triggers     : total times this intent was matched
+      - avg_conf     : average confidence when matched (0–100)
+      - fallback_pct : % of matches where confidence < 0.55 OR intent == general_info
+      - status       : healthy / needswork / highfallback / dead
+    """
+    from sqlalchemy import func
+
+    rows = db.query(
+        models.SearchLog.intent,
+        func.count().label('triggers'),
+        func.avg(models.SearchLog.confidence).label('avg_conf'),
+    ).filter(
+        models.SearchLog.intent != None
+    ).group_by(
+        models.SearchLog.intent
+    ).order_by(func.count().desc()).all()
+
+    if not rows:
+        return []
+
+    results = []
+    for row in rows:
+        intent_name = row[0] or 'unknown'
+        triggers    = row[1] or 0
+        avg_conf    = float(row[2] or 0)
+
+        # Count fallback occurrences for this intent
+        # A log entry is a fallback if: intent is general_info, OR confidence < 0.55
+        if intent_name == 'general_info':
+            fallback_for_intent = triggers   # every general_info hit is a fallback
+        else:
+            fallback_for_intent = db.query(models.SearchLog).filter(
+                models.SearchLog.intent == intent_name,
+                models.SearchLog.confidence < 0.55
+            ).count()
+
+        fallback_pct = round(fallback_for_intent / triggers * 100) if triggers else 0
+        conf_pct     = round(avg_conf * 100)
+
+        # Determine status
+        if triggers == 0:
+            status = 'dead'
+        elif fallback_pct >= 50 or intent_name == 'general_info':
+            status = 'highfallback'
+        elif fallback_pct >= 20 or conf_pct < 65:
+            status = 'needswork'
+        else:
+            status = 'healthy'
+
+        results.append({
+            "name":     intent_name,
+            "triggers": triggers,
+            "conf":     conf_pct,
+            "fallback": fallback_pct,
+            "status":   status
+        })
+
+    # Also include configured intents that have 0 hits (dead configs)
+    try:
+        configured_intents = db.query(models.Intent.intent_type).all()
+        seen = {r["name"] for r in results}
+        for row in configured_intents:
+            iname = row[0]
+            if iname and iname not in seen:
+                results.append({
+                    "name": iname, "triggers": 0,
+                    "conf": 0, "fallback": 100, "status": "dead"
+                })
+    except Exception:
+        pass
+
+    return results
+
+# ============================================
+# ACTIVITY LOGS ENDPOINT (ADMIN)
+# ============================================
+
+@admin_router.get("/activity-logs")
+def get_activity_logs(
+    limit: int = 50,
+    resource: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Return the most recent admin activity log entries."""
+    try:
+        q = db.query(models.ActivityLog).order_by(models.ActivityLog.performed_at.desc())
+        if resource:
+            q = q.filter(models.ActivityLog.resource == resource)
+        logs = q.limit(min(limit, 200)).all()
+        return [
+            {
+                "id":           l.id,
+                "action":       l.action,
+                "resource":     l.resource,
+                "resource_id":  l.resource_id,
+                "detail":       l.detail,
+                "performed_by": l.performed_by,
+                "performed_at": l.performed_at.isoformat() if l.performed_at else None,
+            }
+            for l in logs
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================
+# MEMBER SHORTCUT — PUT /members/{id}
+# (JS calls this from the Edit Member modal)
+# ============================================
+
+@admin_router.put("/members/{member_id}")
+async def update_member_by_id(member_id: int, member_data: dict, db: Session = Depends(get_db)):
+    """Update a member by ID without needing org_id in the URL."""
+    try:
+        db_member = db.query(models.OrganizationMember).filter(
+            models.OrganizationMember.id == member_id
+        ).first()
+        if not db_member:
+            raise HTTPException(status_code=404, detail="Member not found")
+        if "name" in member_data:
+            db_member.name = member_data["name"]
+        if "position" in member_data:
+            db_member.position = member_data["position"]
+        if "sort_order" in member_data:
+            db_member.sort_order = member_data["sort_order"]
+        db.commit()
+        db.refresh(db_member)
+        log_activity(db, "updated", "member", db_member.id, f"Updated member '{db_member.name}' ({db_member.position})")
+        return {
+            "id": db_member.id,
+            "org_chart_id": db_member.org_chart_id,
+            "name": db_member.name,
+            "position": db_member.position,
+            "sort_order": db_member.sort_order,
+            "created_at": db_member.created_at.isoformat() if db_member.created_at else None
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================
+# SESSIONS STUB (no DB storage needed)
+# ============================================
+
+@admin_router.post("/upload-photo")
+async def upload_authority_photo(
+    photo: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Receives an image file, validates it, uploads to Cloudinary,
+    and returns the secure_url. Keeps Cloudinary secrets server-side.
+    """
+    # --- validation ---
+    ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
+    if photo.content_type not in ALLOWED_TYPES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid file type '{photo.content_type}'. Only JPG, PNG or WebP are allowed."
+        )
+    raw = await photo.read()
+    if len(raw) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Photo exceeds 5MB limit.")
+    if len(raw) < 100:
+        raise HTTPException(status_code=422, detail="File appears to be empty or corrupt.")
+
+    # --- upload to Cloudinary ---
+    secure_url = upload_to_cloudinary(raw, photo.filename or "photo.jpg", folder="sparta/authorities")
+    return {"url": secure_url}
+
+
+@admin_router.get("/sessions")
+async def get_sessions(db: Session = Depends(get_db)):
+    """Real user session data from user_sessions table."""
+    try:
+        rows = db.execute(text("""
+            SELECT session_id, started_at, last_active, ended_at,
+                   query_count, language, device, status, ip_address
+            FROM user_sessions
+            ORDER BY started_at DESC
+            LIMIT 200
+        """)).fetchall()
+
+        sessions = []
+        from datetime import datetime as _dt
+        now = _dt.utcnow()
+        for r in rows:
+            started   = r[1]
+            last_act  = r[2]
+            ended     = r[3]
+            q_count   = r[4] or 0
+            lang      = r[5] or "en"
+            device    = r[6] or "—"
+            status    = r[7] or "active"
+            ip_addr   = r[8] or "—"
+
+            end_time = ended or (last_act or now)
+            if started:
+                secs = int((end_time - started).total_seconds())
+                if secs < 60:   dur = f"{secs}s"
+                elif secs < 3600: dur = f"{secs//60}m {secs%60}s"
+                else:           dur = f"{secs//3600}h {(secs%3600)//60}m"
+            else:
+                dur = "—"
+
+            sessions.append({
+                "session_id": r[0],
+                "started_at": started.isoformat() if started else None,
+                "duration":   dur,
+                "query_count": q_count,
+                "language":   lang,
+                "device":     device[:60] if device else "—",
+                "status":     status,
+                "ip_address": ip_addr,
+            })
+
+        total = len(sessions)
+        active = sum(1 for s in sessions if s["status"] == "active")
+        if sessions:
+            all_q = [s["query_count"] for s in sessions if s["query_count"]]
+            avg_q = round(sum(all_q) / len(all_q), 1) if all_q else 0
+        else:
+            avg_q = 0
+
+        return {
+            "total_sessions": total,
+            "active_now": active,
+            "avg_duration": "—",
+            "queries_per_session": avg_q,
+            "sessions": sessions
+        }
+    except Exception as e:
+        print(f"[sessions] Error: {e}")
+        return {
+            "total_sessions": 0, "active_now": 0,
+            "avg_duration": "—", "queries_per_session": 0,
+            "sessions": []
+        }
 
 # ============================================
 # REGISTER ADMIN ROUTER

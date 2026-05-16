@@ -1,7 +1,43 @@
-from sqlalchemy import Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey, JSON, LargeBinary
+from sqlalchemy import Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey, JSON, LargeBinary, text
 from sqlalchemy.orm import relationship
-from database import Base
+from database import Base, engine
 from datetime import datetime
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AUTO-MIGRATION
+# Runs once on server start. Safely adds missing columns to existing DB tables.
+# To add a new column: 1) update the model class below, 2) add an entry here.
+# ─────────────────────────────────────────────────────────────────────────────
+_MIGRATIONS = {
+    "announcement_popups": [
+        ("is_archived",  "BOOLEAN DEFAULT FALSE"),
+        ("scheduled_at", "TIMESTAMP"),
+        ("expires_at",   "TIMESTAMP"),
+        ("updated_at",   "TIMESTAMP DEFAULT NOW()"),
+    ],
+}
+
+def run_migrations():
+    try:
+        with engine.begin() as conn:
+            for table, cols in _MIGRATIONS.items():
+                for col, definition in cols:
+                    exists = conn.execute(text(
+                        "SELECT 1 FROM information_schema.columns "
+                        "WHERE table_name=:t AND column_name=:c"
+                    ), {"t": table, "c": col}).fetchone()
+                    if not exists:
+                        conn.execute(text(
+                            f"ALTER TABLE {table} ADD COLUMN {col} {definition}"
+                        ))
+                        print(f"[models] Added column: {table}.{col}")
+        print("[models] Migration check complete.")
+    except Exception as e:
+        print(f"[models] Migration warning: {e}")
+
+# Run immediately when this module is imported (i.e. every server start)
+run_migrations()
+
 
 class Authority(Base):
     __tablename__ = "authorities"
@@ -190,6 +226,22 @@ class SearchLog(Base):
     searched_at = Column(DateTime, default=datetime.utcnow)
 
 
+class ActivityLog(Base):
+    """
+    Audit trail for all admin create / update / delete actions.
+    Rows are append-only — never updated or deleted by the app.
+    """
+    __tablename__ = "activity_logs"
+
+    id           = Column(Integer, primary_key=True, index=True)
+    action       = Column(String(20), nullable=False)   # "created" | "updated" | "deleted"
+    resource     = Column(String(50), nullable=False)   # e.g. "authority", "announcement"
+    resource_id  = Column(Integer,  nullable=True)      # PK of the affected row (None for bulk ops)
+    detail       = Column(Text,     nullable=True)      # human-readable summary
+    performed_by = Column(String,   default="Admin")
+    performed_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
 class AdminCredentials(Base):
     __tablename__ = "admin_credentials"
 
@@ -213,7 +265,10 @@ class AnnouncementPopup(Base):
     image_data = Column(Text, nullable=True)          # base64-encoded image or empty
     image_filename = Column(String, nullable=True)    # original filename for display
     is_active = Column(Boolean, default=True)         # toggle visibility on main menu
+    is_archived = Column(Boolean, default=False)      # soft-delete / archive
     priority = Column(Integer, default=0)             # higher number = shown first
+    scheduled_at = Column(DateTime, nullable=True)    # null = show immediately
+    expires_at = Column(DateTime, nullable=True)      # null = never expires
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -236,3 +291,30 @@ class FAQDocument(Base):
 
     def __repr__(self):
         return f"<FAQDocument id={self.id} title='{self.title}' pages={self.page_count}>"
+
+class UserSession(Base):
+    """
+    Tracks each chatbot session — created on first message, updated on each query.
+    Allows the admin to see usage patterns, session counts, and durations.
+    """
+    __tablename__ = "user_sessions"
+
+    id           = Column(Integer, primary_key=True, index=True)
+    session_id   = Column(String(64), unique=True, nullable=False, index=True)
+    started_at   = Column(DateTime, default=datetime.utcnow, index=True)
+    last_active  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    ended_at     = Column(DateTime, nullable=True)
+    query_count  = Column(Integer, default=0)
+    language     = Column(String(10), default="en")   # "en" | "tl"
+    device       = Column(String(100), nullable=True) # User-Agent snippet
+    status       = Column(String(20), default="active")  # "active" | "ended"
+    ip_address   = Column(String(45), nullable=True)
+
+    def duration_str(self) -> str:
+        end = self.ended_at or datetime.utcnow()
+        secs = int((end - self.started_at).total_seconds())
+        if secs < 60:
+            return f"{secs}s"
+        if secs < 3600:
+            return f"{secs//60}m {secs%60}s"
+        return f"{secs//3600}h {(secs%3600)//60}m"

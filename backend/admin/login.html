@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SPARTA — Admin Login</title>
+  <link rel="icon" type="image/png" href="https://sparta-production-0acb.up.railway.app/images/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700&display=swap">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --red:    #C62828;
+      --red-dk: #7B0000;
+      --red-md: #9B1F1F;
+      --red-lt: rgba(201,48,48,0.12);
+      --gold:   #F4D03F;
+      --bg:     #F4F5F7;
+      --font:   'DM Sans', system-ui, sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: var(--font);
+      background: var(--bg);
+      overflow: hidden;
+    }
+
+    /* ── LAYOUT ────────────────────────────────────── */
+    #app {
+      display: flex;
+      height: 100vh;
+    }
+
+    /* ── LEFT PANEL ──────────────────────────────── */
+    .lp-left {
+      position: relative;
+      width: 45%;
+      background: linear-gradient(160deg, #c93030 0%, #8b1a1a 60%, #5c0f0f 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+      animation: slideInLeft 0.7s cubic-bezier(0.22,1,0.36,1) both;
+    }
+    @keyframes slideInLeft {
+      from { transform: translateX(-50px); opacity: 0; }
+      to   { transform: translateX(0);    opacity: 1; }
+    }
+
+    .lp-pattern {
+      position: absolute; top: -50%; left: -50%;
+      width: 200%; height: 200%;
+      background: repeating-linear-gradient(
+        45deg, transparent, transparent 12px,
+        rgba(255,255,255,0.035) 12px, rgba(255,255,255,0.035) 24px
+      );
+      animation: patternDrift 30s linear infinite;
+    }
+    @keyframes patternDrift {
+      from { transform: translate(0,0); }
+      to   { transform: translate(48px,48px); }
+    }
+
+    .lp-orb {
+      position: absolute; border-radius: 50%; pointer-events: none;
+    }
+    .lp-orb1 {
+      width: 320px; height: 320px; top: -80px; right: -80px;
+      background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 70%);
+      animation: breathe 5s ease-in-out infinite;
+    }
+    .lp-orb2 {
+      width: 200px; height: 200px; bottom: 60px; left: -40px;
+      background: radial-gradient(circle, rgba(244,208,63,0.15) 0%, transparent 70%);
+      animation: breathe 7s ease-in-out infinite reverse;
+    }
+    .lp-orb3 {
+      width: 140px; height: 140px; bottom: 200px; right: 30px;
+      background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+      animation: breathe 4s ease-in-out infinite 1s;
+    }
+    @keyframes breathe {
+      0%,100% { transform: scale(1);    opacity: 0.8; }
+      50%      { transform: scale(1.12); opacity: 1;   }
+    }
+
+    .lp-content {
+      position: relative; z-index: 1;
+      display: flex; flex-direction: column;
+      align-items: center; text-align: center;
+      padding: 2rem;
+    }
+
+    .lp-logo-ring {
+      position: relative;
+      width: 110px; height: 110px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.12);
+      border: 3px solid rgba(255,255,255,0.3);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 1.75rem;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 8px rgba(255,255,255,0.05);
+      animation: float 3s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%,100% { transform: translateY(0);   }
+      50%      { transform: translateY(-6px); }
+    }
+    .lp-logo-ring img {
+      width: 80px; height: 80px;
+      border-radius: 50%; object-fit: cover;
+    }
+    .lp-logo-fallback {
+      display: none; font-size: 3rem;
+      width: 80px; height: 80px;
+      align-items: center; justify-content: center;
+    }
+    .lp-pulse {
+      position: absolute; top: -8px; left: -8px; right: -8px; bottom: -8px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.2);
+      animation: pulseRing 2.5s ease-out infinite;
+    }
+    @keyframes pulseRing {
+      0%   { transform: scale(1);   opacity: 0.6; }
+      100% { transform: scale(1.3); opacity: 0;   }
+    }
+
+    .lp-brand {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 3.2rem; letter-spacing: 6px;
+      line-height: 1;
+      background: linear-gradient(90deg, #fff 0%, rgba(255,255,255,0.75) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      text-shadow: none;
+    }
+    .lp-subtitle-sm {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.1rem; letter-spacing: 5px;
+      color: rgba(255,255,255,0.65);
+      margin-top: 0.25rem; margin-bottom: 1.25rem;
+    }
+    .lp-divider {
+      width: 60px; height: 3px;
+      background: linear-gradient(90deg, rgba(244,208,63,0.9), rgba(244,208,63,0.3));
+      border-radius: 2px; margin-bottom: 1.25rem;
+    }
+    .lp-desc {
+      color: rgba(255,255,255,0.72);
+      font-size: 0.9rem; line-height: 1.7;
+      margin-bottom: 2rem;
+    }
+
+    .lp-chips { display: flex; flex-direction: column; gap: 0.6rem; width: 100%; max-width: 240px; }
+    .lp-chip {
+      background: rgba(255,255,255,0.09);
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 50px;
+      padding: 0.5rem 1.2rem;
+      font-size: 0.82rem; color: rgba(255,255,255,0.88);
+      backdrop-filter: blur(4px);
+      transition: all 0.25s ease;
+    }
+    .lp-chip:hover { background: rgba(255,255,255,0.16); transform: translateX(4px); }
+
+    .lp-badge {
+      position: absolute; bottom: 1.75rem;
+      left: 0; right: 0; text-align: center; z-index: 1;
+    }
+    .lp-badge-name {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.1rem; letter-spacing: 3px;
+      color: rgba(255,255,255,0.88); display: block;
+    }
+    .lp-badge-tagline {
+      font-size: 0.72rem; color: rgba(255,255,255,0.5); display: block;
+    }
+
+    /* ── RIGHT PANEL ─────────────────────────────── */
+    .lp-right {
+      flex: 1;
+      display: flex; align-items: center; justify-content: center;
+      padding: 2rem;
+      overflow-y: auto;
+      background: #f4f5f7;
+      animation: slideInRight 0.7s cubic-bezier(0.22,1,0.36,1) 0.1s both;
+    }
+    @keyframes slideInRight {
+      from { transform: translateX(40px); opacity: 0; }
+      to   { transform: translateX(0);    opacity: 1; }
+    }
+
+    .lp-form-wrap { width: 100%; max-width: 400px; }
+
+    .lp-form-header { margin-bottom: 2rem; }
+    .lp-form-title {
+      font-size: 1.6rem; font-weight: 700; color: #111318;
+      letter-spacing: -0.02em; margin-bottom: 0.3rem;
+    }
+    .lp-form-sub {
+      font-size: 0.88rem; color: #6B7280;
+    }
+
+    /* Alert */
+    .lp-alert {
+      padding: 0.9rem 1.1rem; border-radius: 10px;
+      font-size: 0.875rem; font-weight: 500;
+      margin-bottom: 1.25rem;
+      display: none;
+    }
+    .lp-alert.err {
+      background: rgba(201,48,48,0.07);
+      border: 1px solid rgba(201,48,48,0.22);
+      color: #9b1f1f;
+    }
+    .lp-alert.ok {
+      background: rgba(17,153,142,0.07);
+      border: 1px solid rgba(17,153,142,0.22);
+      color: #0c6b5f;
+    }
+
+    /* Fields */
+    .lp-field { margin-bottom: 1.25rem; }
+    .lp-label {
+      display: block; font-weight: 600; font-size: 0.78rem;
+      color: #4b5264; margin-bottom: 0.4rem;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      transition: color 0.2s;
+    }
+    .lp-field:focus-within .lp-label { color: var(--red); }
+
+    .lp-input-wrap { position: relative; }
+    .lp-input-icon {
+      position: absolute; left: 14px; top: 50%;
+      transform: translateY(-50%);
+      font-size: 1rem; pointer-events: none; z-index: 1;
+    }
+    .lp-input {
+      width: 100%;
+      padding: 0.8rem 1.1rem 0.8rem 2.9rem;
+      border: 1.5px solid #e4e7ee;
+      border-radius: 10px;
+      font-size: 0.92rem;
+      font-family: var(--font);
+      color: #111318;
+      background: #f9fafb;
+      transition: all 0.22s;
+      outline: none;
+    }
+    .lp-input:focus {
+      border-color: var(--red);
+      box-shadow: 0 0 0 3px rgba(201,48,48,0.12);
+      background: #fff;
+    }
+    .lp-input.shake {
+      animation: shake 0.4s ease-out;
+    }
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20%      { transform: translateX(-6px); }
+      40%      { transform: translateX(6px); }
+      60%      { transform: translateX(-4px); }
+      80%      { transform: translateX(4px); }
+    }
+
+    .lp-eye-btn {
+      position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer;
+      font-size: 1rem; color: #94a3b8; padding: 0.25rem; line-height: 1;
+      transition: color 0.2s;
+    }
+    .lp-eye-btn:hover { color: var(--red); }
+
+    /* Submit button */
+    .lp-btn {
+      width: 100%;
+      padding: 0.88rem 2rem;
+      background: linear-gradient(135deg, var(--red) 0%, var(--red-md) 100%);
+      color: #fff; border: none; border-radius: 10px;
+      font-size: 0.96rem; font-weight: 700;
+      font-family: var(--font);
+      cursor: pointer; letter-spacing: 0.3px;
+      box-shadow: 0 4px 16px rgba(201,48,48,0.32);
+      position: relative; overflow: hidden;
+      transition: all 0.22s;
+      margin-top: 0.5rem;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .lp-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(201,48,48,0.42);
+    }
+    .lp-btn:active { transform: translateY(0); }
+    .lp-btn:disabled { opacity: 0.65; cursor: not-allowed; transform: none; }
+    .lp-btn .shine {
+      position: absolute; top: 0; left: -100%;
+      width: 60%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent);
+      transform: skewX(-20deg);
+      animation: shine 3s ease-in-out infinite 1.2s;
+    }
+    @keyframes shine {
+      0%,65%,100% { left: -100%; }
+      32%          { left: 150%; }
+    }
+
+    /* Spinner */
+    .lp-spinner {
+      width: 18px; height: 18px;
+      border: 2.5px solid rgba(255,255,255,0.35);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .lp-btn.loading .lp-spinner { display: block; }
+    .lp-btn.loading .lp-btn-icon { display: none; }
+
+    /* Divider */
+    .lp-field-divider {
+      display: flex; align-items: center; gap: 12px;
+      margin: 0.25rem 0 1rem;
+      font-size: 0.78rem; color: #9CA3AF;
+    }
+    .lp-field-divider::before,
+    .lp-field-divider::after {
+      content: ''; flex: 1;
+      height: 1px; background: #e5e7eb;
+    }
+
+    /* ── RESPONSIVE ───────────────────────────────── */
+    @media (max-width: 700px) {
+      #app { flex-direction: column; overflow-y: auto; height: auto; min-height: 100vh; }
+      .lp-left { width: 100%; min-height: 200px; flex-shrink: 0; }
+      .lp-content { padding: 1.5rem 1rem; }
+      .lp-brand { font-size: 2.2rem; letter-spacing: 4px; }
+      .lp-chips, .lp-desc { display: none; }
+      .lp-badge { position: static; margin-top: 0.5rem; }
+      .lp-logo-ring { width: 76px; height: 76px; margin-bottom: 0.75rem; }
+      .lp-logo-ring img { width: 54px; height: 54px; }
+      .lp-right { padding: 1.75rem 1.25rem; min-height: unset; }
+      html, body { overflow: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+
+    <!-- LEFT: Branding panel -->
+    <div class="lp-left">
+      <div class="lp-pattern"></div>
+      <div class="lp-orb lp-orb1"></div>
+      <div class="lp-orb lp-orb2"></div>
+      <div class="lp-orb lp-orb3"></div>
+
+      <div class="lp-content">
+        <div class="lp-logo-ring">
+          <img src="https://sparta-production-0acb.up.railway.app/images/logo.png" alt="SPARTA"
+            onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+          <div class="lp-logo-fallback">&#128272;</div>
+          <div class="lp-pulse"></div>
+        </div>
+
+        <div class="lp-brand">SPARTA</div>
+        <div class="lp-subtitle-sm">ADMIN DASHBOARD</div>
+        <div class="lp-divider"></div>
+        <div class="lp-desc">Smart Campus Companion<br>Management Portal</div>
+
+        <div class="lp-chips">
+          <div class="lp-chip">&#127979;&nbsp; BSU Lipa</div>
+          <div class="lp-chip">&#127981;&nbsp; Campus Navigator</div>
+          <div class="lp-chip">&#128101;&nbsp; Admin Access</div>
+        </div>
+      </div>
+
+      <div class="lp-badge">
+        <span class="lp-badge-name">BSU LIPA</span>
+        <span class="lp-badge-tagline">The National Engineering University</span>
+      </div>
+    </div>
+
+    <!-- RIGHT: Login form -->
+    <div class="lp-right">
+      <div class="lp-form-wrap">
+
+        <div class="lp-form-header">
+          <div class="lp-form-title">Welcome back 👋</div>
+          <div class="lp-form-sub">Sign in to your admin account to continue.</div>
+        </div>
+
+        <div id="loginAlert" class="lp-alert" role="alert"></div>
+
+        <!-- Username -->
+        <div class="lp-field">
+          <label class="lp-label" for="loginUsername">Username</label>
+          <div class="lp-input-wrap">
+            <span class="lp-input-icon">&#128100;</span>
+            <input id="loginUsername" type="text" class="lp-input"
+              placeholder="Enter your username"
+              autocomplete="username"
+              onkeydown="if(event.key==='Enter')document.getElementById('loginPassword').focus()">
+          </div>
+        </div>
+
+        <!-- Password -->
+        <div class="lp-field">
+          <label class="lp-label" for="loginPassword">Password</label>
+          <div class="lp-input-wrap">
+            <span class="lp-input-icon">&#128274;</span>
+            <input id="loginPassword" type="password" class="lp-input"
+              placeholder="Enter your password"
+              autocomplete="current-password"
+              style="padding-right:3.2rem;"
+              onkeydown="if(event.key==='Enter')submitLogin()">
+            <button type="button" class="lp-eye-btn" onclick="togglePassword()" title="Show/hide password">
+              <span id="eyeIcon">&#128065;</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Submit -->
+        <button id="loginBtn" class="lp-btn" onclick="submitLogin()">
+          <span class="lp-spinner"></span>
+          <span class="lp-btn-icon">&#128640;</span>
+          <span id="loginBtnText">Login to Dashboard</span>
+          <div class="shine"></div>
+        </button>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── API base — same logic as admin-script.js ──────────────────
+    const API_BASE = (
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1'
+    )
+      ? '/api/admin'
+      : 'https://sparta-production-0acb.up.railway.app/api/admin';
+
+    // ── On load: if already logged in, go straight to /admin ─────
+    window.addEventListener('DOMContentLoaded', async () => {
+      // Redirect param — where to go after login (defaults to /admin)
+      const params   = new URLSearchParams(window.location.search);
+      const redirect = params.get('next') || '/admin';
+
+      try {
+        const res = await fetch(`${API_BASE}/credentials`, {
+          credentials: 'include'
+        });
+        if (res.ok) {
+          // Already authenticated — go to admin
+          window.location.replace(redirect);
+        }
+      } catch {
+        // Not logged in or server unreachable — stay on login page
+      }
+    });
+
+    // ── Submit login ──────────────────────────────────────────────
+    async function submitLogin() {
+      const username = document.getElementById('loginUsername').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      const btn      = document.getElementById('loginBtn');
+      const btnText  = document.getElementById('loginBtnText');
+
+      if (!username || !password) {
+        showAlert('Please enter both username and password.', 'err');
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const res = await fetch(`${API_BASE}/login`, {
+          method:      'POST',
+          credentials: 'include',
+          headers:     { 'Content-Type': 'application/json' },
+          body:        JSON.stringify({ username, password })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          localStorage.setItem('spartha_user', data.username);
+          btnText.textContent = '✓  Redirecting…';
+
+          // Small pause so the success state is visible, then redirect
+          setTimeout(() => {
+            const params   = new URLSearchParams(window.location.search);
+            const redirect = params.get('next') || '/admin';
+            window.location.replace(redirect);
+          }, 500);
+
+        } else {
+          const err = await res.json().catch(() => ({}));
+          showAlert('❌  ' + (err.detail || 'Invalid username or password.'), 'err');
+          shakePassword();
+          setLoading(false);
+        }
+
+      } catch {
+        showAlert('❌  Could not reach the server. Is the backend running?', 'err');
+        setLoading(false);
+      }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────
+    function setLoading(on) {
+      const btn = document.getElementById('loginBtn');
+      btn.disabled = on;
+      btn.classList.toggle('loading', on);
+      if (!on) document.getElementById('loginBtnText').textContent = 'Login to Dashboard';
+    }
+
+    function showAlert(msg, type) {
+      const el = document.getElementById('loginAlert');
+      el.textContent  = msg;
+      el.className    = 'lp-alert ' + type;
+      el.style.display = 'block';
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function shakePassword() {
+      const inp = document.getElementById('loginPassword');
+      inp.classList.remove('shake');
+      void inp.offsetWidth; // reflow to restart animation
+      inp.classList.add('shake');
+      inp.addEventListener('animationend', () => inp.classList.remove('shake'), { once: true });
+    }
+
+    function togglePassword() {
+      const inp  = document.getElementById('loginPassword');
+      const icon = document.getElementById('eyeIcon');
+      if (inp.type === 'password') {
+        inp.type      = 'text';
+        icon.innerHTML = '&#128683;';
+      } else {
+        inp.type      = 'password';
+        icon.innerHTML = '&#128065;';
+      }
+    }
+  </script>
+</body>
+</html>
