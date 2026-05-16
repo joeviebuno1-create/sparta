@@ -4,9 +4,14 @@
    =================================== */
 
 // ========== CONFIGURATION ==========
-const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? '/api/admin'
-    : 'https://sparta-production-0acb.up.railway.app/api/admin';
+// Detect Live Server (port 5500) vs running directly from FastAPI (port 8000)
+const _isLiveServer = window.location.port === '5500' || window.location.port === '5501';
+const _isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const API_BASE = (_isLocal && !_isLiveServer)
+    ? '/api/admin'                                                          // FastAPI dev server
+    : _isLiveServer
+        ? 'http://127.0.0.1:8000/api/admin'                                // VS Code Live Server
+        : 'https://sparta-production-0acb.up.railway.app/api/admin';       // Production
     
 // Global state
 let allLocations = [];
@@ -1999,9 +2004,15 @@ async function handleLocationFormSubmit(e) {
         }
         
         const savedLocation = await locResponse.json();
-        const locationId = savedLocation.id;
+        // When editing, use the known currentLocationId as fallback in case
+        // the response doesn't include id (SQLAlchemy serialization quirk).
+        const locationId = savedLocation.id || (isEdit ? currentLocationId : null);
         
-        console.log('✅ Location saved successfully with ID:', locationId);
+        console.log('✅ Location saved successfully with ID:', locationId, '(from response:', savedLocation.id, ', edit fallback:', isEdit ? currentLocationId : 'n/a', ')');
+        
+        if (!locationId) {
+            throw new Error('Could not determine saved location ID from server response. Please try again.');
+        }
         
         // Save path if waypoints exist and mode is not 'none'
         if (currentPathMode !== 'none' && pathWaypoints.length > 0) {
@@ -2048,6 +2059,26 @@ async function handleLocationFormSubmit(e) {
             console.log('Full route data:', JSON.stringify(routeData, null, 2));
             console.log('=== END VALIDATION ===');
             
+            // ── Delete any existing routes for this location before saving the new one ──
+            // The admin always POSTs (never PUTs) a route, so without this cleanup
+            // each save stacks a new route record. The navigator would then use the
+            // oldest (fewest waypoints) record instead of the current one.
+            try {
+                const existingResp = await apiFetch('/routes');
+                if (existingResp && existingResp.ok) {
+                    const existingRoutes = await existingResp.json();
+                    const stale = existingRoutes.filter(r =>
+                        r.start_location_id === locationId || r.end_location_id === locationId
+                    );
+                    for (const r of stale) {
+                        await apiFetch(`/routes/${r.id}`, { method: 'DELETE' });
+                        console.log(`🗑️ Removed old route #${r.id} "${r.name}" before saving updated path`);
+                    }
+                }
+            } catch (delErr) {
+                console.warn('Could not clean up old routes (non-fatal):', delErr);
+            }
+
             const routeResponse = await apiFetch('/routes', { method: 'POST', body: JSON.stringify(routeData) });
             
             if (!routeResponse.ok) {

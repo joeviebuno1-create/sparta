@@ -7,6 +7,7 @@ const API_HOST = isLocal
 // ============ STATE ============
 let locations = [];
 let routes = [];
+let allPathMeshes = []; // persistent — all manually created paths shown on load
 let favorites = JSON.parse(localStorage.getItem('spartha_favs') || '[]');
 let activeTypeFilter = 'all';
 let activeFloorFilter = 'all';
@@ -37,6 +38,66 @@ const campusWaypoints = [
     { id: 'west-wing', pos: new THREE.Vector3(-40, 0, 0), name: 'West Wing' },
     { id: 'south-corridor', pos: new THREE.Vector3(0, 0, -50), name: 'South Corridor' }
 ];
+
+// ============ WAYPOINT PARSER ============
+// Handles every format the admin panel stores: {x,y,z}, {x,z}, null-y, arrays, strings.
+// y is always optional — defaults to 0 (flat campus ground plane).
+function _parseWaypoint(wp) {
+    if (wp == null) return null;
+    // Unwrap common wrapper keys
+    if (typeof wp === 'object' && !Array.isArray(wp)) {
+        if (wp.position && typeof wp.position === 'object') wp = wp.position;
+        else if (wp.point && typeof wp.point === 'object') wp = wp.point;
+    }
+    let x, y = 0, z;
+    if (Array.isArray(wp)) {
+        x = parseFloat(wp[0]);
+        if (wp.length >= 3) { y = isNaN(parseFloat(wp[1])) ? 0 : parseFloat(wp[1]); z = parseFloat(wp[2]); }
+        else { z = parseFloat(wp[1]); }
+    } else if (typeof wp === 'object') {
+        x = parseFloat(wp.x);
+        z = parseFloat(wp.z);
+        const rawY = parseFloat(wp.y);
+        y = isNaN(rawY) ? 0 : rawY;
+    } else if (typeof wp === 'number') {
+        const loc = locations.find(l => l.id === wp);
+        if (loc && loc.coordinates) return new THREE.Vector3(parseFloat(loc.coordinates.x)||0, parseFloat(loc.coordinates.y)||0, parseFloat(loc.coordinates.z)||0);
+        return null;
+    } else if (typeof wp === 'string') {
+        try { return _parseWaypoint(JSON.parse(wp)); } catch(e) { return null; }
+    } else { return null; }
+    if (isNaN(x) || isNaN(z)) return null;
+    return new THREE.Vector3(x, y, z);
+}
+
+// Parse a raw waypoints value (string, array, object-with-numeric-keys) into Vector3[].
+function _parseWaypointArray(raw) {
+    if (!raw) return [];
+    let arr = raw;
+    for (let i = 0; i < 2; i++) {
+        if (typeof arr === 'string') { try { arr = JSON.parse(arr); } catch(e) { return []; } }
+        else break;
+    }
+    if (!Array.isArray(arr)) {
+        if (typeof arr === 'object') arr = Object.keys(arr).sort((a,b)=>+a-+b).map(k=>arr[k]);
+        else return [];
+    }
+    const pts = [];
+    for (const wp of arr) {
+        const v = _parseWaypoint(wp);
+        if (v) pts.push(v);
+        else console.warn('[navigator] Skipped waypoint:', JSON.stringify(wp));
+    }
+    return pts;
+}
+
+// Return waypoint count from a raw route.waypoints (handles string or array).
+function _waypointCount(raw) {
+    if (!raw) return 0;
+    if (Array.isArray(raw)) return raw.length;
+    if (typeof raw === 'string') { try { const p = JSON.parse(raw); return Array.isArray(p) ? p.length : 0; } catch(e) { return 0; } }
+    return 0;
+}
 
 // ============ PATHFINDING - Simple A* implementation ============
 
@@ -495,10 +556,10 @@ function selectLocation(idOrObj, clickedEl) {
             console.warn('   May be in wrong coordinate space - recapture in admin panel');
         }
         
-        // Clear previous paths and particles
+        // Clear previous "Get Directions" paths (not the persistent all-paths layer)
         pathLines.forEach(line => scene.remove(line));
         pathLines = [];
-        pathParticles.forEach(p => scene.remove(p.mesh));
+        pathParticles.forEach(p => { scene.remove(p.mesh); if (p.tail) p.tail.forEach(b => scene.remove(b)); });
         pathParticles = [];
         const em = scene.getObjectByName('entrance-marker');
         if (em) scene.remove(em);
@@ -580,6 +641,144 @@ function showFullScreen(){
 }
 
 // ============ 3D SCENE ============
+
+// ─── Draw ALL manually created navigation paths on map load ──────────────────
+// Draws the exact waypoints stored in the DB — no fallbacks, no interpolation.
+// Uses allPathMeshes[] separately from pathLines[] so "Get Directions" won't
+// erase these persistent background paths.
+async function drawAllSavedPaths() {
+    // Clear previous persistent paths
+    allPathMeshes.forEach(m => scene && scene.remove(m));
+    allPathMeshes = [];
+
+    if (!scene) return;
+
+    // Always fetch fresh from API so we get the latest saved routes
+    let allRoutes = [];
+    try {
+        const res = await fetch(`${API_HOST}/navigation-routes`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        allRoutes = await res.json();
+        routes = allRoutes; // keep global in sync
+    } catch(e) {
+        console.warn('[drawAllSavedPaths] Could not fetch routes:', e);
+        return;
+    }
+
+    if (!allRoutes || allRoutes.length === 0) {
+        console.log('[drawAllSavedPaths] No routes found');
+        return;
+    }
+
+    // ── Deduplicate: keep only the route with the MOST waypoints per location pair ──
+    // The admin always POSTs a new route on save, so old saves stack up.
+    // We only want the richest (latest) route for each pair.
+    const bestRouteMap = new Map();
+    for (const route of allRoutes) {
+        const a = Math.min(route.start_location_id, route.end_location_id);
+        const b = Math.max(route.start_location_id, route.end_location_id);
+        const key = `${a}-${b}`;
+        const existing = bestRouteMap.get(key);
+        if (!existing || _waypointCount(route.waypoints) > _waypointCount(existing.waypoints)) {
+            bestRouteMap.set(key, route);
+        }
+    }
+    allRoutes = [...bestRouteMap.values()];
+    console.log(`[drawAllSavedPaths] After dedup: ${allRoutes.length} unique route(s) to draw`);
+
+    let drawn = 0;
+    const PATH_ORDER = 998;
+    const TUBE_R     = 0.50;
+    const GLOW_R     = 1.00;
+
+    for (const route of allRoutes) {
+        // ── Parse the stored waypoints ──────────────────────────────────────
+        let wps = route.waypoints || [];
+        if (typeof wps === 'string') {
+            try { wps = JSON.parse(wps); } catch(e) { wps = []; }
+        }
+        if (!Array.isArray(wps)) wps = [];
+
+        // Parse via shared helper — handles null-y, missing keys, string encoding
+        const pts = _parseWaypointArray(wps);
+
+        // Need at least 2 points to draw a line
+        if (pts.length < 2) {
+            console.log(`[drawAllSavedPaths] Route "${route.name}" has ${pts.length} valid waypoint(s) — skipping`);
+            continue;
+        }
+
+        // ── Resolve color ───────────────────────────────────────────────────
+        let color = 0xF4D03F; // default gold
+        if (route.path_color) {
+            const parsed = parseInt(route.path_color.replace('#', ''), 16);
+            if (!isNaN(parsed)) color = parsed;
+        }
+        if (route.type === 'emergency' || route.type === 'evacuation') color = 0xFF8C00;
+
+        // ── Draw segment-by-segment tubes through every waypoint ────────────
+        for (let i = 0; i < pts.length - 1; i++) {
+            const seg = new THREE.LineCurve3(pts[i], pts[i + 1]);
+
+            // Main tube
+            const tube = new THREE.Mesh(
+                new THREE.TubeGeometry(seg, 12, TUBE_R, 8, false),
+                new THREE.MeshBasicMaterial({
+                    color, transparent: true, opacity: 0.82,
+                    depthTest: false, depthWrite: false,
+                })
+            );
+            tube.renderOrder = PATH_ORDER;
+            scene.add(tube);
+            allPathMeshes.push(tube);
+
+            // Outer glow
+            const glow = new THREE.Mesh(
+                new THREE.TubeGeometry(seg, 12, GLOW_R, 8, false),
+                new THREE.MeshBasicMaterial({
+                    color, transparent: true, opacity: 0.12,
+                    depthTest: false, depthWrite: false,
+                })
+            );
+            glow.renderOrder = PATH_ORDER - 1;
+            scene.add(glow);
+            allPathMeshes.push(glow);
+
+            // White core
+            const core = new THREE.Mesh(
+                new THREE.TubeGeometry(seg, 12, TUBE_R * 0.35, 6, false),
+                new THREE.MeshBasicMaterial({
+                    color: 0xFFFFFF, transparent: true, opacity: 0.45,
+                    depthTest: false, depthWrite: false,
+                })
+            );
+            core.renderOrder = PATH_ORDER + 1;
+            scene.add(core);
+            allPathMeshes.push(core);
+        }
+
+        // Joint spheres at each interior waypoint for smooth connections
+        for (let i = 1; i < pts.length - 1; i++) {
+            const joint = new THREE.Mesh(
+                new THREE.SphereGeometry(TUBE_R, 8, 8),
+                new THREE.MeshBasicMaterial({
+                    color, transparent: true, opacity: 0.82,
+                    depthTest: false, depthWrite: false,
+                })
+            );
+            joint.position.copy(pts[i]);
+            joint.renderOrder = PATH_ORDER;
+            scene.add(joint);
+            allPathMeshes.push(joint);
+        }
+
+        drawn++;
+        console.log(`[drawAllSavedPaths] ✓ "${route.name}" — ${pts.length} waypoints`);
+    }
+
+    console.log(`[drawAllSavedPaths] Drew ${drawn}/${allRoutes.length} routes (${allPathMeshes.length} meshes total)`);
+}
+
 function init3DScene() {
     const canvas=document.getElementById('map3dCanvas'), container=canvas.parentElement;
     scene=new THREE.Scene(); 
@@ -664,6 +863,8 @@ function init3DScene() {
             
             // Verify coordinates after model loads
             setTimeout(() => verifyLocationCoordinates(), 500);
+            // Draw all manually created paths on top of the loaded model
+            setTimeout(() => drawAllSavedPaths(), 900);
         },
         xhr=>console.log('Loading model: '+(xhr.loaded/xhr.total*100).toFixed(0)+'%'),
         err=>{ 
@@ -983,7 +1184,7 @@ function resetOrientation() {
     
     pathLines.forEach(line => scene.remove(line));
     pathLines = [];
-    pathParticles.forEach(p => scene.remove(p.mesh));
+    pathParticles.forEach(p => { scene.remove(p.mesh); if (p.tail) p.tail.forEach(b => scene.remove(b)); });
     pathParticles = [];
     
     clearEvacMarkers();
@@ -992,6 +1193,7 @@ function resetOrientation() {
     if (em) scene.remove(em);
     
     document.getElementById('pathStats').classList.remove('show');
+    if (scene) drawAllSavedPaths();
 }
 
 function focusOn3D() {
@@ -1026,6 +1228,22 @@ function focusOn3D() {
     }, 320);
 }
 
+// Show a friendly non-blocking "no route" message in the info panel
+function _showNoRouteUI() {
+    const infoContent = document.getElementById('infoContent');
+    if (infoContent) {
+        const noRoute = document.createElement('div');
+        noRoute.style.cssText = 'margin-top:10px;padding:10px 12px;background:#fff7ee;border:1.5px solid rgba(230,126,34,0.3);border-radius:8px;font-size:0.75rem;color:#92400e;line-height:1.5;';
+        noRoute.innerHTML = '<strong style="display:block;margin-bottom:4px;">📍 No navigation path yet</strong>' +
+            'This location does not have a mapped route. Ask an admin to add one via Admin → Navigation Paths.';
+        // Remove any existing no-route message first
+        const old = infoContent.querySelector('.no-route-msg');
+        if (old) old.remove();
+        noRoute.classList.add('no-route-msg');
+        infoContent.appendChild(noRoute);
+    }
+}
+
 async function getDirections() {
     if (!selectedLocation || !selectedLocation.coordinates) {
         console.warn('No location selected or location has no coordinates');
@@ -1042,33 +1260,136 @@ async function getDirections() {
         console.log('Route fetch response status:', response.status);
         
         if (response.ok) {
-            const routes = await response.json();
-            console.log('Routes received:', routes);
-            
-            if (routes && routes.length > 0) {
-                // Use the first available route
-                const route = routes[0];
-                console.log('Using saved route:', route.name);
-                
-                // Draw path using saved waypoints
-                if (route.waypoints && route.waypoints.length > 0) {
-                    console.log('Drawing saved route with', route.waypoints.length, 'waypoints');
+            const apiData = await response.json();
+            // Normalize: backend may return a plain array OR { routes, count, has_waypoints }
+            const routeList = Array.isArray(apiData) ? apiData : (apiData.routes || []);
+            console.log(`[getDirections] ${routeList.length} route(s) found for location ${selectedLocation.id}`);
+
+            if (routeList && routeList.length > 0) {
+                // ── Pick the route with the MOST waypoints ──────────────────────────
+                // The admin always POSTs new routes on save (never updates), so multiple
+                // records may exist. The newest/richest one has the most waypoints.
+                const route = routeList.reduce((best, r) =>
+                    _waypointCount(r.waypoints) > _waypointCount(best.waypoints) ? r : best
+                , routeList[0]);
+
+                console.log(`[getDirections] Using route "${route.name}" — raw waypoints: ${_waypointCount(route.waypoints)}`);
+
+                // ── Robust parse ────────────────────────────────────────────────────
+                const pts = _parseWaypointArray(route.waypoints);
+                console.log(`[getDirections] Parsed ${pts.length} valid waypoints`);
+
+                if (pts.length >= 2) {
+                    // ── Best case: route has full waypoints ──
+                    route.waypoints = pts.map(v => ({ x: v.x, y: v.y, z: v.z }));
                     drawSavedRoute(route);
-                    // Auto-close panel and focus the 3D view
                     focusOn3D();
                 } else {
-                    console.log('Route has no waypoints');
-                    alert('⚠️ This route has no waypoints. Please recreate it in the admin panel.');
-                    return;
+                    // ── Fallback: no intermediate waypoints stored ──
+                    // Build a minimal 2-point path using start + end location coords.
+                    console.log('Route has no waypoints — building from location coords');
+
+                    const startLoc = locations.find(l => l.id === route.start_location_id);
+                    const endLoc   = locations.find(l => l.id === route.end_location_id)
+                                  || selectedLocation;
+
+                    // Attempt to build 2-point waypoints from location coordinates
+                    const builtWps = [];
+
+                    if (startLoc && startLoc.coordinates) {
+                        const sx = parseFloat(startLoc.coordinates.x);
+                        const sy = parseFloat(startLoc.coordinates.y);
+                        const sz = parseFloat(startLoc.coordinates.z);
+                        if (!isNaN(sx)) builtWps.push({ x: sx, y: sy, z: sz });
+                    } else {
+                        // No start location — try to find entrance/gate in locations list
+                        const gate = locations.find(l =>
+                            l.type === 'entrance' ||
+                            (l.name && (l.name.toLowerCase().includes('entrance') ||
+                                        l.name.toLowerCase().includes('gate') ||
+                                        l.name.toLowerCase().includes('main')))
+                        );
+                        if (gate && gate.coordinates) {
+                            const gx = parseFloat(gate.coordinates.x);
+                            const gy = parseFloat(gate.coordinates.y);
+                            const gz = parseFloat(gate.coordinates.z);
+                            if (!isNaN(gx)) builtWps.push({ x: gx, y: gy, z: gz });
+                        }
+                    }
+
+                    if (endLoc && endLoc.coordinates) {
+                        const ex = parseFloat(endLoc.coordinates.x);
+                        const ey = parseFloat(endLoc.coordinates.y);
+                        const ez = parseFloat(endLoc.coordinates.z);
+                        if (!isNaN(ex)) builtWps.push({ x: ex, y: ey, z: ez });
+                    }
+
+                    if (builtWps.length >= 2) {
+                        console.log('Built', builtWps.length, 'waypoints from location coords');
+                        route.waypoints = builtWps;
+                        drawSavedRoute(route);
+                        focusOn3D();
+                    } else if (builtWps.length === 1 && selectedLocation && selectedLocation.coordinates) {
+                        // At minimum draw from the single point to the selected destination
+                        const dx = parseFloat(selectedLocation.coordinates.x);
+                        const dy = parseFloat(selectedLocation.coordinates.y);
+                        const dz = parseFloat(selectedLocation.coordinates.z);
+                        if (!isNaN(dx)) {
+                            builtWps.push({ x: dx, y: dy, z: dz });
+                            route.waypoints = builtWps;
+                            drawSavedRoute(route);
+                            focusOn3D();
+                        } else {
+                            _showNoRouteUI();
+                        }
+                    } else {
+                        console.warn('Could not build waypoints — location coordinates missing');
+                        _showNoRouteUI();
+                    }
                 }
             } else {
-                console.log('No routes found for this location');
-                alert('⚠️ No Navigation Route Found\n\nThis location does not have a manually created navigation route yet.\n\nPlease ask the administrator to create a route in the admin panel:\nAdmin → Navigation → Add Location with Path');
+                console.log('No routes found for this location — trying direct coord path');
+                // Attempt to draw a direct line to the selected location anyway
+                if (selectedLocation && selectedLocation.coordinates) {
+                    const dx = parseFloat(selectedLocation.coordinates.x);
+                    const dy = parseFloat(selectedLocation.coordinates.y);
+                    const dz = parseFloat(selectedLocation.coordinates.z);
+                    const gate = locations.find(l =>
+                        l.type === 'entrance' ||
+                        (l.name && (l.name.toLowerCase().includes('entrance') ||
+                                    l.name.toLowerCase().includes('gate') ||
+                                    l.name.toLowerCase().includes('main')))
+                    );
+                    const syntheticRoute = {
+                        name: 'Direct path',
+                        type: 'standard',
+                        path_color: '#F4D03F',
+                        waypoints: []
+                    };
+                    if (gate && gate.coordinates && !isNaN(parseFloat(gate.coordinates.x))) {
+                        syntheticRoute.waypoints.push({
+                            x: parseFloat(gate.coordinates.x),
+                            y: parseFloat(gate.coordinates.y),
+                            z: parseFloat(gate.coordinates.z)
+                        });
+                    }
+                    if (!isNaN(dx)) {
+                        syntheticRoute.waypoints.push({ x: dx, y: dy, z: dz });
+                    }
+                    if (syntheticRoute.waypoints.length >= 2) {
+                        drawSavedRoute(syntheticRoute);
+                        focusOn3D();
+                    } else {
+                        _showNoRouteUI();
+                    }
+                } else {
+                    _showNoRouteUI();
+                }
                 return;
             }
         } else {
             console.log('No routes found (HTTP', response.status, ')');
-            alert('⚠️ No Navigation Route Found\n\nThis location does not have a manually created navigation route yet.\n\nPlease ask the administrator to create a route in the admin panel:\nAdmin → Navigation → Add Location with Path');
+            _showNoRouteUI();
             return;
         }
         
@@ -1082,10 +1403,10 @@ async function getDirections() {
 
 // Draw saved route using waypoints
 async function drawSavedRoute(route) {
-    // Clear old paths
+    // Clear old paths before drawing the new one
     pathLines.forEach(line => scene.remove(line));
     pathLines = [];
-    pathParticles.forEach(p => scene.remove(p.mesh));
+    pathParticles.forEach(p => { scene.remove(p.mesh); if (p.tail) p.tail.forEach(b => scene.remove(b)); });
     pathParticles = [];
     
     // Convert waypoints to THREE.Vector3 positions
@@ -1113,46 +1434,49 @@ async function drawSavedRoute(route) {
         return;
     }
     
-    for (const waypoint of waypoints) {
-        // Check if waypoint is a coordinate object {x, y, z}
-        if (waypoint && typeof waypoint === 'object' && 
-            'x' in waypoint && 'y' in waypoint && 'z' in waypoint) {
-            const x = parseFloat(waypoint.x);
-            const y = parseFloat(waypoint.y);
-            const z = parseFloat(waypoint.z);
-            
-            if (!isNaN(x) && !isNaN(y) && !isNaN(z)) {
-                waypointPositions.push(new THREE.Vector3(x, y, z));
-                console.log(`Added waypoint: (${x}, ${y}, ${z})`);
-            } else {
-                console.warn('Invalid waypoint coordinates:', waypoint);
-            }
-        } 
-        // Fallback: if waypoint is a location ID (for backward compatibility)
-        else if (typeof waypoint === 'number') {
-            const loc = locations.find(l => l.id === waypoint);
-            if (loc && loc.coordinates) {
-                waypointPositions.push(new THREE.Vector3(
-                    loc.coordinates.x,
-                    loc.coordinates.y,
-                    loc.coordinates.z
-                ));
-                console.log(`Added waypoint from location ID ${waypoint}`);
-            } else {
-                console.warn('Location not found for waypoint ID:', waypoint);
-            }
-        } else {
-            console.warn('Unknown waypoint format:', waypoint);
+    // Shared parser handles all formats — null-y defaults to 0, no points silently dropped
+    const parsedPts = _parseWaypointArray(waypoints);
+    console.log(`[drawSavedRoute] ${parsedPts.length} / ${Array.isArray(waypoints) ? waypoints.length : '?'} waypoints parsed`);
+    parsedPts.forEach((v, i) => {
+        waypointPositions.push(v);
+        console.log(`  [${i}] (${v.x.toFixed(2)}, ${v.y.toFixed(2)}, ${v.z.toFixed(2)})`);
+    });
+    
+    if (waypointPositions.length < 2) {
+        console.error('Not enough valid waypoints:', waypointPositions.length, '— attempting fallback to location coords');
+        // Try one final fallback: use the selected location's own coordinates
+        if (waypointPositions.length === 1 && selectedLocation && selectedLocation.coordinates) {
+            const dx = parseFloat(selectedLocation.coordinates.x);
+            const dy = parseFloat(selectedLocation.coordinates.y);
+            const dz = parseFloat(selectedLocation.coordinates.z);
+            if (!isNaN(dx)) waypointPositions.push(new THREE.Vector3(dx, dy, dz));
+        }
+        if (waypointPositions.length < 2) {
+            console.error('Cannot draw path — not enough coords. Aborting.');
+            _showNoRouteUI();
+            return;
         }
     }
     
-    if (waypointPositions.length < 2) {
-        console.error('Not enough valid waypoints to draw route. Found:', waypointPositions.length);
-        alert('⚠️ Not enough waypoints to draw path. At least 2 waypoints are required.\n\nPlease recreate the route in the admin panel with more waypoints.');
-        return;
-    }
-    
     console.log('✅ Successfully created', waypointPositions.length, 'waypoint positions');
+
+    // ── Visible debug sphere at every waypoint ──────────────────────────────
+    // Makes it immediately obvious how many waypoints are being drawn and where.
+    // White = start, orange = intermediate, green = end.
+    waypointPositions.forEach((v, i) => {
+        const isFirst = i === 0;
+        const isLast  = i === waypointPositions.length - 1;
+        const col = isFirst ? 0xFFFFFF : (isLast ? 0x00FF88 : 0xFFAA00);
+        const r   = isFirst || isLast ? 1.4 : 0.9;
+        const dot = new THREE.Mesh(
+            new THREE.SphereGeometry(r, 10, 10),
+            new THREE.MeshBasicMaterial({ color: col, depthTest: false, depthWrite: false })
+        );
+        dot.position.copy(v);
+        dot.renderOrder = 1002;
+        scene.add(dot);
+        pathLines.push(dot); // tracked so it's cleaned up on next call
+    });
     
     // Create entrance marker at first waypoint
     if (waypointPositions.length > 0) {
@@ -1162,12 +1486,12 @@ async function drawSavedRoute(route) {
         const eg = new THREE.Group();
         const ec = new THREE.Mesh(
             new THREE.ConeGeometry(1.4, 6, 8),
-            new THREE.MeshStandardMaterial({
+            new THREE.MeshBasicMaterial({
                 color: 0x00FF00,
-                emissive: 0x00FF00,
-                emissiveIntensity: .5
+                depthTest: false, depthWrite: false,
             })
         );
+        ec.renderOrder = 1000;
         ec.position.y = 3;
         eg.add(ec);
         
@@ -1204,65 +1528,74 @@ async function drawSavedRoute(route) {
     // The particles will travel the whole path using a single CatmullRom with
     // tension=0 (which is effectively straight between evenly-spaced points).
 
-    // For the TUBE we draw straight LineCurve3 segments — no bending at all.
-    const TUBE_RADIUS      = 0.18;   // thin line
-    const GLOW_RADIUS      = 0.36;   // soft halo around line
-    const CORE_RADIUS      = 0.07;   // bright white core
-    const TUBE_SEGMENTS    = 12;     // enough for smooth caps
+    // Tube sizing — must be large enough to be visible over the 100-unit campus model.
+    // depthTest: false ensures the path always renders on top of building geometry.
+    const TUBE_RADIUS   = 0.55;   // visible over the building
+    const GLOW_RADIUS   = 1.1;    // soft halo
+    const CORE_RADIUS   = 0.22;   // bright white center
+    const TUBE_SEGMENTS = 14;
+    const PATH_ORDER    = 999;    // renderOrder — draw after everything else
 
     for (let i = 0; i < waypointPositions.length - 1; i++) {
         const seg = new THREE.LineCurve3(waypointPositions[i], waypointPositions[i + 1]);
 
-        // Main glowing tube
-        const tubeGeo  = new THREE.TubeGeometry(seg, TUBE_SEGMENTS, TUBE_RADIUS, 10, false);
-        const tubeMat  = new THREE.MeshStandardMaterial({
-            color: pathColor, emissive: pathColor,
-            emissiveIntensity: 0.9,
-            transparent: true, opacity: 0.85,
-            metalness: 0, roughness: 0.5
+        // Main glowing tube — depthTest:false so it shows over the building
+        const tubeGeo = new THREE.TubeGeometry(seg, TUBE_SEGMENTS, TUBE_RADIUS, 10, false);
+        const tubeMat = new THREE.MeshBasicMaterial({
+            color: pathColor,
+            transparent: true, opacity: 0.92,
+            depthTest: false,
+            depthWrite: false,
         });
         const tube = new THREE.Mesh(tubeGeo, tubeMat);
+        tube.renderOrder = PATH_ORDER;
         scene.add(tube);
         pathLines.push(tube);
 
-        // Soft outer glow shell
-        const glowGeo  = new THREE.TubeGeometry(seg, TUBE_SEGMENTS, GLOW_RADIUS, 10, false);
-        const glowMat  = new THREE.MeshBasicMaterial({
-            color: pathColor, transparent: true, opacity: 0.13
+        // Soft outer glow
+        const glowGeo = new THREE.TubeGeometry(seg, TUBE_SEGMENTS, GLOW_RADIUS, 10, false);
+        const glowMat = new THREE.MeshBasicMaterial({
+            color: pathColor,
+            transparent: true, opacity: 0.18,
+            depthTest: false, depthWrite: false,
         });
         const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+        glowMesh.renderOrder = PATH_ORDER - 1;
         scene.add(glowMesh);
         pathLines.push(glowMesh);
 
-        // Bright inner core
-        const coreGeo  = new THREE.TubeGeometry(seg, TUBE_SEGMENTS, CORE_RADIUS, 8, false);
-        const coreMat  = new THREE.MeshBasicMaterial({
-            color: 0xFFFFFF, transparent: true, opacity: 0.55
+        // Bright white core
+        const coreGeo = new THREE.TubeGeometry(seg, TUBE_SEGMENTS, CORE_RADIUS, 8, false);
+        const coreMat = new THREE.MeshBasicMaterial({
+            color: 0xFFFFFF,
+            transparent: true, opacity: 0.7,
+            depthTest: false, depthWrite: false,
         });
         const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+        coreMesh.renderOrder = PATH_ORDER + 1;
         scene.add(coreMesh);
         pathLines.push(coreMesh);
 
-        // Animated pulse per segment (slightly offset phase each segment)
+        // Animated pulse
         let pulseT = i * 0.4;
         (function pulse(tMat, gMat) {
             if (!pathLines.includes(tube)) return;
-            pulseT += 0.010;
-            tMat.emissiveIntensity = 0.80 + 0.20 * Math.sin(pulseT);
-            gMat.opacity           = 0.10 + 0.06 * Math.sin(pulseT * 0.8);
+            pulseT += 0.012;
+            tMat.opacity = 0.82 + 0.15 * Math.sin(pulseT);
+            gMat.opacity = 0.12 + 0.08 * Math.sin(pulseT * 0.8);
             requestAnimationFrame(() => pulse(tMat, gMat));
         })(tubeMat, glowMat);
 
-        // Smooth joint sphere at each interior waypoint
+        // Joint sphere at each interior waypoint
         if (i > 0) {
-            const jointGeo = new THREE.SphereGeometry(TUBE_RADIUS, 10, 10);
-            const jointMat = new THREE.MeshStandardMaterial({
-                color: pathColor, emissive: pathColor,
-                emissiveIntensity: 0.9,
-                transparent: true, opacity: 0.85
+            const jointMat = new THREE.MeshBasicMaterial({
+                color: pathColor,
+                transparent: true, opacity: 0.92,
+                depthTest: false, depthWrite: false,
             });
-            const joint = new THREE.Mesh(jointGeo, jointMat);
+            const joint = new THREE.Mesh(new THREE.SphereGeometry(TUBE_RADIUS * 1.1, 10, 10), jointMat);
             joint.position.copy(waypointPositions[i]);
+            joint.renderOrder = PATH_ORDER;
             scene.add(joint);
             pathLines.push(joint);
         }
@@ -1282,16 +1615,19 @@ async function drawSavedRoute(route) {
     for (let j = 0; j < NUM_PARTICLES; j++) {
 
         // Head
-        const headMat = new THREE.MeshStandardMaterial({
-            color: pathColor, emissive: pathColor,
-            emissiveIntensity: 1.6,
-            transparent: true, opacity: 0.98
+        const headMat = new THREE.MeshBasicMaterial({
+            color: 0xFFFFFF,
+            transparent: true, opacity: 0.98,
+            depthTest: false, depthWrite: false,
         });
         const head = new THREE.Mesh(new THREE.SphereGeometry(PARTICLE_R, 14, 14), headMat);
+        head.renderOrder = 1001;
 
-        // Glow halo (child of head, no extra scene.add needed)
+        // Glow halo
         const haloMat = new THREE.MeshBasicMaterial({
-            color: pathColor, transparent: true, opacity: 0.20
+            color: pathColor,
+            transparent: true, opacity: 0.30,
+            depthTest: false, depthWrite: false,
         });
         const halo = new THREE.Mesh(new THREE.SphereGeometry(GLOW_R, 14, 14), haloMat);
         head.add(halo);
@@ -1483,10 +1819,84 @@ window.debugCoordinates = function() {
     console.log('========================================\n');
 };
 
+// ============ DEBUG: VISUALIZE EVERY WAYPOINT ============
+// Call window.debugPaths() from the browser console to:
+//   1. Print every route + every raw waypoint from the DB
+//   2. Place a visible yellow sphere at each parsed waypoint on the 3D map
+window.debugPaths = async function() {
+    console.log('%c🛤️ debugPaths — fetching all routes...', 'font-weight:bold;color:#F4D03F;');
+
+    // Remove previous debug spheres
+    (window._debugSpheres || []).forEach(s => scene && scene.remove(s));
+    window._debugSpheres = [];
+
+    let allRoutes = [];
+    try {
+        const res = await fetch(`${API_HOST}/navigation-routes`);
+        allRoutes = await res.json();
+    } catch(e) {
+        console.error('Failed to fetch routes:', e);
+        return;
+    }
+
+    console.log(`Found ${allRoutes.length} route(s) in DB:`);
+
+    for (const route of allRoutes) {
+        const rawWps = route.waypoints;
+        const rawCount = _waypointCount(rawWps);
+        const parsed   = _parseWaypointArray(rawWps);
+
+        console.group(`Route #${route.id} "${route.name}" | start:${route.start_location_id} → end:${route.end_location_id}`);
+        console.log('  Raw waypoints count :', rawCount);
+        console.log('  Parsed count        :', parsed.length);
+        console.log('  Raw data            :', JSON.stringify(rawWps).slice(0, 300));
+        parsed.forEach((v, i) => console.log(`  [${i}] x:${v.x.toFixed(2)}  y:${v.y.toFixed(2)}  z:${v.z.toFixed(2)}`));
+        console.groupEnd();
+
+        // Place a visible yellow sphere at every parsed waypoint
+        if (scene) {
+            parsed.forEach((v, i) => {
+                const mat = new THREE.MeshBasicMaterial({
+                    color: i === 0 ? 0x00ff00 : (i === parsed.length - 1 ? 0xff0000 : 0xffff00),
+                    depthTest: false
+                });
+                const sphere = new THREE.Mesh(new THREE.SphereGeometry(1.5, 8, 8), mat);
+                sphere.position.copy(v);
+                sphere.renderOrder = 2000;
+                scene.add(sphere);
+                window._debugSpheres.push(sphere);
+            });
+        }
+    }
+
+    console.log('%c✅ Done — green=start, red=end, yellow=intermediate. Call debugPaths() again to refresh.', 'color:#0f0;');
+};
+
+// Also expose a quick route check for a specific location
+window.debugLocation = async function(locationId) {
+    console.log(`%c🔍 Routes for location ${locationId}`, 'font-weight:bold;color:#4A90E2;');
+    try {
+        const res = await fetch(`${API_HOST}/api/routes/for-location/${locationId}`);
+        const data = await res.json();
+        const routeList = Array.isArray(data) ? data : (data.routes || []);
+        console.log(`Found ${routeList.length} route(s):`);
+        routeList.forEach(r => {
+            const count = _waypointCount(r.waypoints);
+            const parsed = _parseWaypointArray(r.waypoints);
+            console.log(`  #${r.id} "${r.name}" — DB waypoints: ${count}, parsed: ${parsed.length}`);
+            console.log('  Raw:', JSON.stringify(r.waypoints).slice(0, 200));
+        });
+    } catch(e) {
+        console.error('Error:', e);
+    }
+};
+
 // Add helpful startup message
 console.log('%c🗺️ BSU Lipa Campus Navigator', 'font-size: 16px; font-weight: bold; color: #C93030;');
 console.log('%cDebug Tools Available:', 'font-size: 12px; font-weight: bold;');
 console.log('  → debugCoordinates() - Show all coordinate info');
+console.log('  → debugPaths()        - Visualize ALL route waypoints as colored spheres on the map');
+console.log('  → debugLocation(id)   - Check exact DB data for a specific location ID');
 console.log('  → Press F12 to see detailed loading logs');
 
 // ============ INIT ============

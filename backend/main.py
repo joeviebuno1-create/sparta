@@ -176,13 +176,27 @@ class SecurityMiddleware:
 
         # Run the inner app; if the client disconnects mid-response we
         # catch the resulting exceptions quietly so uvicorn stays clean.
+        response_started = False
+
+        async def send_tracking(message):
+            nonlocal response_started
+            if message["type"] == "http.response.start":
+                response_started = True
+            await send_with_headers(message)
+
         try:
-            await self.app(scope, receive, send_with_headers)
-        except Exception:
-            # Re-raise anything that isn't a client-disconnect noise.
-            # h11 LocalProtocolError is raised as a plain Exception
-            # subclass; we swallow it only when the connection is already gone.
-            pass
+            await self.app(scope, receive, send_tracking)
+        except Exception as exc:
+            # If the inner app raised before sending any response,
+            # send a clean 500 so ASGI doesn't crash with
+            # "ASGI callable returned without starting response".
+            import logging as _logging
+            _logging.getLogger("uvicorn.error").exception("Unhandled error in request handler")
+            if not response_started:
+                try:
+                    await self._send_json(send, 500, {"detail": "Internal server error"})
+                except Exception:
+                    pass  # client already disconnected — nothing we can do
 
     @staticmethod
     async def _send_json(send, status_code: int, body: dict):
@@ -340,8 +354,36 @@ BASE_DIR = os.path.join(BACKEND_DIR, "admin")  # backend/admin/
 
 from fastapi.responses import FileResponse
 
+# Admin files live in backend/admin/
+# User-facing frontend files live in ../frontend/ (sibling of backend/)
+FRONTEND_DIR = os.path.join(os.path.dirname(BACKEND_DIR), "frontend")
+
+# Files that belong to the admin panel (served from backend/admin/)
+ADMIN_FILES = {
+    "admin.html", "login.html",
+    "admin-script.js", "admin-styles.css",
+}
+
 def frontend_file(filename: str):
-    return FileResponse(os.path.join(BASE_DIR, filename))
+    """Serve a file from the correct directory based on whether it is an
+    admin/backend file or a user-facing frontend file."""
+    if filename in ADMIN_FILES:
+        path = os.path.join(BASE_DIR, filename)      # backend/admin/
+    else:
+        # Try frontend/ first, then fall back to backend/ and admin/
+        candidates = [
+            os.path.join(FRONTEND_DIR, filename),    # ../frontend/
+            os.path.join(BACKEND_DIR, filename),     # backend/
+            os.path.join(BASE_DIR, filename),        # backend/admin/
+        ]
+        path = next((p for p in candidates if os.path.exists(p)), None)
+        if path is None:
+            raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+        return FileResponse(path)
+
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+    return FileResponse(path)
 
 # ── HTML pages ──────────────────────────────────────────
 @app.get("/admin.html", response_class=HTMLResponse)
@@ -1227,7 +1269,18 @@ async def create_location(location: RoomLocationCreate, db: Session = Depends(ge
     db.commit()
     db.refresh(db_location)
     log_activity(db, "created", "location", db_location.id, f"Added location '{db_location.name}' ({db_location.building}, Floor {db_location.floor})")
-    return db_location
+    return {
+        "id": db_location.id,
+        "name": db_location.name,
+        "building": db_location.building,
+        "floor": db_location.floor,
+        "type": db_location.type,
+        "icon": db_location.icon,
+        "capacity": db_location.capacity,
+        "description": db_location.description,
+        "coordinates": db_location.coordinates,
+        "created_at": db_location.created_at.isoformat() if db_location.created_at else None,
+    }
 
 @admin_router.put("/locations/{location_id}")
 async def update_location(location_id: int, location: RoomLocationCreate, db: Session = Depends(get_db)):
@@ -1244,7 +1297,18 @@ async def update_location(location_id: int, location: RoomLocationCreate, db: Se
     db.commit()
     db.refresh(db_location)
     log_activity(db, "updated", "location", db_location.id, f"Updated location '{db_location.name}'")
-    return db_location
+    return {
+        "id": db_location.id,
+        "name": db_location.name,
+        "building": db_location.building,
+        "floor": db_location.floor,
+        "type": db_location.type,
+        "icon": db_location.icon,
+        "capacity": db_location.capacity,
+        "description": db_location.description,
+        "coordinates": db_location.coordinates,
+        "created_at": db_location.created_at.isoformat() if db_location.created_at else None,
+    }
 
 @admin_router.delete("/locations/{location_id}")
 async def delete_location(location_id: int, db: Session = Depends(get_db)):
