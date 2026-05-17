@@ -645,16 +645,18 @@
 // MOBILE UI PATCHES v2 — all mobile-only, desktop unaffected
 // ============================================================
 (function() {
-    if (typeof isMobile !== 'function' || !isMobile()) return;
+    // window.* functions always registered regardless of viewport
+    // Individual DOM functions guard with isMobile() internally
 
-    // ── 1. Override showSheetDetail → Parzellary floating card ──
+    // -- 1. Override showSheetDetail -> Parzellary floating card --
     var _orig = window.showSheetDetail;
     window.showSheetDetail = function(loc) {
-        if (isMobile()) _showMobileCard(loc);
+        if (typeof isMobile === 'function' && isMobile()) _showMobileCard(loc);
         else if (_orig) _orig(loc);
     };
 
     function _showMobileCard(loc) {
+        if (typeof isMobile === 'function' && !isMobile()) return;
         var card = document.getElementById('mobileLocCard');
         if (!card) return;
         document.getElementById('mlcIcon').textContent =
@@ -742,7 +744,7 @@
     var _origGetDir = window.getDirections;
     window.getDirections = function() {
         if (_origGetDir) _origGetDir.apply(this, arguments);
-        // After directions triggered, minimize the card
+        if (typeof isMobile !== 'function' || !isMobile()) return;
         var card = document.getElementById('mobileLocCard');
         if (card && card.classList.contains('show')) {
             card.classList.add('minimized');
@@ -751,9 +753,9 @@
 
     // ── 4. Content-aware sheet snap (issue 5) ────────────────────
     var _origRender = window.renderSheetLocList;
-    window.renderSheetLocList = function(locs) {
-        if (_origRender) _origRender(locs);
-        _autoSnapSheet();
+    window.renderSheetLocList = function(locs, containerId) {
+        if (_origRender) _origRender(locs, containerId);
+        if (typeof isMobile === 'function' && isMobile()) _autoSnapSheet();
     };
     function _autoSnapSheet() {
         var sheet = document.getElementById('mobileBottomSheet');
