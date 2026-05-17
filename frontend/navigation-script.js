@@ -292,12 +292,14 @@ function typeLabel(t) {
 }
 
 function buildFilterPills() {
-    // Deduplicate by normalised label so "classroom" and "classromm" merge
+    // Deduplicate by normalised label — exclude evac/exit (they live in Evac tab)
     const labelMap = {};
-    locations.forEach(l => {
-        const label = typeLabel(l.type);
-        if (!labelMap[label]) labelMap[label] = l.type; // keep first raw value
-    });
+    locations
+        .filter(l => l.type !== 'evacuation' && l.type !== 'exit')
+        .forEach(l => {
+            const label = typeLabel(l.type);
+            if (!labelMap[label]) labelMap[label] = l.type;
+        });
     const bar = document.getElementById('filterBar');
     let html = '<button class="filter-pill active" data-filter="all" onclick="applyFilter(\'all\',this)">All</button>';
     Object.entries(labelMap).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([label, rawType]) => {
@@ -336,10 +338,31 @@ function applyFloor(val, btn) {
     syncSheetPills();
 }
 
+// ============ TYPE → ICON MAP (matches Legend tab) ============
+function getTypeIcon(type) {
+    const m = {
+        classroom:'🏫', classromm:'🏫',
+        laboratory:'🔬', lab:'🔬',
+        office:'🏛️', admin:'🏛️',
+        library:'📚',
+        cafeteria:'🍽️',
+        gymnasium:'🏋️', gym:'🏋️',
+        clinic:'🏥',
+        restroom:'🚻', cr:'🚻', comfort_room:'🚻',
+        entrance:'🚪', exit:'🚪', evacuation:'🚨',
+        auditorium:'🎭', chapel:'⛪',
+        stairs:'🪜', hallway:'🚶',
+        conference:'📋', storage:'📦',
+    };
+    return m[type?.toLowerCase()] || null;
+}
+
 // ============ RENDER LOCATIONS ============
 function getFilteredLocations() {
     const activeLbl = activeTypeFilter !== 'all' ? typeLabel(activeTypeFilter) : 'all';
     return locations.filter(l => {
+        // Evac & exit entries belong in the Evac tab — keep Locations clean
+        if (l.type === 'evacuation' || l.type === 'exit') return false;
         if (activeTypeFilter !== 'all' && typeLabel(l.type) !== activeLbl) return false;
         if (activeFloorFilter !== 'all' && l.floor != activeFloorFilter) return false;
         return true;
@@ -363,7 +386,7 @@ function renderLocationsList() {
             const isFav = favorites.includes(loc.id);
             const a11y = loc.accessible ? '<span class="a11y-badge">♿ Accessible</span>' : '';
             html += `<div class="loc-item" data-id="${loc.id}" onclick="selectLocation(${loc.id},this)">
-                <span class="loc-icon">${loc.icon}</span>
+                <span class="loc-icon">${getTypeIcon(loc.type) || loc.icon || '📍'}</span>
                 <div style="flex:1;min-width:0;">
                     <div class="loc-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:.2rem;">${loc.name}${a11y}</div>
                     <div class="loc-sub">Floor ${loc.floor} · ${typeLabel(loc.type)}</div>
@@ -409,7 +432,7 @@ function renderNearby() {
 
     // Render as horizontal snap-scroll cards
     list.innerHTML = sorted.map(loc => {
-        const icon  = loc.icon || '📍';
+        const icon  = getTypeIcon(loc.type) || loc.icon || '📍';
         const floor = loc.floor != null ? `Floor ${loc.floor}` : '';
         const type  = loc.type || '';
         const sub   = [floor, type].filter(Boolean).join(' · ');
@@ -444,7 +467,7 @@ function renderFavorites() {
     favLocs.forEach(loc => {
         const a11y = loc.accessible ? '<span class="a11y-badge">♿ Accessible</span>' : '';
         html += `<div class="loc-item" onclick="selectLocation(${loc.id},this)">
-            <span class="loc-icon">${loc.icon}</span>
+            <span class="loc-icon">${getTypeIcon(loc.type) || loc.icon || '📍'}</span>
             <div style="flex:1;min-width:0;">
                 <div class="loc-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:.2rem;">${loc.name}${a11y}</div>
                 <div class="loc-sub">Floor ${loc.floor} · ${loc.type}</div>
@@ -472,18 +495,17 @@ function renderEvacExits() {
     
     let html = '';
     exits.forEach((loc, index) => {
-        const accessible = loc.accessible ? '<span class="evac-exit-badge">♿ Accessible</span>' : '';
         const isPrimary = index === 0 || loc.name.toLowerCase().includes('main');
-        const badge = isPrimary 
-            ? '<span class="evac-exit-badge">🟢 Primary Exit</span>' 
-            : '<span class="evac-exit-badge">🟡 Secondary Exit</span>';
-        
-        html += `<div class="evac-exit-item" onclick="selectLocation(${loc.id}, this)">
-            <div class="evac-exit-icon">${index + 1}</div>
-            <div class="evac-exit-info">
-                <div class="evac-exit-name">${loc.name}</div>
-                <div class="evac-exit-details">${loc.building || ''} ${loc.floor ? '· Floor ' + loc.floor : ''} ${loc.description ? '· ' + loc.description : ''}</div>
-                ${badge}${accessible}
+        const badge = isPrimary
+            ? '<span class="evac-primary-badge">🟢 Primary</span>'
+            : '<span class="evac-primary-badge evac-secondary-badge">🟡 Secondary</span>';
+        const accessible = loc.accessible ? '<span class="a11y-badge" style="font-size:9px;">♿</span>' : '';
+        html += `<div class="loc-item evac-loc-item" onclick="selectLocation(${loc.id}, this)">
+            <div class="evac-exit-num">${index + 1}</div>
+            <div style="flex:1;min-width:0;">
+                <div class="loc-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:.25rem;">${loc.name}${accessible}</div>
+                <div class="loc-sub">${loc.building || ''} ${loc.floor != null ? '· Floor ' + loc.floor : ''} ${loc.description ? '· ' + loc.description : ''}</div>
+                <div style="margin-top:3px;">${badge}</div>
             </div>
         </div>`;
     });
@@ -740,7 +762,7 @@ function renderSheetLocList(locs) {
             .filter(Boolean).join(' · ');
         const isFav = favorites.includes(loc.id);
         return `<div class="sheet-loc-item" onclick="selectLocation(${loc.id}, this)">
-            <span class="loc-icon">${loc.icon || '📍'}</span>
+            <span class="loc-icon">${getTypeIcon(loc.type) || loc.icon || '📍'}</span>
             <div style="flex:1;min-width:0;">
                 <div class="loc-name">${loc.name}</div>
                 <div class="loc-sub">${sub}</div>
@@ -773,11 +795,11 @@ function renderSheetExitsList() {
         return;
     }
     container.innerHTML = exits.map((loc, i) => `
-        <div class="evac-exit-item" onclick="selectLocation(${loc.id},this)">
-            <div class="evac-exit-icon">${i+1}</div>
-            <div class="evac-exit-info">
-                <div class="evac-exit-name">${loc.name}</div>
-                <div class="evac-exit-details">${loc.building||''} ${loc.floor!=null?'· Floor '+loc.floor:''}</div>
+        <div class="loc-item evac-loc-item" onclick="selectLocation(${loc.id},this)">
+            <div class="evac-exit-num">${i + 1}</div>
+            <div style="flex:1;min-width:0;">
+                <div class="loc-name">${loc.name}</div>
+                <div class="loc-sub">${loc.building||''} ${loc.floor!=null?'· Floor '+loc.floor:''}</div>
             </div>
         </div>`).join('');
 }
@@ -853,7 +875,7 @@ function liveSearch(val) {
         ? hits.slice(0,8).map(l =>
             `<div class="sr-item" onclick="selectLocation(${l.id});clearSearch()">
                 ${l.accessible ? '<span class="a11y-badge" style="float:right;">♿</span>' : ''}
-                <div class="sr-name">${l.icon||'📍'} ${l.name}</div>
+                <div class="sr-name">${getTypeIcon(l.type) || l.icon || '📍'} ${l.name}</div>
                 <div class="sr-sub">${l.building||''} · Floor ${l.floor}</div>
             </div>`).join('')
         : `<div class="sr-item" style="text-align:center;padding:1rem;color:#999;">
@@ -901,7 +923,7 @@ function handleSearch(e) {
     if (!locations.length) { rd.innerHTML='<div class="sr-item" style="text-align:center;padding:1.2rem;color:#999;font-size:.78rem;">No locations available</div>'; rd.classList.add('show'); return; }
     const hits = locations.filter(l => l.name.toLowerCase().includes(q)||l.building.toLowerCase().includes(q)||l.type.toLowerCase().includes(q));
     rd.innerHTML = hits.length
-        ? hits.map(l=>`<div class="sr-item" onclick="selectLocation(${l.id})">${l.accessible?'<span class="a11y-badge" style="float:right;">♿</span>':''}<div class="sr-name">${l.icon} ${l.name}</div><div class="sr-sub">${l.building} · Floor ${l.floor}</div></div>`).join('')
+        ? hits.map(l=>`<div class="sr-item" onclick="selectLocation(${l.id})">${l.accessible?'<span class="a11y-badge" style="float:right;">♿</span>':''}<div class="sr-name">${getTypeIcon(l.type) || l.icon || '📍'} ${l.name}</div><div class="sr-sub">${l.building} · Floor ${l.floor}</div></div>`).join('')
         : `<div class="sr-item" style="text-align:center;padding:1rem;color:#999;"><div style="font-size:1.3rem;">🔍</div><div style="font-size:.76rem;margin-top:.25rem;">No results for "${e.target.value}"</div></div>`;
     rd.classList.add('show');
 }

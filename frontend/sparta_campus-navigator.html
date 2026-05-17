@@ -43,17 +43,14 @@
     <button class="tab-btn active" onclick="switchTab('locations',this)">
       <span class="t-icon">📍</span>Locations
     </button>
-    <button class="tab-btn" onclick="switchTab('favorites',this)">
-      <span class="t-icon">⭐</span>Favs
-    </button>
     <button class="tab-btn evac-tab" onclick="switchTab('evacuation',this)">
       <span class="t-icon">🚨</span>Evac
     </button>
+    <button class="tab-btn" onclick="switchTab('favorites',this)">
+      <span class="t-icon">⭐</span>Favs
+    </button>
     <button class="tab-btn" onclick="switchTab('legend',this)">
       <span class="t-icon">🗺️</span>Legend
-    </button>
-    <button class="tab-btn" onclick="switchTab('about',this)">
-      <span class="t-icon">ℹ️</span>About
     </button>
   </div>
 
@@ -81,15 +78,7 @@
       </div>
     </div>
 
-    <!-- Nearby — sticky bottom card -->
-    <div class="nearby-bottom-card" id="nearbySection" style="display:none;">
-      <div class="nearby-bottom-header">
-        <span class="nearby-bottom-icon">📍</span>
-        <span class="nearby-bottom-title">Nearest to Main Entrance</span>
-        <button class="nearby-bottom-close" onclick="document.getElementById('nearbySection').style.display='none'" title="Dismiss">✕</button>
-      </div>
-      <div class="nearby-scroll" id="nearbyList"></div>
-    </div>
+
   </div>
 
   <!-- ---- FAVORITES TAB ---- -->
@@ -138,45 +127,19 @@
     </div>
   </div>
 
-  <!-- ---- ABOUT TAB ---- -->
-  <div class="tab-panel" id="tab-about">
-    <div class="about-inner">
-      <div class="about-hero">
-        <h3>SPARTA</h3>
-        <p>Smart Campus Companion</p>
-      </div>
-      <div class="about-section">
-        <div class="about-section-title">How To Use</div>
-        <div class="about-item"><span class="ab-bullet">1</span>Search or tap a location in the list</div>
-        <div class="about-item"><span class="ab-bullet">2</span>The location panel appears on the map</div>
-        <div class="about-item"><span class="ab-bullet">3</span>Tap <strong>Get Directions</strong> to draw the route</div>
-        <div class="about-item"><span class="ab-bullet">4</span>View distance and time in the route card</div>
-        <div class="about-item"><span class="ab-bullet">5</span>Tap ✕ Clear Route to reset</div>
-        <div class="about-item"><span class="ab-bullet">6</span>Tap 🚨 Evac for emergency routes</div>
-      </div>
-      <div class="about-section">
-        <div class="about-section-title">About</div>
-        <div class="about-item"><span class="ab-bullet">›</span>Interactive 3D campus map of BSU Lipa</div>
-        <div class="about-item"><span class="ab-bullet">›</span>Real-time location search &amp; pinning</div>
-        <div class="about-item"><span class="ab-bullet">›</span>Paths from Main Gate to any destination</div>
-        <div class="about-item"><span class="ab-bullet">›</span>Favorites, filters &amp; floor selection</div>
-      </div>
-      <div class="about-section">
-        <div class="about-section-title">Contact</div>
-        <div class="about-item"><span class="ab-bullet">›</span>Batangas State University – The NEU, Lipa Campus</div>
-        <div class="about-item"><span class="ab-bullet">›</span>Lipa City, Batangas, Philippines</div>
-      </div>
-    </div>
-  </div>
 
   <!-- ---- EVACUATION TAB ---- -->
   <div class="tab-panel" id="tab-evacuation">
     <div class="evac-inner">
-      <div class="evac-alert">
-        <div class="ea-icon">🚨</div>
-        <h3>EMERGENCY EVACUATION</h3>
-        <p>Know your nearest emergency exits</p>
+      <!-- Compact orange banner -->
+      <div class="evac-compact-banner">
+        <span class="evac-compact-icon">🚨</span>
+        <div>
+          <div class="evac-compact-title">Emergency Evacuation</div>
+          <div class="evac-compact-sub">Know your nearest emergency exits</div>
+        </div>
       </div>
+      <!-- Procedures -->
       <div class="evac-section">
         <div class="evac-section-title"><span>📋</span> Evacuation Procedures</div>
         <div class="evac-info-box">
@@ -187,6 +150,7 @@
           <p><strong>5. Wait for Instructions:</strong> Do not re-enter until authorized.</p>
         </div>
       </div>
+      <!-- Emergency contacts -->
       <div class="evac-section">
         <div class="evac-section-title"><span>📞</span> Emergency Contacts</div>
         <div class="evac-info-box">
@@ -196,6 +160,7 @@
           <p><strong>Fire Department:</strong> (043) 756-1234</p>
         </div>
       </div>
+      <!-- Exit list — populated by renderEvacExits() -->
       <div class="evac-section">
         <div class="evac-section-title"><span>🚪</span> Emergency Exits</div>
         <div id="emergencyExitsList">
@@ -376,19 +341,19 @@
     <div class="sheet-handle"></div>
   </div>
 
-  <!-- Pill tabs — exactly like Parzellary: filled pill for active -->
+  <!-- Pill tabs — exactly like ParPill tabs -->
   <div class="sheet-tab-bar" id="sheetTabBar">
     <button class="sheet-tab-btn active" onclick="switchSheetTab('locations',this)">
       📍 Locations
     </button>
-    <button class="sheet-tab-btn" onclick="switchSheetTab('favorites',this)">
-      ⭐ Saved
-    </button>
     <button class="sheet-tab-btn evac-tab" onclick="switchSheetTab('evacuation',this)">
       🚨 Evac
     </button>
-    <button class="sheet-tab-btn" onclick="switchSheetTab('about',this)">
-      ☰ More
+    <button class="sheet-tab-btn" onclick="switchSheetTab('favorites',this)">
+      ⭐ Saved
+    </button>
+    <button class="sheet-tab-btn" onclick="switchSheetTab('legend',this)">
+      🗺️ Legend
     </button>
   </div>
 
@@ -453,15 +418,28 @@
     <!-- Evacuation panel -->
     <div class="sheet-panel" id="sheet-panel-evacuation">
       <div class="evac-inner" style="padding:.75rem;">
-        <div class="evac-alert">
-          <div class="ea-icon">🚨</div>
-          <h3>EMERGENCY EVACUATION</h3>
-          <p>Know your nearest emergency exits</p>
+        <div class="evac-compact-banner">
+          <span class="evac-compact-icon">🚨</span>
+          <div>
+            <div class="evac-compact-title">Emergency Evacuation</div>
+            <div class="evac-compact-sub">Know your nearest emergency exits</div>
+          </div>
+        </div>
+        <div class="evac-section">
+          <div class="evac-section-title"><span>📋</span> Evacuation Procedures</div>
+          <div class="evac-info-box">
+            <p><strong>1. Stay Calm:</strong> Follow instructions from faculty or emergency personnel.</p>
+            <p><strong>2. Use Nearest Exit:</strong> Proceed to the closest safe exit. Do not use elevators.</p>
+            <p><strong>3. Assembly Point:</strong> Gather at the open field near Main Gate.</p>
+            <p><strong>4. Account for Everyone:</strong> Faculty will conduct headcount.</p>
+            <p><strong>5. Wait for Instructions:</strong> Do not re-enter until authorized.</p>
+          </div>
         </div>
         <div class="evac-section">
           <div class="evac-section-title"><span>📞</span> Emergency Contacts</div>
           <div class="evac-info-box">
             <p><strong>Campus Security:</strong> (043) 756-5555 local 101</p>
+            <p><strong>Medical Clinic:</strong> (043) 756-5555 local 201</p>
             <p><strong>Lipa City Emergency:</strong> 911</p>
             <p><strong>Fire Department:</strong> (043) 756-1234</p>
           </div>
@@ -490,24 +468,7 @@
       </div>
     </div>
 
-    <!-- About panel -->
-    <div class="sheet-panel" id="sheet-panel-about">
-      <div class="about-inner">
-        <div class="about-hero"><h3>SPARTA</h3><p>Smart Campus Companion</p></div>
-        <div class="about-section">
-          <div class="about-section-title">How To Use</div>
-          <div class="about-item"><span class="ab-bullet">1</span>Search or tap a location in the list</div>
-          <div class="about-item"><span class="ab-bullet">2</span>Tap <strong>Get Directions</strong> to draw the route</div>
-          <div class="about-item"><span class="ab-bullet">3</span>View distance and time in the route card</div>
-          <div class="about-item"><span class="ab-bullet">4</span>Tap ✕ Clear to reset the route</div>
-        </div>
-        <div class="about-section">
-          <div class="about-section-title">Contact</div>
-          <div class="about-item"><span class="ab-bullet">›</span>BSU – The NEU, Lipa Campus</div>
-          <div class="about-item"><span class="ab-bullet">›</span>Lipa City, Batangas, Philippines</div>
-        </div>
-      </div>
-    </div>
+
 
   </div><!-- /sheet-content -->
 </div><!-- /mobile-bottom-sheet -->
@@ -538,11 +499,11 @@
     </svg>
     <span class="bn-label">Evac</span>
   </button>
-  <button class="bottom-nav-btn" onclick="switchSheetTab('about',this); expandSheet('mid')">
+  <button class="bottom-nav-btn" onclick="switchSheetTab('legend',this); expandSheet('mid')">
     <svg class="bn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
     </svg>
-    <span class="bn-label">More</span>
+    <span class="bn-label">Legend</span>
   </button>
 </div>
 

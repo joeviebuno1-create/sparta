@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About SPARTA - BSU Lipa</title>
+    <link rel="icon" type="image/png" href="https://sparta-production-0acb.up.railway.app/images/logo.png">
+    <link rel="apple-touch-icon" href="https://sparta-production-0acb.up.railway.app/images/logo.png">
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --sparta-red:      #E6392F;
+            --sparta-deep-red: #8B0000;
+            --sparta-gold:     #F7C21B;
+            --sparta-cream:    #FFF7E6;
+            --sparta-black:    #111111;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        html { opacity:0; transition:opacity 0.22s ease; }
+        html.page-ready { opacity:1; }
+
+        body { font-family:'Sora',sans-serif; background:#f5f5f5; color:var(--sparta-black); overflow-x:hidden; }
+
+        /* ── Back bar ── */
+        .back-bar {
+            position:fixed; top:0; left:0; right:0; z-index:100;
+            padding:0.65rem 1.2rem;
+            padding-top:max(0.65rem, env(safe-area-inset-top,0px));
+            background:rgba(230,57,47,0.97);
+            backdrop-filter:blur(12px);
+            -webkit-backdrop-filter:blur(12px);
+            display:flex; align-items:center; gap:0.75rem;
+            box-shadow:0 2px 12px rgba(0,0,0,0.15);
+        }
+        .back-btn {
+            display:inline-flex; align-items:center; gap:6px;
+            padding:6px 14px 6px 10px;
+            background:rgba(255,255,255,0.15); border:1.5px solid rgba(255,255,255,0.4);
+            border-radius:50px; text-decoration:none; color:#fff;
+            font-size:13px; font-weight:700; font-family:'Sora',sans-serif;
+            transition:background 0.18s, transform 0.18s; cursor:pointer;
+        }
+        .back-btn:hover { background:rgba(255,255,255,0.25); transform:translateX(-2px); }
+        .back-bar-title { font-size:14px; font-weight:700; color:rgba(255,255,255,0.92); letter-spacing:0.02em; }
+
+        /* ── Hero ── */
+        .hero {
+            background:linear-gradient(135deg, var(--sparta-red) 0%, var(--sparta-deep-red) 100%);
+            padding:5.5rem 2rem 3rem; text-align:center; position:relative; overflow:hidden;
+        }
+        .hero::before {
+            content:''; position:absolute; top:-40%; right:-15%;
+            width:500px; height:500px;
+            background:radial-gradient(circle, rgba(247,194,27,0.18) 0%, transparent 70%);
+            border-radius:50%; animation:float 7s ease-in-out infinite;
+        }
+        @keyframes float { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-20px,-20px)} }
+
+        .hero-content { position:relative; z-index:1; max-width:680px; margin:0 auto; }
+        .hero-logo {
+            width:100px; height:100px; border-radius:50%; margin:0 auto 1.25rem;
+            box-shadow:0 12px 40px rgba(0,0,0,0.3);
+            animation:pulseLogo 2.5s ease-in-out infinite;
+        }
+        @keyframes pulseLogo { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
+        .hero h1 { font-size:2.6rem; font-weight:800; color:#fff; letter-spacing:0.05em; margin-bottom:0.5rem; }
+        .hero-tagline { font-size:1rem; color:rgba(255,255,255,0.88); font-weight:400; margin-bottom:0.5rem; }
+        .hero-version { display:inline-block; background:rgba(247,194,27,0.2); border:1.5px solid rgba(247,194,27,0.5); color:var(--sparta-gold); font-size:0.75rem; font-weight:700; padding:4px 14px; border-radius:50px; letter-spacing:0.05em; }
+
+        /* ── Container ── */
+        .container { max-width:960px; margin:0 auto; padding:0 1.5rem; }
+
+        .section { padding:3rem 0 1.5rem; }
+        .section-title {
+            font-size:1.5rem; font-weight:800; color:var(--sparta-black);
+            margin-bottom:1.5rem; position:relative; padding-bottom:0.65rem;
+        }
+        .section-title::after {
+            content:''; position:absolute; bottom:0; left:0;
+            width:40px; height:3px; background:var(--sparta-red); border-radius:99px;
+        }
+
+        /* ── Feature pills ── */
+        .feature-row { display:flex; flex-wrap:wrap; gap:0.75rem; margin-bottom:2rem; }
+        .feature-pill {
+            display:flex; align-items:center; gap:0.55rem;
+            background:#fff; border:1px solid rgba(0,0,0,0.07);
+            border-radius:12px; padding:0.75rem 1rem;
+            box-shadow:0 2px 8px rgba(0,0,0,0.06);
+            flex:1; min-width:160px;
+        }
+        .fp-icon { font-size:1.4rem; flex-shrink:0; }
+        .fp-label { font-size:0.82rem; font-weight:700; color:var(--sparta-black); }
+        .fp-desc  { font-size:0.72rem; color:#666; margin-top:2px; }
+
+        /* ── Tech stack ── */
+        .tech-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:1rem; }
+        .tech-card {
+            background:#fff; border-radius:12px; padding:1rem 1.1rem;
+            border-left:3px solid var(--sparta-red);
+            box-shadow:0 2px 8px rgba(0,0,0,0.06);
+        }
+        .tech-card h4 { font-size:0.78rem; font-weight:800; color:var(--sparta-red); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.5rem; }
+        .tech-item { font-size:0.8rem; color:#444; padding:3px 0; line-height:1.5; }
+        .tech-item::before { content:'›'; margin-right:6px; color:var(--sparta-red); font-weight:700; }
+
+        /* ── Team ── */
+        .team-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem; }
+        .team-card {
+            background:#fff; border-radius:14px; padding:1.25rem 1rem; text-align:center;
+            box-shadow:0 2px 10px rgba(0,0,0,0.07); border:1px solid rgba(0,0,0,0.06);
+            transition:transform 0.2s, box-shadow 0.2s;
+        }
+        .team-card:hover { transform:translateY(-3px); box-shadow:0 8px 24px rgba(0,0,0,0.1); }
+        .team-avatar {
+            width:80px; height:80px; border-radius:50%; margin:0 auto 0.75rem;
+            background:linear-gradient(135deg,var(--sparta-red),var(--sparta-deep-red));
+            display:flex; align-items:center; justify-content:center;
+            overflow:hidden;
+            box-shadow:0 4px 12px rgba(230,57,47,0.3);
+            position:relative;
+        }
+        .team-avatar img {
+            width:100%; height:100%; object-fit:cover;
+            border-radius:50%;
+            display:block;
+        }
+        .team-initials {
+            font-size:1.35rem; color:#fff; font-weight:800;
+            display:flex; align-items:center; justify-content:center;
+            width:100%; height:100%;
+            position:absolute; inset:0;
+        }
+        .team-name   { font-size:0.88rem; font-weight:700; color:var(--sparta-black); margin-bottom:2px; }
+        .team-role   { font-size:0.72rem; color:var(--sparta-red); font-weight:600; margin-bottom:4px; }
+        .team-course { font-size:0.68rem; color:#888; }
+
+        /* ── University info ── */
+        .uni-card {
+            background:linear-gradient(135deg,var(--sparta-red),var(--sparta-deep-red));
+            color:#fff; border-radius:16px; padding:1.75rem;
+            display:flex; gap:1.25rem; align-items:flex-start;
+            box-shadow:0 4px 20px rgba(230,57,47,0.3);
+        }
+        .uni-logo { width:70px; height:70px; border-radius:50%; flex-shrink:0; border:2px solid rgba(255,255,255,0.3); }
+        .uni-info h3 { font-size:1rem; font-weight:800; margin-bottom:4px; }
+        .uni-info p  { font-size:0.8rem; opacity:0.88; line-height:1.6; }
+
+        /* ── Footer ── */
+        .page-footer { background:var(--sparta-black); color:rgba(255,255,255,0.5); text-align:center; padding:1.5rem; font-size:0.78rem; margin-top:3rem; }
+        .page-footer a { color:var(--sparta-gold); text-decoration:none; }
+
+        /* ── Responsive ── */
+        @media (max-width:600px) {
+            .hero h1 { font-size:2rem; }
+            .hero { padding:5rem 1.25rem 2.5rem; }
+            .section-title { font-size:1.25rem; }
+            .uni-card { flex-direction:column; align-items:center; text-align:center; }
+        }
+        @media (max-width:380px) {
+            .hero h1 { font-size:1.7rem; }
+            .feature-pill { min-width:140px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="back-bar">
+        <a href="sparta_main_menu.html" class="back-btn">
+            <span>←</span><span>Back</span>
+        </a>
+        <span class="back-bar-title">About SPARTA</span>
+    </div>
+
+    <div class="hero">
+        <div class="hero-content">
+            <img src="https://sparta-production-0acb.up.railway.app/images/logo.png" alt="BSU Logo" class="hero-logo">
+            <h1>SPARTA</h1>
+            <p class="hero-tagline">Smart Campus Companion Portal · BSU Lipa</p>
+            <span class="hero-version">v1.0 · 2025</span>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <!-- What is SPARTA -->
+        <section class="section">
+            <h2 class="section-title">What is SPARTA?</h2>
+            <p style="font-size:0.92rem;color:#444;line-height:1.75;margin-bottom:1.5rem;">
+                SPARTA is an intelligent campus companion portal for Batangas State University — The National Engineering University, Lipa Campus. It helps students and visitors navigate the campus with a 3D interactive map, get instant answers through an AI-powered chatbot, and stay informed with real-time announcements.
+            </p>
+            <div class="feature-row">
+                <div class="feature-pill">
+                    <span class="fp-icon">🗺️</span>
+                    <div><div class="fp-label">Navigate</div><div class="fp-desc">3D campus map with directions</div></div>
+                </div>
+                <div class="feature-pill">
+                    <span class="fp-icon">💬</span>
+                    <div><div class="fp-label">Ask</div><div class="fp-desc">RAG-powered AI assistant</div></div>
+                </div>
+                <div class="feature-pill">
+                    <span class="fp-icon">📢</span>
+                    <div><div class="fp-label">Discover</div><div class="fp-desc">Announcements & events</div></div>
+                </div>
+                <div class="feature-pill">
+                    <span class="fp-icon">🚨</span>
+                    <div><div class="fp-label">Safety</div><div class="fp-desc">Emergency exit routing</div></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tech Stack -->
+        <section class="section">
+            <h2 class="section-title">Built With</h2>
+            <div class="tech-grid">
+                <div class="tech-card">
+                    <h4>Frontend</h4>
+                    <div class="tech-item">HTML5 / CSS3 / JavaScript</div>
+                    <div class="tech-item">Three.js (3D campus map)</div>
+                    <div class="tech-item">Sora — Google Fonts</div>
+                </div>
+                <div class="tech-card">
+                    <h4>Backend</h4>
+                    <div class="tech-item">Python / FastAPI</div>
+                    <div class="tech-item">RAG (Retrieval-Augmented Gen.)</div>
+                    <div class="tech-item">OpenAI API</div>
+                </div>
+                <div class="tech-card">
+                    <h4>Infrastructure</h4>
+                    <div class="tech-item">Railway (deployment)</div>
+                    <div class="tech-item">PostgreSQL (database)</div>
+                    <div class="tech-item">Blender (3D model)</div>
+                </div>
+                <div class="tech-card">
+                    <h4>Features</h4>
+                    <div class="tech-item">Voice input (Web Speech API)</div>
+                    <div class="tech-item">Text-to-speech</div>
+                    <div class="tech-item">Bilingual EN / TL</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Development Team -->
+        <section class="section">
+            <h2 class="section-title">Development Team</h2>
+            <div class="team-grid">
+                <div class="team-card">
+                    <div class="team-avatar" id="avatar-alvarez">
+                        <img src="images/team/alvarez.jpg" alt="Christopher Alvarez"
+                             onerror="this.style.display='none';document.getElementById('init-alvarez').style.display='flex'">
+                        <span class="team-initials" id="init-alvarez">CA</span>
+                    </div>
+                    <div class="team-name">Christopher K. Alvarez</div>
+                    <div class="team-role">Developer</div>
+                    <div class="team-course">BS Information Technology</div>
+                </div>
+                <div class="team-card">
+                    <div class="team-avatar" id="avatar-brucal">
+                        <img src="images/team/brucal.jpg" alt="Lloyd Brucal"
+                             onerror="this.style.display='none';document.getElementById('init-brucal').style.display='flex'">
+                        <span class="team-initials" id="init-brucal">LB</span>
+                    </div>
+                    <div class="team-name">Lloyd O. Brucal</div>
+                    <div class="team-role">Developer</div>
+                    <div class="team-course">BS Information Technology</div>
+                </div>
+                <div class="team-card">
+                    <div class="team-avatar" id="avatar-buno">
+                        <img src="images/team/buno.jpg" alt="Joevie Buno"
+                             onerror="this.style.display='none';document.getElementById('init-buno').style.display='flex'">
+                        <span class="team-initials" id="init-buno">JB</span>
+                    </div>
+                    <div class="team-name">Joevie C. Buno</div>
+                    <div class="team-role">Developer</div>
+                    <div class="team-course">BS Information Technology</div>
+                </div>
+                <div class="team-card">
+                    <div class="team-avatar" id="avatar-danuco">
+                        <img src="images/team/danuco.jpg" alt="John Denver Danuco"
+                             onerror="this.style.display='none';document.getElementById('init-danuco').style.display='flex'">
+                        <span class="team-initials" id="init-danuco">JD</span>
+                    </div>
+                    <div class="team-name">John Denver G. Danuco</div>
+                    <div class="team-role">Developer</div>
+                    <div class="team-course">BS Information Technology</div>
+                </div>
+                <div class="team-card">
+                    <div class="team-avatar" id="avatar-mendoza">
+                        <img src="images/team/mendoza.jpg" alt="Christian Mendoza"
+                             onerror="this.style.display='none';document.getElementById('init-mendoza').style.display='flex'">
+                        <span class="team-initials" id="init-mendoza">CM</span>
+                    </div>
+                    <div class="team-name">Christian C. Mendoza</div>
+                    <div class="team-role">Developer</div>
+                    <div class="team-course">BS Information Technology</div>
+                </div>
+            </div>
+            <p style="font-size:0.75rem;color:#999;margin-top:1rem;text-align:center;">
+                Developed under the College of Engineering — BSU Lipa Campus, 2025
+            </p>
+        </section>
+
+        <!-- University -->
+        <section class="section">
+            <h2 class="section-title">About BSU Lipa</h2>
+            <div class="uni-card">
+                <img src="https://sparta-production-0acb.up.railway.app/images/logo.png" alt="BSU Logo" class="uni-logo">
+                <div class="uni-info">
+                    <h3>Batangas State University — The National Engineering University</h3>
+                    <p>Lipa Campus · Lipa City, Batangas, Philippines<br>
+                    One of the premier state universities in the Philippines, committed to providing quality education in engineering, technology, and sciences. BSU Lipa is dedicated to producing globally competitive graduates.</p>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <div class="page-footer">
+        SPARTA · Batangas State University Lipa Campus · 2025 &nbsp;|&nbsp;
+        <a href="sparta_main_menu.html">← Back to Main Menu</a>
+    </div>
+
+    <script>
+        (function(){
+            window.addEventListener('DOMContentLoaded', function(){
+                document.documentElement.classList.add('page-ready');
+            });
+            document.addEventListener('click', function(e){
+                var a = e.target.closest('a[href]');
+                if(a && !a.target && !e.ctrlKey && !e.metaKey && a.hostname === location.hostname){
+                    e.preventDefault();
+                    var href = a.href;
+                    document.documentElement.style.opacity = '0';
+                    setTimeout(function(){ location.href = href; }, 220);
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

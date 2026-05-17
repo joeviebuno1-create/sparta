@@ -205,6 +205,7 @@ input, textarea,
   display: flex; flex-shrink: 0;
   background: #f8f9fb;
   border-bottom: 1px solid var(--border);
+  padding: 0;
 }
 .tab-btn {
   flex: 1; padding: 0.56rem 0;
@@ -405,6 +406,72 @@ input, textarea,
 .evac-warning { background: #fef7f0; border: 1.5px solid rgba(230,126,34,0.22); border-radius: var(--radius-sm); padding: 0.55rem 0.65rem; margin-top: 0.6rem; display: flex; gap: 0.45rem; align-items: flex-start; }
 .evac-warning-icon { font-size: 0.95rem; flex-shrink: 0; }
 .evac-warning-text { font-size: 0.66rem; color: #9a3412; line-height: 1.45; }
+
+/* ── New evac tab branding — matches Locations layout, orange accent ── */
+.evac-compact-banner {
+  display: flex; align-items: center; gap: 0.6rem;
+  background: linear-gradient(135deg, var(--evac), var(--evac-dark));
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.75rem;
+  margin-bottom: 0.6rem;
+  color: #fff;
+}
+.evac-compact-icon { font-size: 1.4rem; flex-shrink: 0; }
+.evac-compact-title { font-size: 0.78rem; font-weight: 800; letter-spacing: 0.02em; }
+.evac-compact-sub   { font-size: 0.62rem; opacity: 0.88; margin-top: 1px; }
+
+.evac-contacts-row {
+  display: flex; gap: 0.4rem; flex-wrap: wrap;
+  margin-bottom: 0.65rem;
+}
+.evac-contact-chip {
+  display: flex; align-items: center; gap: 0.38rem;
+  background: var(--evac-bg);
+  border: 1.5px solid rgba(230,126,34,0.2);
+  border-radius: var(--radius-sm);
+  padding: 0.38rem 0.55rem;
+  flex: 1; min-width: 120px;
+}
+.evac-contact-chip > span { font-size: 0.95rem; flex-shrink: 0; }
+.ecc-label { font-size: 0.58rem; font-weight: 800; color: var(--evac-dark); text-transform: uppercase; letter-spacing: 0.4px; }
+.ecc-val   { font-size: 0.62rem; color: var(--text-2); margin-top: 1px; }
+
+.evac-list-label {
+  font-size: 0.6rem; font-weight: 800;
+  color: var(--evac); text-transform: uppercase;
+  letter-spacing: 0.5px; margin-bottom: 0.38rem;
+  padding: 0 0.05rem;
+}
+
+/* Evac exit items — loc-item style with orange accents */
+.evac-loc-item { cursor: pointer; }
+.evac-loc-item:hover { border-color: rgba(230,126,34,0.35); background: var(--evac-bg); }
+.evac-loc-item:active { opacity: 0.75; }
+.evac-loc-item.active {
+  background: linear-gradient(135deg, var(--evac), var(--evac-dark));
+  border-color: transparent;
+}
+.evac-loc-item.active .loc-name,
+.evac-loc-item.active .loc-sub { color: #fff; }
+
+/* Numbered circle for evac items */
+.evac-exit-num {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--evac);
+  color: #fff;
+  font-size: 0.72rem; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.evac-loc-item.active .evac-exit-num { background: rgba(255,255,255,0.25); }
+
+/* Primary / Secondary badges */
+.evac-primary-badge {
+  font-size: 0.62rem; font-weight: 700;
+  color: var(--evac-dark);
+}
+.evac-secondary-badge { color: var(--text-3); }
 
 /* =====================================================
    TOP NAV
@@ -840,12 +907,14 @@ input, textarea,
 
 /* Horizontal scroll row of nearby items */
 .nearby-scroll {
-  display: flex; gap: 0.5rem;
-  padding: 0.5rem 0.75rem 0.65rem;
+  display: flex; gap: 0.55rem;
+  padding: 0.55rem 0.75rem 0.7rem;
   overflow-x: auto; overflow-y: hidden;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
   scroll-snap-type: x mandatory;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 8px, black calc(100% - 8px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0%, black 8px, black calc(100% - 8px), transparent 100%);
 }
 .nearby-scroll::-webkit-scrollbar { display: none; }
 .nearby-scroll { cursor: grab; }
@@ -855,8 +924,8 @@ input, textarea,
 .nearby-scroll .loc-item {
   flex-shrink: 0;
   flex-direction: column; align-items: flex-start;
-  width: 110px; gap: 0.28rem;
-  padding: 0.5rem 0.55rem;
+  width: 130px; gap: 0.22rem;
+  padding: 0.58rem 0.65rem;
   border-radius: var(--radius-sm);
   border: 1.5px solid var(--border);
   background: #fafbfc;
@@ -864,29 +933,32 @@ input, textarea,
   margin-bottom: 0;
 }
 .nearby-scroll .loc-item:hover {
-  border-color: rgba(201,48,48,0.25);
+  border-color: rgba(230,57,47,0.28);
   background: var(--red-light);
 }
 .nearby-scroll .loc-item.active {
   background: linear-gradient(135deg, var(--red), var(--red-dark));
   border-color: transparent;
 }
-.nearby-scroll .loc-icon { font-size: 1.1rem; }
+.nearby-scroll .loc-icon { font-size: 1.15rem; }
 .nearby-scroll .loc-name {
-  font-size: 0.68rem; line-height: 1.3;
+  font-size: 0.7rem; font-weight: 700; line-height: 1.3;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   white-space: normal;
+  color: var(--text-1);
 }
-.nearby-scroll .loc-sub { font-size: 0.6rem; }
+.nearby-scroll .loc-item.active .loc-name { color: #fff; }
+.nearby-scroll .loc-sub { font-size: 0.62rem; color: var(--text-3); }
+.nearby-scroll .loc-item.active .loc-sub { color: rgba(255,255,255,0.75); }
 
-/* Mobile — make cards slightly bigger for touch */
+/* Mobile — touch-friendly */
 @media (max-width: 768px) {
-  .nearby-scroll .loc-item { width: 100px; padding: 0.48rem 0.5rem; }
-  .nearby-scroll .loc-name { font-size: 0.66rem; }
+  .nearby-scroll .loc-item { width: 120px; padding: 0.52rem 0.58rem; }
+  .nearby-scroll .loc-name { font-size: 0.68rem; }
   .nearby-bottom-card { box-shadow: 0 -6px 24px rgba(0,0,0,0.1); }
 }
 
