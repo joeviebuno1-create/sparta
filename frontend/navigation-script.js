@@ -61,10 +61,10 @@ function _parseWaypoint(wp) {
         y = isNaN(rawY) ? 0 : rawY;
     } else if (typeof wp === 'number') {
         const loc = locations.find(l => l.id === wp);
-        if (loc && loc.coordinates) return new THREE.Vector3(parseFloat(loc.coordinates.x) || 0, parseFloat(loc.coordinates.y) || 0, parseFloat(loc.coordinates.z) || 0);
+        if (loc && loc.coordinates) return new THREE.Vector3(parseFloat(loc.coordinates.x)||0, parseFloat(loc.coordinates.y)||0, parseFloat(loc.coordinates.z)||0);
         return null;
     } else if (typeof wp === 'string') {
-        try { return _parseWaypoint(JSON.parse(wp)); } catch (e) { return null; }
+        try { return _parseWaypoint(JSON.parse(wp)); } catch(e) { return null; }
     } else { return null; }
     if (isNaN(x) || isNaN(z)) return null;
     return new THREE.Vector3(x, y, z);
@@ -75,11 +75,11 @@ function _parseWaypointArray(raw) {
     if (!raw) return [];
     let arr = raw;
     for (let i = 0; i < 2; i++) {
-        if (typeof arr === 'string') { try { arr = JSON.parse(arr); } catch (e) { return []; } }
+        if (typeof arr === 'string') { try { arr = JSON.parse(arr); } catch(e) { return []; } }
         else break;
     }
     if (!Array.isArray(arr)) {
-        if (typeof arr === 'object') arr = Object.keys(arr).sort((a, b) => +a - +b).map(k => arr[k]);
+        if (typeof arr === 'object') arr = Object.keys(arr).sort((a,b)=>+a-+b).map(k=>arr[k]);
         else return [];
     }
     const pts = [];
@@ -95,7 +95,7 @@ function _parseWaypointArray(raw) {
 function _waypointCount(raw) {
     if (!raw) return 0;
     if (Array.isArray(raw)) return raw.length;
-    if (typeof raw === 'string') { try { const p = JSON.parse(raw); return Array.isArray(p) ? p.length : 0; } catch (e) { return 0; } }
+    if (typeof raw === 'string') { try { const p = JSON.parse(raw); return Array.isArray(p) ? p.length : 0; } catch(e) { return 0; } }
     return 0;
 }
 
@@ -114,7 +114,7 @@ async function loadLocationsFromAPI() {
                 if (typeof loc.coordinates === 'string') {
                     try {
                         coords = JSON.parse(loc.coordinates);
-                    } catch (e) {
+                    } catch(e) {
                         console.warn(`Failed to parse coordinates for ${loc.name}:`, e);
                     }
                 } else if (typeof loc.coordinates === 'object') {
@@ -125,16 +125,16 @@ async function loadLocationsFromAPI() {
                     };
                 }
             }
-
+            
             return {
-                id: loc.id,
-                name: loc.name,
+                id: loc.id, 
+                name: loc.name, 
                 building: loc.building,
-                floor: loc.floor,
-                type: loc.type,
+                floor: loc.floor, 
+                type: loc.type, 
                 icon: loc.icon || '📍',
                 coordinates: coords,
-                capacity: loc.capacity,
+                capacity: loc.capacity, 
                 description: loc.description,
                 accessible: loc.description && loc.description.toLowerCase().includes('accessible'),
                 isExit: loc.type && (loc.type.toLowerCase().includes('exit') || loc.type.toLowerCase().includes('entrance') || loc.name.toLowerCase().includes('gate') || loc.name.toLowerCase().includes('entrance') || loc.name.toLowerCase().includes('exit'))
@@ -153,12 +153,12 @@ async function loadLocationsFromAPI() {
         renderSheetLocList(getFilteredLocations());
         // Also populate sheet evacuation list
         renderSheetExitsList();
-    } catch (e) {
+    } catch(e) {
         console.error('Error loading locations:', e);
         locations = [];
         renderLocationsList();
     }
-
+    
 }
 
 async function loadRoutesFromAPI() {
@@ -168,7 +168,7 @@ async function loadRoutesFromAPI() {
         const data = await res.json();
         routes = data;
         console.log(`✅ Loaded ${routes.length} navigation routes from /navigation-routes`);
-    } catch (e) {
+    } catch(e) {
         console.error('Error loading routes:', e);
         routes = [];
     }
@@ -279,16 +279,16 @@ function formatDescription(text) {
 
 // ============ FILTER PILLS ============
 const TYPE_LABELS = {
-    classroom: 'Classroom', classromm: 'Classroom', laboratory: 'Lab',
-    lab: 'Lab', office: 'Office', library: 'Library', cafeteria: 'Cafeteria',
-    gymnasium: 'Gym', clinic: 'Clinic', restroom: 'Restroom',
-    entrance: 'Entrance', exit: 'Exit', evacuation: 'Evacuation',
-    auditorium: 'Auditorium', chapel: 'Chapel', storage: 'Storage',
-    conference: 'Conference', hallway: 'Hallway', stairs: 'Stairs',
-    comfort_room: 'CR', cr: 'CR',
+    classroom:'Classroom', classromm:'Classroom', laboratory:'Lab',
+    lab:'Lab', office:'Office', library:'Library', cafeteria:'Cafeteria',
+    gymnasium:'Gym', clinic:'Clinic', restroom:'Restroom',
+    entrance:'Entrance', exit:'Exit', evacuation:'Evacuation',
+    auditorium:'Auditorium', chapel:'Chapel', storage:'Storage',
+    conference:'Conference', hallway:'Hallway', stairs:'Stairs',
+    comfort_room:'CR', cr:'CR',
 };
 function typeLabel(t) {
-    return TYPE_LABELS[t?.toLowerCase()] || (t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Other');
+    return TYPE_LABELS[t?.toLowerCase()] || (t ? t.charAt(0).toUpperCase()+t.slice(1) : 'Other');
 }
 
 function buildFilterPills() {
@@ -302,7 +302,7 @@ function buildFilterPills() {
         });
     const bar = document.getElementById('filterBar');
     let html = '<button class="filter-pill active" data-filter="all" onclick="applyFilter(\'all\',this)">All</button>';
-    Object.entries(labelMap).sort((a, b) => a[0].localeCompare(b[0])).forEach(([label, rawType]) => {
+    Object.entries(labelMap).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([label, rawType]) => {
         html += `<button class="filter-pill" data-filter="${rawType}" data-label="${label}" onclick="applyFilter('${rawType}',this)">${label}</button>`;
     });
     bar.innerHTML = html;
@@ -320,7 +320,7 @@ function applyFilter(val, btn) {
 
 // ============ FLOOR PILLS ============
 function buildFloorPills() {
-    const floors = [...new Set(locations.map(l => l.floor))].sort((a, b) => a - b);
+    const floors = [...new Set(locations.map(l => l.floor))].sort((a,b) => a-b);
     const bar = document.getElementById('floorBar');
     let html = '<button class="floor-pill active" data-floor="all" onclick="applyFloor(\'all\',this)">All Floors</button>';
     floors.forEach(f => {
@@ -341,18 +341,18 @@ function applyFloor(val, btn) {
 // ============ TYPE → ICON MAP (matches Legend tab) ============
 function getTypeIcon(type) {
     const m = {
-        classroom: '🏫', classromm: '🏫',
-        laboratory: '🔬', lab: '🔬',
-        office: '🏛️', admin: '🏛️',
-        library: '📚',
-        cafeteria: '🍽️',
-        gymnasium: '🏋️', gym: '🏋️',
-        clinic: '🏥',
-        restroom: '🚻', cr: '🚻', comfort_room: '🚻',
-        entrance: '🚪', exit: '🚪', evacuation: '🚨',
-        auditorium: '🎭', chapel: '⛪',
-        stairs: '🪜', hallway: '🚶',
-        conference: '📋', storage: '📦',
+        classroom:'🏫', classromm:'🏫',
+        laboratory:'🔬', lab:'🔬',
+        office:'🏛️', admin:'🏛️',
+        library:'📚',
+        cafeteria:'🍽️',
+        gymnasium:'🏋️', gym:'🏋️',
+        clinic:'🏥',
+        restroom:'🚻', cr:'🚻', comfort_room:'🚻',
+        entrance:'🚪', exit:'🚪', evacuation:'🚨',
+        auditorium:'🎭', chapel:'⛪',
+        stairs:'🪜', hallway:'🚶',
+        conference:'📋', storage:'📦',
     };
     return m[type?.toLowerCase()] || null;
 }
@@ -382,7 +382,7 @@ function renderLocationsList() {
     let html = '';
     Object.keys(grouped).sort().forEach(building => {
         html += `<div class="building-group"><div class="building-label">🏢 ${building}</div>`;
-        grouped[building].sort((a, b) => a.floor - b.floor).forEach(loc => {
+        grouped[building].sort((a,b) => a.floor - b.floor).forEach(loc => {
             const isFav = favorites.includes(loc.id);
             const a11y = loc.accessible ? '<span class="a11y-badge">♿ Accessible</span>' : '';
             html += `<div class="loc-item" data-id="${loc.id}" onclick="selectLocation(${loc.id},this)">
@@ -391,7 +391,7 @@ function renderLocationsList() {
                     <div class="loc-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:.2rem;">${loc.name}${a11y}</div>
                     <div class="loc-sub">Floor ${loc.floor} · ${typeLabel(loc.type)}</div>
                 </div>
-                <span class="loc-fav ${isFav ? 'active' : ''}" onclick="event.stopPropagation();toggleFav(${loc.id})">${isFav ? '⭐' : '☆'}</span>
+                <span class="loc-fav ${isFav?'active':''}" onclick="event.stopPropagation();toggleFav(${loc.id})">${isFav?'⭐':'☆'}</span>
             </div>`;
         });
         html += '</div>';
@@ -411,10 +411,10 @@ function renderNearby() {
     const sorted = locations
         .filter(l => l.id !== entrance.id && l.coordinates)
         .map(l => {
-            const dx = (l.coordinates.x || 0) - (entrance.coordinates.x || 0);
-            const dy = (l.coordinates.y || 0) - (entrance.coordinates.y || 0);
-            const dz = (l.coordinates.z || 0) - (entrance.coordinates.z || 0);
-            return { loc: l, dist: Math.sqrt(dx * dx + dy * dy + dz * dz) };
+            const dx = (l.coordinates.x||0) - (entrance.coordinates.x||0);
+            const dy = (l.coordinates.y||0) - (entrance.coordinates.y||0);
+            const dz = (l.coordinates.z||0) - (entrance.coordinates.z||0);
+            return { loc: l, dist: Math.sqrt(dx*dx + dy*dy + dz*dz) };
         })
         .sort((a, b) => a.dist - b.dist)
         .slice(0, 6)   // show top 6 nearest
@@ -423,7 +423,7 @@ function renderNearby() {
     if (!sorted.length) return;
 
     const section = document.getElementById('nearbySection');
-    const list = document.getElementById('nearbyList');
+    const list    = document.getElementById('nearbyList');
     if (!section || !list) return;
 
     section.style.display = 'block';
@@ -432,10 +432,10 @@ function renderNearby() {
 
     // Render as horizontal snap-scroll cards
     list.innerHTML = sorted.map(loc => {
-        const icon = getTypeIcon(loc.type) || loc.icon || '📍';
+        const icon  = getTypeIcon(loc.type) || loc.icon || '📍';
         const floor = loc.floor != null ? `Floor ${loc.floor}` : '';
-        const type = loc.type || '';
-        const sub = [floor, type].filter(Boolean).join(' · ');
+        const type  = loc.type || '';
+        const sub   = [floor, type].filter(Boolean).join(' · ');
         return `<div class="loc-item" onclick="selectLocation(${loc.id},this)" title="${loc.name}">
             <span class="loc-icon">${icon}</span>
             <div class="loc-name">${loc.name}</div>
@@ -483,7 +483,7 @@ function renderEvacExits() {
     const exits = locations.filter(l => l.isExit);
     const container = document.getElementById('emergencyExitsList');
     if (!container) return; // Tab might not be loaded yet
-
+    
     if (!exits.length) {
         container.innerHTML = `<div class="empty-state" style="padding:1.5rem;">
             <div class="es-icon">🚪</div>
@@ -492,7 +492,7 @@ function renderEvacExits() {
         </div>`;
         return;
     }
-
+    
     let html = '';
     exits.forEach((loc, index) => {
         const isPrimary = index === 0 || loc.name.toLowerCase().includes('main');
@@ -512,9 +512,9 @@ function renderEvacExits() {
     container.innerHTML = html;
 }
 
-function openEvacModal() {
-    document.getElementById("evacOverlay").classList.add("show");
-    if (scene) drawAllEvacRoutes();
+function openEvacModal() { 
+    document.getElementById("evacOverlay").classList.add("show"); 
+    if(scene) drawAllEvacRoutes(); 
 }
 
 function closeEvacModal(e) {
@@ -544,15 +544,15 @@ function enableDragScroll(el) {
     el.addEventListener('mousedown', e => {
         isDown = true;
         el.style.cursor = 'grabbing';
-        startX = e.pageX - el.offsetLeft;
+        startX    = e.pageX - el.offsetLeft;
         scrollLeft = el.scrollLeft;
         e.preventDefault();
     });
     el.addEventListener('mouseleave', () => { isDown = false; el.style.cursor = ''; });
-    el.addEventListener('mouseup', () => { isDown = false; el.style.cursor = ''; });
-    el.addEventListener('mousemove', e => {
+    el.addEventListener('mouseup',    () => { isDown = false; el.style.cursor = ''; });
+    el.addEventListener('mousemove',  e => {
         if (!isDown) return;
-        const x = e.pageX - el.offsetLeft;
+        const x    = e.pageX - el.offsetLeft;
         const walk = (x - startX) * 1.4;
         el.scrollLeft = scrollLeft - walk;
     });
@@ -577,109 +577,133 @@ function isMobile() { return window.innerWidth <= MOBILE_BP; }
 
 // ── Sheet snap positions ──────────────────────────────────────
 function expandSheet(snap) {
-    const sheet = document.getElementById('mobileBottomSheet');
-    const fsrch = document.getElementById('mFloatSearch');
-    const fab = document.getElementById('mMapFab');
+    const sheet  = document.getElementById('mobileBottomSheet');
+    const fsrch  = document.getElementById('mFloatSearch');
+    const fab    = document.getElementById('mMapFab');
     if (!sheet || !isMobile()) return;
     sheet.classList.remove('expanded', 'mid');
     if (snap === 'full') {
         sheet.classList.add('expanded');
         // Hide floating elements when sheet is full screen
         if (fsrch) fsrch.style.opacity = '0';
-        if (fab) fab.style.opacity = '0';
+        if (fab)   fab.style.opacity   = '0';
     } else {
         if (snap === 'mid') sheet.classList.add('mid');
         // Show floating elements
         if (fsrch) fsrch.style.opacity = '1';
-        if (fab) fab.style.display === 'flex' && (fab.style.opacity = '1');
+        if (fab)   fab.style.display === 'flex' && (fab.style.opacity = '1');
     }
 }
 
-// ── Drag-to-snap ─────────────────────────────────────────────
+// ── Drag-to-snap — exact Parzellary pattern ──────────────────
+// Key: passive:true on touchstart (no preventDefault there),
+//      passive:false only on touchmove (where we call preventDefault).
+//      Velocity tracking for flick gestures.
+//      Distance-to-nearest-snap for slow drags.
+//      Separate scroll-area handler collapses sheet when list is at top.
 function initSheetDrag() {
-    const sheet = document.getElementById('mobileBottomSheet');
-    if (!sheet || !isMobile()) return;
+    if (!isMobile()) return;
+    var sheet = document.getElementById('mobileBottomSheet');
+    if (!sheet) return;
 
-    let startY = 0, startTranslateY = 0, dragging = false, dragType = null;
+    var sY = 0, sT = 0, drag = false, vy = 0, ly = 0, lt = 0;
 
-    function getTranslateY() {
-        try {
-            const m = new DOMMatrix(window.getComputedStyle(sheet).transform);
-            return isNaN(m.m42) ? 0 : m.m42;
-        } catch (e) { return 0; }
+    function gT(el) {
+        try { return new DOMMatrix(getComputedStyle(el).transform).m42; }
+        catch(e) { return 0; }
     }
 
-    function onStart(e) {
-        if (!isMobile()) return;
-        const isHandle = !!e.target.closest('.sheet-handle-bar, .sheet-handle');
-        const content = document.getElementById('sheetContent');
-        const scrollTop = content ? content.scrollTop : 0;
-
-        // Allow drag from handle always; allow drag from body only when scrolled to top
-        if (!isHandle && scrollTop > 2) return;
-        // When swiping up from body, let scroll happen instead
-        const touchY = e.touches ? e.touches[0].clientY : e.clientY;
-        if (!isHandle) dragType = 'body'; else dragType = 'handle';
-
-        dragging = true;
-        startY = touchY;
-        startTranslateY = getTranslateY();
+    function onS(e) {
+        if (window.innerWidth >= 768) return;
+        var t = e.touches ? e.touches[0] : e;
+        sY = t.clientY; sT = gT(sheet);
         sheet.style.transition = 'none';
+        drag = true; vy = 0; ly = sY; lt = Date.now();
     }
 
-    function onMove(e) {
-        if (!dragging || !isMobile()) return;
-        const y = e.touches ? e.touches[0].clientY : e.clientY;
-        const delta = y - startY;
-
-        // Body drag: only allow pulling DOWN (collapsing)
-        if (dragType === 'body' && delta < 0) {
-            dragging = false;
-            sheet.style.transition = '';
-            return;
-        }
-
-        const newT = Math.max(0, startTranslateY + delta);
-        sheet.style.transform = `translateY(${newT}px)`;
-        if (e.cancelable) e.preventDefault();
+    function onM(e) {
+        if (!drag || window.innerWidth >= 768) return;
+        e.preventDefault();
+        var t   = e.touches ? e.touches[0] : e;
+        var dy  = t.clientY - sY;
+        var peek = parseInt(getComputedStyle(document.documentElement)
+                    .getPropertyValue('--sheet-peek')) || 300;
+        var max = sheet.offsetHeight - peek;
+        var clamped = Math.max(0, Math.min(max, sT + dy));
+        sheet.style.transform = 'translateY(' + clamped + 'px)';
+        var n = Date.now();
+        vy = (t.clientY - ly) / (n - lt + 1);
+        ly = t.clientY; lt = n;
     }
 
-    function onEnd(e) {
-        if (!dragging || !isMobile()) return;
-        dragging = false;
+    function onE() {
+        if (!drag || window.innerWidth >= 768) { drag = false; return; }
+        drag = false;
         sheet.style.transition = '';
-        sheet.style.transform = '';
-
-        const y = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
-        const delta = y - startY;
-        const isFull = sheet.classList.contains('expanded');
-        const isMid = sheet.classList.contains('mid');
-
-        if (delta < -60) {
-            // Swipe UP
-            if (isFull) expandSheet('full');
-            else if (isMid) expandSheet('full');
-            else expandSheet('mid');
-        } else if (delta > 80) {
-            // Swipe DOWN
-            if (isFull) expandSheet('mid');
-            else expandSheet('peek');
-        } else {
-            // Snap back
-            if (isFull) expandSheet('full');
-            else if (isMid) expandSheet('mid');
-            else expandSheet('peek');
-        }
+        sheet.style.transform  = '';
+        var h   = sheet.offsetHeight;
+        var cur = gT(sheet);
+        var mid = parseInt(getComputedStyle(document.documentElement)
+                    .getPropertyValue('--sheet-mid')) || Math.round(window.innerHeight * 0.52);
+        var ht  = h - mid;
+        var peek = parseInt(getComputedStyle(document.documentElement)
+                    .getPropertyValue('--sheet-peek')) || 300;
+        // Velocity-based snap (flick gesture)
+        if (vy > 0.4)  { expandSheet(cur > ht ? 'peek' : 'mid'); return; }
+        if (vy < -0.4) { expandSheet(cur < ht ? 'full' : 'mid'); return; }
+        // Distance-to-nearest-snap
+        var d = [
+            { s: 'peek', d: Math.abs(cur - (h - peek)) },
+            { s: 'mid',  d: Math.abs(cur - ht) },
+            { s: 'full', d: Math.abs(cur - 0) }
+        ];
+        d.sort(function(a, b) { return a.d - b.d; });
+        expandSheet(d[0].s);
     }
 
-    // Attach to full sheet (handle + body)
-    sheet.addEventListener('touchstart', onStart, { passive: true });
-    sheet.addEventListener('touchmove', onMove, { passive: false });
-    sheet.addEventListener('touchend', onEnd, { passive: true });
-    // Mouse fallback
-    sheet.addEventListener('mousedown', onStart);
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onEnd);
+    // Attach to handle + drag-top zones — touchstart passive:true (Parzellary pattern)
+    ['sheetHandleBar', 'sheet-drag-top'].forEach(function(sel) {
+        var el = document.getElementById(sel) || document.querySelector('.' + sel);
+        if (!el) return;
+        el.addEventListener('touchstart', onS, { passive: true });
+        el.addEventListener('touchmove',  onM, { passive: false });
+        el.addEventListener('touchend',   onE);
+        el.addEventListener('mousedown',  onS);
+    });
+
+    // ALSO attach to all .sheet-drag-top elements (there may be multiple — one per panel)
+    document.querySelectorAll('.sheet-drag-top').forEach(function(el) {
+        el.addEventListener('touchstart', onS, { passive: true });
+        el.addEventListener('touchmove',  onM, { passive: false });
+        el.addEventListener('touchend',   onE);
+        el.addEventListener('mousedown',  onS);
+    });
+
+    document.addEventListener('mousemove', onM);
+    document.addEventListener('mouseup',   onE);
+
+    // Scroll-area collapse: when list is at top and user swipes down, collapse sheet
+    // Uses passive:true on both — scroll is never prevented, just piggybacks on it
+    var scroll = document.getElementById('sheetContent');
+    if (scroll) {
+        var tSY = 0, tST = 0, collapsed = false;
+        scroll.addEventListener('touchstart', function(e) {
+            tSY = e.touches[0].clientY;
+            tST = scroll.scrollTop;
+            collapsed = false;
+        }, { passive: true });
+        scroll.addEventListener('touchmove', function(e) {
+            if (window.innerWidth >= 768 || collapsed) return;
+            if (tST <= 0 && scroll.scrollTop <= 0) {
+                var dy = e.touches[0].clientY - tSY;
+                if (dy > 60) {
+                    collapsed = true;
+                    if (sheet.classList.contains('expanded'))  expandSheet('mid');
+                    else if (sheet.classList.contains('mid'))  expandSheet('peek');
+                }
+            }
+        }, { passive: true });
+    }
 }
 
 // ── Sheet tabs ───────────────────────────────────────────────
@@ -714,9 +738,9 @@ function switchSheetTab(tabName, btn) {
     }
 
     // Tab-specific renders
-    if (tabName === 'favorites') { renderFavorites(); renderSheetLocList(locations.filter(l => favorites.includes(l.id))); }
+    if (tabName === 'favorites')  { renderFavorites(); renderSheetLocList(locations.filter(l => favorites.includes(l.id))); }
     if (tabName === 'evacuation') { renderEvacExits(); renderSheetExitsList(); }
-    if (tabName === 'legend') { /* static content */ }
+    if (tabName === 'legend')     { /* static content */ }
 
     // Expand sheet to show content
     if (typeof isMobile === 'function' && isMobile()) expandSheet('mid');
@@ -726,20 +750,20 @@ function switchSheetTab(tabName, btn) {
 function showSheetDetail(loc) {
     if (!isMobile()) return;
 
-    const detail = document.getElementById('sheetLocationDetail');
+    const detail   = document.getElementById('sheetLocationDetail');
     const listPane = document.getElementById('sheet-panel-locations');
     if (!detail || !listPane) return;
 
     // Hide list, show detail
     listPane.style.display = 'none';
-    detail.style.display = 'block';
+    detail.style.display   = 'block';
 
     // Header
     const badge = loc.icon || '📍';
     document.getElementById('sheetDetailName').textContent = loc.name;
-    document.getElementById('sheetDetailSub').textContent =
+    document.getElementById('sheetDetailSub').textContent  =
         [loc.building, loc.floor != null ? `Floor ${loc.floor}` : '', loc.type]
-            .filter(Boolean).join(' · ');
+        .filter(Boolean).join(' · ');
 
     // Content — reuse the same info rows format
     const content = document.getElementById('sheetDetailContent');
@@ -756,9 +780,9 @@ function showSheetDetail(loc) {
 }
 
 function closeSheetDetail() {
-    const detail = document.getElementById('sheetLocationDetail');
+    const detail   = document.getElementById('sheetLocationDetail');
     const listPane = document.getElementById('sheet-panel-locations');
-    if (detail) detail.style.display = 'none';
+    if (detail)   detail.style.display   = 'none';
     if (listPane) listPane.style.display = '';
     closeInfo();
     expandSheet('mid');
@@ -767,11 +791,11 @@ function closeSheetDetail() {
 // Build reusable info row HTML from a location object
 function buildInfoRows(loc) {
     let html = '';
-    if (loc.building) html += infoRow('🏢', 'Building', loc.building);
-    if (loc.floor != null) html += infoRow('🏬', 'Floor', `Floor ${loc.floor}`);
-    if (loc.type) html += infoRow('🏷️', 'Type', loc.type);
-    if (loc.capacity) html += infoRow('👥', 'Capacity', `${loc.capacity} persons`);
-    if (loc.description) html += infoRow('📝', 'Description', loc.description);
+    if (loc.building)    html += infoRow('🏢','Building', loc.building);
+    if (loc.floor != null) html += infoRow('🏬','Floor', `Floor ${loc.floor}`);
+    if (loc.type)        html += infoRow('🏷️','Type', loc.type);
+    if (loc.capacity)    html += infoRow('👥','Capacity', `${loc.capacity} persons`);
+    if (loc.description) html += infoRow('📝','Description', loc.description);
     return html || '<div style="color:#94a3b8;font-size:.75rem;padding:.5rem 0">No additional details.</div>';
 }
 function infoRow(icon, label, value) {
@@ -791,11 +815,11 @@ function syncSheetSearch(val) {
 
 // ── Sync pills from sidebar into sheet ───────────────────────
 function syncSheetPills() {
-    const sfb = document.getElementById('sheetFilterBar');
+    const sfb  = document.getElementById('sheetFilterBar');
     const sflb = document.getElementById('sheetFloorBar');
-    const fb = document.getElementById('filterBar');
-    const flb = document.getElementById('floorBar');
-    if (sfb && fb) sfb.innerHTML = fb.innerHTML;
+    const fb   = document.getElementById('filterBar');
+    const flb  = document.getElementById('floorBar');
+    if (sfb && fb)   sfb.innerHTML  = fb.innerHTML;
     if (sflb && flb) sflb.innerHTML = flb.innerHTML;
     // Re-apply correct active state based on global filter values
     if (sfb) {
@@ -830,7 +854,7 @@ function renderSheetLocList(locs) {
                 <div class="loc-name">${loc.name}</div>
                 <div class="loc-sub">${sub}</div>
             </div>
-            <span class="loc-fav ${isFav ? 'active' : ''}" onclick="event.stopPropagation();toggleFav(${loc.id})">${isFav ? '⭐' : '☆'}</span>
+            <span class="loc-fav ${isFav?'active':''}" onclick="event.stopPropagation();toggleFav(${loc.id})">${isFav?'⭐':'☆'}</span>
         </div>`;
     }).join('');
 }
@@ -839,8 +863,8 @@ function renderSheetLocList(locs) {
 function syncSheetRouteCard(distance, time, waypoints) {
     const rc = document.getElementById('sheetRouteCard');
     if (!rc || !isMobile()) return;
-    document.getElementById('sheetPathDistance').textContent = distance;
-    document.getElementById('sheetPathTime').textContent = time;
+    document.getElementById('sheetPathDistance').textContent  = distance;
+    document.getElementById('sheetPathTime').textContent      = time;
     document.getElementById('sheetPathWaypoints').textContent = waypoints;
     rc.classList.add('show');
     const clr = document.getElementById('sheetClearBtn');
@@ -862,7 +886,7 @@ function renderSheetExitsList() {
             <div class="evac-exit-num">${i + 1}</div>
             <div style="flex:1;min-width:0;">
                 <div class="loc-name">${loc.name}</div>
-                <div class="loc-sub">${loc.building || ''} ${loc.floor != null ? '· Floor ' + loc.floor : ''}</div>
+                <div class="loc-sub">${loc.building||''} ${loc.floor!=null?'· Floor '+loc.floor:''}</div>
             </div>
         </div>`).join('');
 }
@@ -876,11 +900,11 @@ function initMobileSheet() {
 
     // Show mobile-only elements
     const bottomSheet = document.getElementById('mobileBottomSheet');
-    const bottomNav = document.getElementById('mobileBottomNav');
+    const bottomNav   = document.getElementById('mobileBottomNav');
     const floatSearch = document.getElementById('mFloatSearch');
     if (bottomSheet) bottomSheet.style.display = 'flex';
-    if (bottomNav) bottomNav.style.display = 'flex';
-    if (floatSearch) floatSearch.style.display = 'flex';
+    if (bottomNav)   bottomNav.style.display   = 'flex';
+    if (floatSearch) floatSearch.style.display  = 'flex';
 
     // Start at mid snap
     expandSheet('mid');
@@ -894,19 +918,19 @@ function initMobileSheet() {
 
 // Re-check on resize
 window.addEventListener('resize', () => {
-    const bs = document.getElementById('mobileBottomSheet');
-    const bn = document.getElementById('mobileBottomNav');
-    const mc = document.querySelector('.map-controls');
+    const bs  = document.getElementById('mobileBottomSheet');
+    const bn  = document.getElementById('mobileBottomNav');
+    const mc  = document.querySelector('.map-controls');
     const hint = document.getElementById('mapIdleHint');
     if (isMobile()) {
-        if (bs) bs.style.display = 'flex';
-        if (bn) bn.style.display = 'flex';
-        if (mc) mc.style.bottom = 'calc(var(--bottom-nav-h) + var(--sheet-peek) + 0.75rem)';
-        if (hint) hint.style.bottom = 'calc(var(--bottom-nav-h) + var(--sheet-peek) + 0.5rem)';
+        if (bs)   bs.style.display   = 'flex';
+        if (bn)   bn.style.display   = 'flex';
+        if (mc)   mc.style.bottom    = 'calc(var(--bottom-nav-h) + var(--sheet-peek) + 0.75rem)';
+        if (hint) hint.style.bottom  = 'calc(var(--bottom-nav-h) + var(--sheet-peek) + 0.5rem)';
     } else {
-        if (bs) bs.style.display = 'none';
-        if (bn) bn.style.display = 'none';
-        if (mc) mc.style.removeProperty('bottom');
+        if (bs)   bs.style.display   = 'none';
+        if (bn)   bn.style.display   = 'none';
+        if (mc)   mc.style.removeProperty('bottom');
         if (hint) hint.style.removeProperty('bottom');
     }
 });
@@ -918,10 +942,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Called from HTML oninput
 function liveSearch(val) {
-    const rd = document.getElementById('searchResults');
+    const rd  = document.getElementById('searchResults');
     const clr = document.getElementById('searchClear');
     const mClr = document.getElementById('mFloatClear');
-    if (clr) clr.style.display = val.length ? 'block' : 'none';
+    if (clr)  clr.style.display  = val.length ? 'block' : 'none';
     if (mClr) mClr.style.display = val.length ? 'block' : 'none';
     const q = val.toLowerCase().trim();
     if (q.length < 2) { rd.classList.remove('show'); return; }
@@ -931,15 +955,15 @@ function liveSearch(val) {
     }
     const hits = locations.filter(l =>
         l.name.toLowerCase().includes(q) ||
-        (l.building || '').toLowerCase().includes(q) ||
-        (l.type || '').toLowerCase().includes(q)
+        (l.building||'').toLowerCase().includes(q) ||
+        (l.type||'').toLowerCase().includes(q)
     );
     rd.innerHTML = hits.length
-        ? hits.slice(0, 8).map(l =>
+        ? hits.slice(0,8).map(l =>
             `<div class="sr-item" onclick="selectLocation(${l.id});clearSearch()">
                 ${l.accessible ? '<span class="a11y-badge" style="float:right;">♿</span>' : ''}
                 <div class="sr-name">${getTypeIcon(l.type) || l.icon || '📍'} ${l.name}</div>
-                <div class="sr-sub">${l.building || ''} · Floor ${l.floor}</div>
+                <div class="sr-sub">${l.building||''} · Floor ${l.floor}</div>
             </div>`).join('')
         : `<div class="sr-item" style="text-align:center;padding:1rem;color:#999;">
                 <div style="font-size:1.3rem;">🔍</div>
@@ -951,23 +975,23 @@ function liveSearch(val) {
         const filtered = q.length >= 2
             ? locations.filter(l =>
                 l.name.toLowerCase().includes(q) ||
-                (l.building || '').toLowerCase().includes(q) ||
-                (l.type || '').toLowerCase().includes(q))
+                (l.building||'').toLowerCase().includes(q) ||
+                (l.type||'').toLowerCase().includes(q))
             : getFilteredLocations();
         renderSheetLocList(filtered);
     }
 }
 
 function clearSearch() {
-    const inp = document.getElementById('searchInput');
-    const ssi = document.getElementById('sheetSearchInput');
-    const rd = document.getElementById('searchResults');
-    const clr = document.getElementById('searchClear');
+    const inp  = document.getElementById('searchInput');
+    const ssi  = document.getElementById('sheetSearchInput');
+    const rd   = document.getElementById('searchResults');
+    const clr  = document.getElementById('searchClear');
     const mClr = document.getElementById('mFloatClear');
-    if (inp) inp.value = '';
-    if (ssi) ssi.value = '';
-    if (rd) rd.classList.remove('show');
-    if (clr) clr.style.display = 'none';
+    if (inp)  inp.value  = '';
+    if (ssi)  ssi.value  = '';
+    if (rd)   rd.classList.remove('show');
+    if (clr)  clr.style.display  = 'none';
     if (mClr) mClr.style.display = 'none';
     if (isMobile()) renderSheetLocList(getFilteredLocations());
 }
@@ -983,10 +1007,10 @@ function handleSearch(e) {
     const q = e.target.value.toLowerCase().trim();
     const rd = document.getElementById('searchResults');
     if (q.length < 2) { rd.classList.remove('show'); return; }
-    if (!locations.length) { rd.innerHTML = '<div class="sr-item" style="text-align:center;padding:1.2rem;color:#999;font-size:.78rem;">No locations available</div>'; rd.classList.add('show'); return; }
-    const hits = locations.filter(l => l.name.toLowerCase().includes(q) || l.building.toLowerCase().includes(q) || l.type.toLowerCase().includes(q));
+    if (!locations.length) { rd.innerHTML='<div class="sr-item" style="text-align:center;padding:1.2rem;color:#999;font-size:.78rem;">No locations available</div>'; rd.classList.add('show'); return; }
+    const hits = locations.filter(l => l.name.toLowerCase().includes(q)||l.building.toLowerCase().includes(q)||l.type.toLowerCase().includes(q));
     rd.innerHTML = hits.length
-        ? hits.map(l => `<div class="sr-item" onclick="selectLocation(${l.id})">${l.accessible ? '<span class="a11y-badge" style="float:right;">♿</span>' : ''}<div class="sr-name">${getTypeIcon(l.type) || l.icon || '📍'} ${l.name}</div><div class="sr-sub">${l.building} · Floor ${l.floor}</div></div>`).join('')
+        ? hits.map(l=>`<div class="sr-item" onclick="selectLocation(${l.id})">${l.accessible?'<span class="a11y-badge" style="float:right;">♿</span>':''}<div class="sr-name">${getTypeIcon(l.type) || l.icon || '📍'} ${l.name}</div><div class="sr-sub">${l.building} · Floor ${l.floor}</div></div>`).join('')
         : `<div class="sr-item" style="text-align:center;padding:1rem;color:#999;"><div style="font-size:1.3rem;">🔍</div><div style="font-size:.76rem;margin-top:.25rem;">No results for "${e.target.value}"</div></div>`;
     rd.classList.add('show');
 }
@@ -1006,7 +1030,7 @@ function selectLocation(idOrObj, clickedEl) {
 
     document.querySelectorAll('.loc-item').forEach(el => el.classList.remove('active'));
     if (clickedEl) clickedEl.classList.add('active');
-    else { const m = document.querySelector(`.loc-item[data-id="${location.id}"]`); if (m) m.classList.add('active'); }
+    else { const m = document.querySelector(`.loc-item[data-id="${location.id}"]`); if(m) m.classList.add('active'); }
 
     document.getElementById('vsName').textContent = location.name;
     document.getElementById('vsSub').textContent = location.building + ' · Floor ' + location.floor;
@@ -1028,10 +1052,10 @@ function selectLocation(idOrObj, clickedEl) {
     document.getElementById('infoContent').innerHTML = `
         <div class="info-row"><span class="info-row-icon">🏢</span><div><div class="info-label">Building</div><div class="info-value">${location.building}</div></div></div>
         <div class="info-row"><span class="info-row-icon">📍</span><div><div class="info-label">Floor</div><div class="info-value">Floor ${location.floor}</div></div></div>
-        <div class="info-row"><span class="info-row-icon">🏷️</span><div><div class="info-label">Type</div><div class="info-value">${location.type.charAt(0).toUpperCase() + location.type.slice(1)}</div></div></div>
-        ${location.capacity ? `<div class="info-row"><span class="info-row-icon">👥</span><div><div class="info-label">Capacity</div><div class="info-value">${location.capacity} people</div></div></div>` : ''}
-        ${location.accessible ? `<div class="info-row"><span class="info-row-icon">♿</span><div><div class="info-label">Accessibility</div><div class="info-value" style="color:#16a34a;font-weight:600;">Wheelchair Accessible</div></div></div>` : ''}
-        ${location.description ? `<div class="info-row"><span class="info-row-icon">📝</span><div style="flex:1;"><div class="info-label">Description</div><div class="info-value desc-formatted">${formatDescription(location.description)}</div></div></div>` : ''}
+        <div class="info-row"><span class="info-row-icon">🏷️</span><div><div class="info-label">Type</div><div class="info-value">${location.type.charAt(0).toUpperCase()+location.type.slice(1)}</div></div></div>
+        ${location.capacity?`<div class="info-row"><span class="info-row-icon">👥</span><div><div class="info-label">Capacity</div><div class="info-value">${location.capacity} people</div></div></div>`:''}
+        ${location.accessible?`<div class="info-row"><span class="info-row-icon">♿</span><div><div class="info-label">Accessibility</div><div class="info-value" style="color:#16a34a;font-weight:600;">Wheelchair Accessible</div></div></div>`:''}
+        ${location.description?`<div class="info-row"><span class="info-row-icon">📝</span><div style="flex:1;"><div class="info-label">Description</div><div class="info-value desc-formatted">${formatDescription(location.description)}</div></div></div>`:''}
 
         ${dirHtml}
     `;
@@ -1054,29 +1078,29 @@ function selectLocation(idOrObj, clickedEl) {
         const x = parseFloat(location.coordinates.x);
         const y = parseFloat(location.coordinates.y);
         const z = parseFloat(location.coordinates.z);
-
+        
         if (isNaN(x) || isNaN(y) || isNaN(z)) {
             console.error('Invalid coordinates for location:', location.name, location.coordinates);
             document.getElementById('infoContent').innerHTML +=
                 '<div class="no-route-msg"><strong>⚠️ Invalid coordinates</strong>Please ask an admin to update this locations position in the admin panel.</div>';
             return;
         }
-
+        
         console.log(`\n📍 Selecting: ${location.name}`);
-        // Hide idle hint when a location is selected
-        const hint = document.getElementById('mapIdleHint');
-        if (hint) hint.classList.add('hidden');
-        // Mobile: show in bottom sheet detail
-        if (isMobile()) showSheetDetail(location);
+    // Hide idle hint when a location is selected
+    const hint = document.getElementById('mapIdleHint');
+    if (hint) hint.classList.add('hidden');
+    // Mobile: show in bottom sheet detail
+    if (isMobile()) showSheetDetail(location);
         console.log(`   DB Coordinates: (${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)})`);
-
+        
         // Check coordinate validity
         const maxCoord = Math.max(Math.abs(x), Math.abs(y), Math.abs(z));
         if (maxCoord > 200) {
             console.warn(`   ⚠️ Large coordinates detected (max: ${maxCoord.toFixed(1)})`);
             console.warn('   May be in wrong coordinate space - recapture in admin panel');
         }
-
+        
         // Clear any existing path from a previous selection
         pathLines.forEach(line => scene.remove(line));
         pathLines = [];
@@ -1086,12 +1110,12 @@ function selectLocation(idOrObj, clickedEl) {
         const em = scene.getObjectByName('entrance-marker');
         if (em) scene.remove(em);
         document.getElementById('pathStats').classList.remove('show');
-
+        
         // Place marker at exact database coordinates - NO TRANSFORMATION
         const pos = new THREE.Vector3(x, y, z);
         createMarker(pos, 0xC93030);
         animateCamera(pos);
-
+        
         console.log('   ✓ Marker placed\n');
     } else {
         console.warn('No coordinates or scene not ready for location:', location.name);
@@ -1100,10 +1124,10 @@ function selectLocation(idOrObj, clickedEl) {
 
 // ============ TABS ============
 function switchTab(name, btn) {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
     btn.classList.add('active');
-    document.getElementById('tab-' + name).classList.add('active');
+    document.getElementById('tab-'+name).classList.add('active');
     if (name === 'favorites') renderFavorites();
     if (name === 'evacuation') renderEvacExits();
 }
@@ -1112,18 +1136,18 @@ function switchTab(name, btn) {
 // ============ VIEWING STRIP ============
 function clearViewingStrip() {
     document.getElementById('viewingStrip').classList.remove('show');
-    document.querySelectorAll('.loc-item').forEach(el => el.classList.remove('active'));
-    closeInfo();
-    resetOrientation();
-    selectedLocation = null;
-    document.getElementById('currentLocation').textContent = 'BSU Lipa Campus';
+    document.querySelectorAll('.loc-item').forEach(el=>el.classList.remove('active'));
+    closeInfo(); 
+    resetOrientation(); 
+    selectedLocation=null;
+    document.getElementById('currentLocation').textContent='BSU Lipa Campus';
     document.getElementById('pathStats').classList.remove('show');
 }
 
 // ============ SIDEBAR ============
 function toggleSidebar(forceClose) {
-    const sb = document.getElementById('sidebar');
-    const mc = document.getElementById('mapContainer');
+    const sb  = document.getElementById('sidebar');
+    const mc  = document.getElementById('mapContainer');
     const tab = document.getElementById('sidebarEdgeTab');
     const isMobile = window.innerWidth <= 768;
 
@@ -1168,7 +1192,7 @@ document.addEventListener('click', e => {
         }
     }
 });
-function closeInfo() {
+function closeInfo(){
     document.getElementById('infoPanel').classList.remove('show');
     document.getElementById('pathStats').classList.remove('show');
     // Hide route info card and clear button
@@ -1193,15 +1217,15 @@ function closeInfo() {
     const hint = document.getElementById('mapIdleHint');
     if (hint) hint.classList.remove('hidden');
 }
-function resetView() {
-    selectedLocation = null;
-    document.getElementById('currentLocation').textContent = 'BSU Lipa Campus';
-    closeInfo();
-    clearViewingStrip();
+function resetView(){ 
+    selectedLocation=null; 
+    document.getElementById('currentLocation').textContent='BSU Lipa Campus'; 
+    closeInfo(); 
+    clearViewingStrip(); 
 }
-function showFullScreen() {
-    const e = document.documentElement;
-    (e.requestFullscreen || e.webkitRequestFullscreen || e.msRequestFullscreen).call(e);
+function showFullScreen(){ 
+    const e=document.documentElement; 
+    (e.requestFullscreen||e.webkitRequestFullscreen||e.msRequestFullscreen).call(e); 
 }
 
 // ============ 3D SCENE ============
@@ -1224,7 +1248,7 @@ async function drawAllSavedPaths() {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         allRoutes = await res.json();
         routes = allRoutes; // keep global in sync
-    } catch (e) {
+    } catch(e) {
         console.warn('[drawAllSavedPaths] Could not fetch routes:', e);
         return;
     }
@@ -1252,14 +1276,14 @@ async function drawAllSavedPaths() {
 
     let drawn = 0;
     const PATH_ORDER = 998;
-    const TUBE_R = 0.50;
-    const GLOW_R = 1.00;
+    const TUBE_R     = 0.50;
+    const GLOW_R     = 1.00;
 
     for (const route of allRoutes) {
         // ── Parse the stored waypoints ──────────────────────────────────────
         let wps = route.waypoints || [];
         if (typeof wps === 'string') {
-            try { wps = JSON.parse(wps); } catch (e) { wps = []; }
+            try { wps = JSON.parse(wps); } catch(e) { wps = []; }
         }
         if (!Array.isArray(wps)) wps = [];
 
@@ -1344,32 +1368,32 @@ async function drawAllSavedPaths() {
 }
 
 function init3DScene() {
-    const canvas = document.getElementById('map3dCanvas'), container = canvas.parentElement;
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf0f1f3);
-
-    const aspect = container.clientWidth / container.clientHeight;
-    camera = new THREE.PerspectiveCamera(30, aspect, 0.1, 10000);
-    camera.position.set(0, 150, -250);
-
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-    renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.shadowMap.enabled = true;
-
-    controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = .05;
-    controls.minDistance = 1;
-    controls.maxDistance = Infinity;
-
-    scene.add(new THREE.AmbientLight(0xffffff, .6));
-    const dl = new THREE.DirectionalLight(0xffffff, .8);
-    dl.position.set(100, 200, 100);
-    dl.castShadow = true;
+    const canvas=document.getElementById('map3dCanvas'), container=canvas.parentElement;
+    scene=new THREE.Scene(); 
+    scene.background=new THREE.Color(0xf0f1f3);
+    
+    const aspect=container.clientWidth/container.clientHeight;
+    camera=new THREE.PerspectiveCamera(30,aspect,0.1,10000);
+    camera.position.set(0,150,-250);
+    
+    renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+    renderer.setSize(container.clientWidth,container.clientHeight);
+    renderer.setPixelRatio(window.devicePixelRatio); 
+    renderer.shadowMap.enabled=true;
+    
+    controls=new THREE.OrbitControls(camera,renderer.domElement);
+    controls.enableDamping=true; 
+    controls.dampingFactor=.05; 
+    controls.minDistance=1;
+    controls.maxDistance=Infinity;
+    
+    scene.add(new THREE.AmbientLight(0xffffff,.6));
+    const dl=new THREE.DirectionalLight(0xffffff,.8); 
+    dl.position.set(100,200,100); 
+    dl.castShadow=true; 
     scene.add(dl);
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, .4));
-
+    scene.add(new THREE.HemisphereLight(0xffffff,0x444444,.4));
+    
     // Grid helper removed - no gridlines
 
     // Load active 3D model from API
@@ -1378,10 +1402,10 @@ function init3DScene() {
         .then(response => response.json())
         .then(modelInfo => {
             console.log('Active model info:', modelInfo);
-            const modelPath = modelInfo.cache_buster
+            const modelPath = modelInfo.cache_buster 
                 ? `${modelInfo.path}?v=${modelInfo.cache_buster}`
                 : modelInfo.path;
-
+            
             console.log('Loading 3D model from:', modelPath);
             loadModel(modelPath);
         })
@@ -1392,77 +1416,77 @@ function init3DScene() {
             const modelPath = `https://sparta-production-0acb.up.railway.app/static/batangas_state_university-_the_neu_lipa_map.glb?v=${cacheBuster}`;
             loadModel(modelPath);
         });
-
+    
     function loadModel(modelPath) {
         new THREE.GLTFLoader().load(modelPath,
-            gltf => {
-                campusModel = gltf.scene;
-                const box = new THREE.Box3().setFromObject(campusModel);
-                const c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
-
-                // Store transformation info
-                modelTransformation.originalBounds = {
-                    min: { x: box.min.x, y: box.min.y, z: box.min.z },
-                    max: { x: box.max.x, y: box.max.y, z: box.max.z },
-                    center: { x: c.x, y: c.y, z: c.z },
-                    size: { x: s.x, y: s.y, z: s.z }
-                };
-
-                campusModel.position.sub(c);
-                modelTransformation.center = c;
-
-                const sc = 100 / Math.max(s.x, s.y, s.z);
-                campusModel.scale.set(sc, sc, sc);
-                modelTransformation.scale = sc;
-
-                scene.add(campusModel);
-                document.getElementById('mapLoading').style.display = 'none';
-                canvas.style.display = 'block';
-                console.log('✓ 3D model loaded successfully');
-                console.log('📊 Model Transformation:', {
-                    center: { x: c.x.toFixed(2), y: c.y.toFixed(2), z: c.z.toFixed(2) },
-                    scale: sc.toFixed(2),
-                    note: 'All coordinates should be in this transformed space'
-                });
-
-                // Verify coordinates after model loads
-                setTimeout(() => verifyLocationCoordinates(), 500);
-                // NOTE: paths are NOT drawn on load — they appear only when
-                // the user selects a location and clicks "Get Directions".
-                // Show floating FAB on mobile
-                if (isMobile()) {
-                    const fab = document.getElementById('mMapFab');
-                    if (fab) fab.style.display = 'flex';
-                }
-            },
-            xhr => {
-                const pct = xhr.total > 0 ? Math.round(xhr.loaded / xhr.total * 100) : 0;
-                console.log('Loading model: ' + pct + '%');
-                const bar = document.getElementById('loadingBar');
-                const status = document.getElementById('loadingStatus');
-                if (bar) bar.style.width = pct + '%';
-                if (status) status.textContent = pct < 100 ? `Loading 3D Map… ${pct}%` : 'Almost ready…';
-            },
-            err => {
-                console.error('Failed to load 3D model:', err);
-                document.getElementById('mapLoading').innerHTML = '<div style="color:#dc3545;text-align:center;"><div style="font-size:2.5rem;margin-bottom:.6rem;">⚠️</div><p style="font-size:.82rem;">Failed to load 3D map</p><p style="font-size:.7rem;margin-top:.3rem;">Please upload a 3D model in the Admin panel (Admin → Navigation → 3D Map Upload)</p></div>';
+        gltf=>{ 
+            campusModel=gltf.scene; 
+            const box=new THREE.Box3().setFromObject(campusModel); 
+            const c=box.getCenter(new THREE.Vector3()), s=box.getSize(new THREE.Vector3()); 
+            
+            // Store transformation info
+            modelTransformation.originalBounds = {
+                min: { x: box.min.x, y: box.min.y, z: box.min.z },
+                max: { x: box.max.x, y: box.max.y, z: box.max.z },
+                center: { x: c.x, y: c.y, z: c.z },
+                size: { x: s.x, y: s.y, z: s.z }
+            };
+            
+            campusModel.position.sub(c);
+            modelTransformation.center = c;
+            
+            const sc=100/Math.max(s.x,s.y,s.z); 
+            campusModel.scale.set(sc,sc,sc);
+            modelTransformation.scale = sc;
+            
+            scene.add(campusModel); 
+            document.getElementById('mapLoading').style.display='none'; 
+            canvas.style.display='block';
+            console.log('✓ 3D model loaded successfully');
+            console.log('📊 Model Transformation:', {
+                center: { x: c.x.toFixed(2), y: c.y.toFixed(2), z: c.z.toFixed(2) },
+                scale: sc.toFixed(2),
+                note: 'All coordinates should be in this transformed space'
+            });
+            
+            // Verify coordinates after model loads
+            setTimeout(() => verifyLocationCoordinates(), 500);
+            // NOTE: paths are NOT drawn on load — they appear only when
+            // the user selects a location and clicks "Get Directions".
+            // Show floating FAB on mobile
+            if (isMobile()) {
+                const fab = document.getElementById('mMapFab');
+                if (fab) fab.style.display = 'flex';
             }
-        );
+        },
+        xhr=>{
+            const pct = xhr.total > 0 ? Math.round(xhr.loaded/xhr.total*100) : 0;
+            console.log('Loading model: '+pct+'%');
+            const bar = document.getElementById('loadingBar');
+            const status = document.getElementById('loadingStatus');
+            if (bar) bar.style.width = pct + '%';
+            if (status) status.textContent = pct < 100 ? `Loading 3D Map… ${pct}%` : 'Almost ready…';
+        },
+        err=>{ 
+            console.error('Failed to load 3D model:', err); 
+            document.getElementById('mapLoading').innerHTML='<div style="color:#dc3545;text-align:center;"><div style="font-size:2.5rem;margin-bottom:.6rem;">⚠️</div><p style="font-size:.82rem;">Failed to load 3D map</p><p style="font-size:.7rem;margin-top:.3rem;">Please upload a 3D model in the Admin panel (Admin → Navigation → 3D Map Upload)</p></div>'; 
+        }
+    );
     } // End loadModel function
-
+    
     animate();
-
-    window.addEventListener('resize', () => {
-        const w = container.clientWidth, h = container.clientHeight;
-        camera.aspect = w / h;
-        camera.updateProjectionMatrix();
-        renderer.setSize(w, h);
+    
+    window.addEventListener('resize',()=>{ 
+        const w=container.clientWidth,h=container.clientHeight; 
+        camera.aspect=w/h; 
+        camera.updateProjectionMatrix(); 
+        renderer.setSize(w,h); 
     });
 }
 
 function animate() {
     animationFrameId = requestAnimationFrame(animate);
-
+    
     // Update path particles — slow comet-trail style
     pathParticles.forEach(particle => {
         // Advance progress very slowly — feels like walking pace
@@ -1481,7 +1505,7 @@ function animate() {
         particle.mesh.scale.setScalar(breathScale);
 
         // Fade edges: ramp in first 5%, ramp out last 5%
-        const fadeIn = Math.min(1, particle.progress / 0.05);
+        const fadeIn  = Math.min(1, particle.progress / 0.05);
         const fadeOut = Math.min(1, (1 - particle.progress) / 0.05);
         const edgeFade = Math.min(fadeIn, fadeOut);
         particle.mesh.material.opacity = (particle.baseOpacity || 0.98) * edgeFade;
@@ -1514,20 +1538,20 @@ function animate() {
             particle.glow.material.opacity = 0.18 * edgeFade;
         }
     });
-
+    
     controls.update();
     renderer.render(scene, camera);
 }
 
 // ============ ENHANCED BLUE MARKER WITH ANIMATION ============
-function createMarker(position, color = 0x1E90FF) {
-    if (currentMarker) scene.remove(currentMarker);
-
-    const g = new THREE.Group();
-
+function createMarker(position, color=0x1E90FF) {
+    if(currentMarker) scene.remove(currentMarker);
+    
+    const g=new THREE.Group();
+    
     // Blue cone marker - matching professional navigation apps
-    const cone = new THREE.Mesh(
-        new THREE.ConeGeometry(1.0, 4, 8),
+    const cone=new THREE.Mesh(
+        new THREE.ConeGeometry(1.0, 4, 8), 
         new THREE.MeshStandardMaterial({
             color: 0x1E90FF,  // Dodger Blue
             emissive: 0x1E90FF,
@@ -1536,12 +1560,12 @@ function createMarker(position, color = 0x1E90FF) {
             roughness: 0.2
         })
     );
-    cone.position.y = 2;
+    cone.position.y=2; 
     g.add(cone);
-
+    
     // Glowing blue sphere on top
-    const sphere = new THREE.Mesh(
-        new THREE.SphereGeometry(0.7, 16, 16),
+    const sphere=new THREE.Mesh(
+        new THREE.SphereGeometry(0.7, 16, 16), 
         new THREE.MeshStandardMaterial({
             color: 0x4169E1,  // Royal Blue
             emissive: 0x1E90FF,
@@ -1550,9 +1574,9 @@ function createMarker(position, color = 0x1E90FF) {
             roughness: 0.1
         })
     );
-    sphere.position.y = 4.5;
+    sphere.position.y=4.5; 
     g.add(sphere);
-
+    
     // Inner blue glow ring
     const ring1 = new THREE.Mesh(
         new THREE.RingGeometry(1.5, 2.0, 32),
@@ -1566,7 +1590,7 @@ function createMarker(position, color = 0x1E90FF) {
     ring1.rotation.x = -Math.PI / 2;
     ring1.position.y = 0.1;
     g.add(ring1);
-
+    
     // Outer ripple ring
     const ring2 = new THREE.Mesh(
         new THREE.RingGeometry(2.2, 2.6, 32),
@@ -1580,39 +1604,39 @@ function createMarker(position, color = 0x1E90FF) {
     ring2.rotation.x = -Math.PI / 2;
     ring2.position.y = 0.05;
     g.add(ring2);
-
+    
     // Enhanced animation with multiple effects
     let time = 0;
-    (function pulse() {
+    (function pulse(){ 
         if (currentMarker !== g) return;
-
+        
         time += 0.025;
-
+        
         // Pulsing sphere with smooth sine wave
         const s = 1 + 0.2 * Math.sin(time * 2);
         sphere.scale.set(s, s, s);
-
+        
         // Inner ring pulse
         const ring1Scale = 1 + 0.3 * Math.sin(time * 1.5);
         const ring1Opacity = 0.4 + 0.3 * Math.sin(time * 1.5);
         ring1.scale.set(ring1Scale, ring1Scale, 1);
         ring1.material.opacity = ring1Opacity;
-
+        
         // Outer ring ripple effect
         const ring2Scale = 1 + 0.5 * Math.sin(time);
         const ring2Opacity = 0.2 + 0.2 * Math.sin(time);
         ring2.scale.set(ring2Scale, ring2Scale, 1);
         ring2.material.opacity = ring2Opacity;
-
+        
         // Gentle rotation for visual interest
         g.rotation.y += 0.005;
-
-        requestAnimationFrame(pulse);
+        
+        requestAnimationFrame(pulse); 
     })();
-
-    g.position.copy(position);
-    scene.add(g);
-    currentMarker = g;
+    
+    g.position.copy(position); 
+    scene.add(g); 
+    currentMarker=g;
 }
 
 // ============ ENHANCED PATH with ANIMATION ============
@@ -1620,9 +1644,9 @@ function createMarker(position, color = 0x1E90FF) {
 function drawEnhancedPath(end) {
     console.error('❌ drawEnhancedPath is DEPRECATED. All navigation paths must be manually created in the admin panel.');
     console.error('Please create a route for this location in the admin panel under Navigation tab.');
-
+    
     alert('⚠️ No Manual Route Found\n\nThis location does not have a manually created navigation route yet.\n\nPlease ask the administrator to create a route in the admin panel:\nAdmin → Navigation → Add Location with Path');
-
+    
     // Clear any existing paths
     pathLines.forEach(line => scene.remove(line));
     pathLines = [];
@@ -1642,26 +1666,26 @@ function createEvacMarker(position) {
     const g = new THREE.Group();
     const cone = new THREE.Mesh(
         new THREE.ConeGeometry(2.8, 11, 8),
-        new THREE.MeshStandardMaterial({
-            color: 0xE67E22,
-            emissive: 0xE67E22,
-            emissiveIntensity: 0.4
+        new THREE.MeshStandardMaterial({ 
+            color: 0xE67E22, 
+            emissive: 0xE67E22, 
+            emissiveIntensity: 0.4 
         })
     );
     cone.position.y = 5.5;
     g.add(cone);
-
+    
     const sphere = new THREE.Mesh(
         new THREE.SphereGeometry(1.8, 16, 16),
-        new THREE.MeshStandardMaterial({
-            color: 0xE67E22,
-            emissive: 0xE67E22,
-            emissiveIntensity: 0.6
+        new THREE.MeshStandardMaterial({ 
+            color: 0xE67E22, 
+            emissive: 0xE67E22, 
+            emissiveIntensity: 0.6 
         })
     );
     sphere.position.y = 12;
     g.add(sphere);
-
+    
     let s = 1, growing = true;
     (function pulse() {
         if (!evacMarkers.includes(g)) return;
@@ -1669,7 +1693,7 @@ function createEvacMarker(position) {
         sphere.scale.set(s, s, s);
         requestAnimationFrame(pulse);
     })();
-
+    
     g.position.copy(position);
     scene.add(g);
     evacMarkers.push(g);
@@ -1684,10 +1708,10 @@ function drawEvacRoute(exitPos) {
     );
     const curve = new THREE.QuadraticBezierCurve3(center, mid, exitPos);
     const geo = new THREE.BufferGeometry().setFromPoints(curve.getPoints(50));
-    const line = new THREE.Line(geo, new THREE.LineDashedMaterial({
-        color: 0xE67E22,
-        dashSize: 3,
-        gapSize: 1
+    const line = new THREE.Line(geo, new THREE.LineDashedMaterial({ 
+        color: 0xE67E22, 
+        dashSize: 3, 
+        gapSize: 1 
     }));
     line.computeLineDistances();
     scene.add(line);
@@ -1704,7 +1728,7 @@ function drawAllEvacRoutes() {
             createEvacMarker(pos);
         }
     });
-
+    
     if (camera && controls) {
         const startPos = camera.position.clone();
         const endPos = new THREE.Vector3(0, 250, -350);
@@ -1725,16 +1749,16 @@ function drawAllEvacRoutes() {
 // ============ CAMERA ANIMATION ============
 function animateCamera(pos) {
     if (!camera || !controls) return;
-    const startCamPos = camera.position.clone();
-    const startTarget = controls.target.clone();
-    const endTarget = pos.clone();
+    const startCamPos    = camera.position.clone();
+    const startTarget    = controls.target.clone();
+    const endTarget      = pos.clone();
     // Pull back and up so the location is nicely framed
     const endCamPos = new THREE.Vector3(pos.x, pos.y + 60, pos.z - 100);
     const startTime = Date.now();
-    const duration = 900;
+    const duration  = 900;
     (function step() {
-        const raw = Math.min((Date.now() - startTime) / duration, 1);
-        const ease = raw < 0.5 ? 2 * raw * raw : 1 - Math.pow(-2 * raw + 2, 2) / 2;
+        const raw  = Math.min((Date.now() - startTime) / duration, 1);
+        const ease = raw < 0.5 ? 2*raw*raw : 1 - Math.pow(-2*raw+2, 2)/2;
         camera.position.lerpVectors(startCamPos, endCamPos, ease);
         controls.target.lerpVectors(startTarget, endTarget, ease);
         controls.update();
@@ -1772,22 +1796,22 @@ function resetOrientation() {
     controls.target.set(0, 0, 0);
     controls.autoRotate = false;
     controls.update();
-
+    
     if (currentMarker) {
         scene.remove(currentMarker);
         currentMarker = null;
     }
-
+    
     pathLines.forEach(line => scene.remove(line));
     pathLines = [];
     pathParticles.forEach(p => { scene.remove(p.mesh); if (p.tail) p.tail.forEach(b => scene.remove(b)); });
     pathParticles = [];
-
+    
     clearEvacMarkers();
-
+    
     const em = scene.getObjectByName('entrance-marker');
     if (em) scene.remove(em);
-
+    
     document.getElementById('pathStats').classList.remove('show');
     const ric2 = document.getElementById('routeInfoCard');
     if (ric2) ric2.classList.remove('show');
@@ -1800,8 +1824,8 @@ function focusOn3D() {
     // Close the info panel
     document.getElementById('infoPanel').classList.remove('show');
 
-    const sb = document.getElementById('sidebar');
-    const mc = document.getElementById('mapContainer');
+    const sb  = document.getElementById('sidebar');
+    const mc  = document.getElementById('mapContainer');
     const tab = document.getElementById('sidebarEdgeTab');
     const isMobile = window.innerWidth <= 768;
 
@@ -1850,9 +1874,9 @@ async function getDirections() {
         alert('⚠️ Please select a location first');
         return;
     }
-
+    
     console.log('Getting directions to:', selectedLocation.name, 'ID:', selectedLocation.id);
-
+    
     try {
         // Fetch ALL routes for this location
         const btn = document.getElementById('directionsBtn');
@@ -1861,9 +1885,9 @@ async function getDirections() {
         if (btnIcon) btnIcon.textContent = '⏳';
 
         const response = await fetch(`${API_HOST}/api/routes/for-location/${selectedLocation.id}`);
-
+        
         console.log('Route fetch response status:', response.status);
-
+        
         if (response.ok) {
             const apiData = await response.json();
             // Normalize: backend may return a plain array OR { routes, count, has_waypoints }
@@ -1876,7 +1900,7 @@ async function getDirections() {
                 // records may exist. The newest/richest one has the most waypoints.
                 const route = routeList.reduce((best, r) =>
                     _waypointCount(r.waypoints) > _waypointCount(best.waypoints) ? r : best
-                    , routeList[0]);
+                , routeList[0]);
 
                 console.log(`[getDirections] Using route "${route.name}" — raw waypoints: ${_waypointCount(route.waypoints)}`);
 
@@ -1895,8 +1919,8 @@ async function getDirections() {
                     console.log('Route has no waypoints — building from location coords');
 
                     const startLoc = locations.find(l => l.id === route.start_location_id);
-                    const endLoc = locations.find(l => l.id === route.end_location_id)
-                        || selectedLocation;
+                    const endLoc   = locations.find(l => l.id === route.end_location_id)
+                                  || selectedLocation;
 
                     // Attempt to build 2-point waypoints from location coordinates
                     const builtWps = [];
@@ -1911,8 +1935,8 @@ async function getDirections() {
                         const gate = locations.find(l =>
                             l.type === 'entrance' ||
                             (l.name && (l.name.toLowerCase().includes('entrance') ||
-                                l.name.toLowerCase().includes('gate') ||
-                                l.name.toLowerCase().includes('main')))
+                                        l.name.toLowerCase().includes('gate') ||
+                                        l.name.toLowerCase().includes('main')))
                         );
                         if (gate && gate.coordinates) {
                             const gx = parseFloat(gate.coordinates.x);
@@ -1962,8 +1986,8 @@ async function getDirections() {
                     const gate = locations.find(l =>
                         l.type === 'entrance' ||
                         (l.name && (l.name.toLowerCase().includes('entrance') ||
-                            l.name.toLowerCase().includes('gate') ||
-                            l.name.toLowerCase().includes('main')))
+                                    l.name.toLowerCase().includes('gate') ||
+                                    l.name.toLowerCase().includes('main')))
                     );
                     const syntheticRoute = {
                         name: 'Direct path',
@@ -1997,9 +2021,9 @@ async function getDirections() {
             _showNoRouteUI();
             return;
         }
+        
 
-
-
+        
     } catch (error) {
         console.error('Error fetching route:', error);
         alert('❌ Error loading route. Please try again or contact the administrator.');
@@ -2019,32 +2043,32 @@ async function drawSavedRoute(route) {
     pathLines = [];
     pathParticles.forEach(p => { scene.remove(p.mesh); if (p.tail) p.tail.forEach(b => scene.remove(b)); });
     pathParticles = [];
-
+    
     // Convert waypoints to THREE.Vector3 positions
     const waypointPositions = [];
-
+    
     console.log('Drawing route with waypoints:', route.waypoints);
     console.log('Waypoints type:', typeof route.waypoints);
-
+    
     // Parse waypoints - handle both array and JSON string
     let waypoints = route.waypoints;
     if (typeof waypoints === 'string') {
         try {
             waypoints = JSON.parse(waypoints);
             console.log('Parsed waypoints from JSON string');
-        } catch (e) {
+        } catch(e) {
             console.error('Failed to parse waypoints JSON:', e);
             alert('❌ Invalid waypoint data. Please recreate the route in admin panel.');
             return;
         }
     }
-
+    
     if (!Array.isArray(waypoints)) {
         console.error('Waypoints is not an array:', waypoints);
         alert('❌ Invalid waypoint format. Please recreate the route in admin panel.');
         return;
     }
-
+    
     // Shared parser handles all formats — null-y defaults to 0, no points silently dropped
     const parsedPts = _parseWaypointArray(waypoints);
     console.log(`[drawSavedRoute] ${parsedPts.length} / ${Array.isArray(waypoints) ? waypoints.length : '?'} waypoints parsed`);
@@ -2052,7 +2076,7 @@ async function drawSavedRoute(route) {
         waypointPositions.push(v);
         console.log(`  [${i}] (${v.x.toFixed(2)}, ${v.y.toFixed(2)}, ${v.z.toFixed(2)})`);
     });
-
+    
     if (waypointPositions.length < 2) {
         console.error('Not enough valid waypoints:', waypointPositions.length, '— attempting fallback to location coords');
         // Try one final fallback: use the selected location's own coordinates
@@ -2068,7 +2092,7 @@ async function drawSavedRoute(route) {
             return;
         }
     }
-
+    
     console.log('✅ Successfully created', waypointPositions.length, 'waypoint positions');
 
     // ── Visible debug sphere at every waypoint ──────────────────────────────
@@ -2076,9 +2100,9 @@ async function drawSavedRoute(route) {
     // White = start, orange = intermediate, green = end.
     waypointPositions.forEach((v, i) => {
         const isFirst = i === 0;
-        const isLast = i === waypointPositions.length - 1;
+        const isLast  = i === waypointPositions.length - 1;
         const col = isFirst ? 0xFFFFFF : (isLast ? 0x00FF88 : 0xFFAA00);
-        const r = isFirst || isLast ? 1.4 : 0.9;
+        const r   = isFirst || isLast ? 1.4 : 0.9;
         const dot = new THREE.Mesh(
             new THREE.SphereGeometry(r, 10, 10),
             new THREE.MeshBasicMaterial({ color: col, depthTest: false, depthWrite: false })
@@ -2088,12 +2112,12 @@ async function drawSavedRoute(route) {
         scene.add(dot);
         pathLines.push(dot); // tracked so it's cleaned up on next call
     });
-
+    
     // Create entrance marker at first waypoint
     if (waypointPositions.length > 0) {
         const old = scene.getObjectByName('entrance-marker');
         if (old) scene.remove(old);
-
+        
         const eg = new THREE.Group();
         const ec = new THREE.Mesh(
             new THREE.ConeGeometry(1.4, 6, 8),
@@ -2105,7 +2129,7 @@ async function drawSavedRoute(route) {
         ec.renderOrder = 1000;
         ec.position.y = 3;
         eg.add(ec);
-
+        
         const es = new THREE.Mesh(
             new THREE.SphereGeometry(0.9, 16, 16),
             new THREE.MeshStandardMaterial({
@@ -2116,12 +2140,12 @@ async function drawSavedRoute(route) {
         );
         es.position.y = 6.5;
         eg.add(es);
-
+        
         eg.position.copy(waypointPositions[0]);
         eg.name = 'entrance-marker';
         scene.add(eg);
     }
-
+    
     // ── PATH RENDERING ──────────────────────────────────────────────────────
     console.log('🎨 Drawing path with', waypointPositions.length, 'waypoints');
 
@@ -2129,8 +2153,8 @@ async function drawSavedRoute(route) {
     let pathColor = 0xF4D03F;
     if (route.path_color) pathColor = parseInt(route.path_color.replace('#', '0x'));
     const isEmergency = route.type === 'emergency' ||
-        route.path_color === '#FF8C00' ||
-        route.path_color === '#E67E22';
+                        route.path_color === '#FF8C00' ||
+                        route.path_color === '#E67E22';
     if (isEmergency) pathColor = 0xFF8C00;
 
     // Build a multi-segment "straight but smoothed at joints" curve.
@@ -2141,11 +2165,11 @@ async function drawSavedRoute(route) {
 
     // Tube sizing — must be large enough to be visible over the 100-unit campus model.
     // depthTest: false ensures the path always renders on top of building geometry.
-    const TUBE_RADIUS = 0.55;   // visible over the building
-    const GLOW_RADIUS = 1.1;    // soft halo
-    const CORE_RADIUS = 0.22;   // bright white center
+    const TUBE_RADIUS   = 0.55;   // visible over the building
+    const GLOW_RADIUS   = 1.1;    // soft halo
+    const CORE_RADIUS   = 0.22;   // bright white center
     const TUBE_SEGMENTS = 14;
-    const PATH_ORDER = 999;    // renderOrder — draw after everything else
+    const PATH_ORDER    = 999;    // renderOrder — draw after everything else
 
     for (let i = 0; i < waypointPositions.length - 1; i++) {
         const seg = new THREE.LineCurve3(waypointPositions[i], waypointPositions[i + 1]);
@@ -2215,13 +2239,13 @@ async function drawSavedRoute(route) {
     // ── PARTICLES ───────────────────────────────────────────────────────────
     // One unified CatmullRom with tension=0 → straight segments, smooth wrapping
     // so particles flow continuously across all segments without jumping.
-    const pathCurve = new THREE.CatmullRomCurve3(waypointPositions, false, 'catmullrom', 0.0);
+    const pathCurve   = new THREE.CatmullRomCurve3(waypointPositions, false, 'catmullrom', 0.0);
     const NUM_PARTICLES = isEmergency ? 9 : 7;
-    const BASE_SPEED = isEmergency ? 0.00055 : 0.00038; // very slow
-    const PARTICLE_R = 0.55;  // noticeably bigger than the tube
-    const GLOW_R = 1.0;   // wide soft halo
-    const TAIL_COUNT = 8;     // tail beads per particle
-    const TAIL_GAP = 0.022; // curve-space gap between beads
+    const BASE_SPEED    = isEmergency ? 0.00055 : 0.00038; // very slow
+    const PARTICLE_R    = 0.55;  // noticeably bigger than the tube
+    const GLOW_R        = 1.0;   // wide soft halo
+    const TAIL_COUNT    = 8;     // tail beads per particle
+    const TAIL_GAP      = 0.022; // curve-space gap between beads
 
     for (let j = 0; j < NUM_PARTICLES; j++) {
 
@@ -2247,9 +2271,9 @@ async function drawSavedRoute(route) {
         // Comet tail beads
         const tailBeads = [];
         for (let t = 0; t < TAIL_COUNT; t++) {
-            const fade = 1 - (t + 1) / (TAIL_COUNT + 1);
+            const fade    = 1 - (t + 1) / (TAIL_COUNT + 1);
             const bRadius = Math.max(0.06, PARTICLE_R * fade * 0.65);
-            const bMat = new THREE.MeshBasicMaterial({
+            const bMat    = new THREE.MeshBasicMaterial({
                 color: pathColor, transparent: true, opacity: fade * 0.50
             });
             const bead = new THREE.Mesh(new THREE.SphereGeometry(bRadius, 8, 8), bMat);
@@ -2258,16 +2282,16 @@ async function drawSavedRoute(route) {
         }
 
         pathParticles.push({
-            mesh: head,
-            glow: halo,
-            tail: tailBeads,
+            mesh:        head,
+            glow:        halo,
+            tail:        tailBeads,
             tailSpacing: TAIL_GAP,
-            curve: pathCurve,
-            progress: j / NUM_PARTICLES,   // evenly spaced on path
-            speed: BASE_SPEED + Math.random() * 0.00006,
-            isLinear: false,
+            curve:       pathCurve,
+            progress:    j / NUM_PARTICLES,   // evenly spaced on path
+            speed:       BASE_SPEED + Math.random() * 0.00006,
+            isLinear:    false,
             baseOpacity: 0.98,
-            breathTime: (j / NUM_PARTICLES) * Math.PI * 2
+            breathTime:  (j / NUM_PARTICLES) * Math.PI * 2
         });
     }
 
@@ -2302,32 +2326,32 @@ async function drawSavedRoute(route) {
 
         // Gentle float up/down
         const baseY = mid.y + 0.55;
-        let aTime = (i / arrowSegments) * Math.PI * 2;
+        let aTime   = (i / arrowSegments) * Math.PI * 2;
         (function floatArrow(arw, mat, by) {
             if (!pathLines.includes(arw)) return;
             aTime += 0.022;
-            arw.position.y = by + 0.14 * Math.sin(aTime);
-            mat.opacity = 0.55 + 0.18 * Math.sin(aTime * 1.2);
+            arw.position.y      = by + 0.14 * Math.sin(aTime);
+            mat.opacity         = 0.55 + 0.18 * Math.sin(aTime * 1.2);
             requestAnimationFrame(() => floatArrow(arw, mat, by));
         })(arrow, arrowMat, baseY);
     }
-
+    
     // Calculate total distance
     let totalDist = 0;
     for (let i = 0; i < waypointPositions.length - 1; i++) {
         totalDist += waypointPositions[i].distanceTo(waypointPositions[i + 1]);
     }
-
+    
     // Calculate estimated time (assuming 1.4 m/s walking speed)
     const estimatedTime = Math.round(totalDist / 1.4); // seconds
     const minutes = Math.floor(estimatedTime / 60);
     const seconds = estimatedTime % 60;
-
+    
     // Show path stats
     const pathStats = document.getElementById('pathStats');
     document.getElementById('pathDistance').textContent = Math.round(totalDist) + 'm';
-    document.getElementById('pathTime').textContent = minutes > 0
-        ? `${minutes}m ${seconds}s`
+    document.getElementById('pathTime').textContent = minutes > 0 
+        ? `${minutes}m ${seconds}s` 
         : `${seconds}s`;
     document.getElementById('pathWaypoints').textContent = waypointPositions.length;
     pathStats.classList.add('show');
@@ -2338,8 +2362,8 @@ async function drawSavedRoute(route) {
     if (clrBtn) clrBtn.classList.add('show');
     // Sync to mobile sheet route card
     const dist = document.getElementById('pathDistance') ? document.getElementById('pathDistance').textContent : '—';
-    const time = document.getElementById('pathTime') ? document.getElementById('pathTime').textContent : '—';
-    const wpts = document.getElementById('pathWaypoints') ? document.getElementById('pathWaypoints').textContent : '—';
+    const time = document.getElementById('pathTime')     ? document.getElementById('pathTime').textContent     : '—';
+    const wpts = document.getElementById('pathWaypoints')? document.getElementById('pathWaypoints').textContent: '—';
     if (typeof syncSheetRouteCard === 'function') syncSheetRouteCard(dist, time, wpts);
 }
 
@@ -2349,15 +2373,15 @@ function verifyLocationCoordinates() {
         console.warn('⚠️ No locations loaded to verify');
         return;
     }
-
+    
     console.log('🔍 Verifying location coordinates...');
-
+    
     const issues = [];
     const warnings = [];
-
+    
     locations.forEach(loc => {
         const coords = loc.coordinates;
-
+        
         // Check if coordinates are all zeros
         if (coords.x === 0 && coords.y === 0 && coords.z === 0) {
             warnings.push({
@@ -2366,7 +2390,7 @@ function verifyLocationCoordinates() {
                 suggestion: 'If this is not the main entrance, set coordinates in admin panel'
             });
         }
-
+        
         // Check if coordinates are outside reasonable bounds
         const maxCoord = Math.max(Math.abs(coords.x), Math.abs(coords.y), Math.abs(coords.z));
         if (maxCoord > 200) {
@@ -2378,7 +2402,7 @@ function verifyLocationCoordinates() {
             });
         }
     });
-
+    
     if (issues.length > 0) {
         console.error('❌ Found', issues.length, 'location(s) with coordinate issues:');
         issues.forEach(issue => {
@@ -2387,7 +2411,7 @@ function verifyLocationCoordinates() {
             console.error(`    → Solution: ${issue.suggestion}`);
         });
     }
-
+    
     if (warnings.length > 0) {
         console.warn('⚠️  Found', warnings.length, 'location(s) with coordinate warnings:');
         warnings.forEach(warn => {
@@ -2395,11 +2419,11 @@ function verifyLocationCoordinates() {
             console.warn(`    → ${warn.suggestion}`);
         });
     }
-
+    
     if (issues.length === 0 && warnings.length === 0) {
         console.log('✅ All location coordinates appear valid');
     }
-
+    
     // Log sample for verification
     if (locations.length > 0) {
         console.log('📍 Sample location coordinates:');
@@ -2409,18 +2433,18 @@ function verifyLocationCoordinates() {
 }
 
 // Debug utility - can be called from browser console
-window.debugCoordinates = function () {
+window.debugCoordinates = function() {
     console.log('========== COORDINATE DEBUG INFO ==========');
     console.log('\n🗺️  Model Transformation:');
     console.log('   Original Center:', modelTransformation.originalBounds?.center);
     console.log('   Scale Factor:', modelTransformation.scale);
     console.log('   Note: All coordinates should be transformed to this space');
-
+    
     console.log('\n📍 All Locations (' + locations.length + '):');
     locations.forEach((loc, i) => {
         console.log(`   ${i + 1}. ${loc.name}:`, loc.coordinates);
     });
-
+    
     console.log('\n🛤️  All Routes (' + routes.length + '):');
     routes.forEach((route, i) => {
         console.log(`   ${i + 1}. ${route.name}:`);
@@ -2432,7 +2456,7 @@ window.debugCoordinates = function () {
             console.log('      Last waypoint:', route.waypoints[route.waypoints.length - 1]);
         }
     });
-
+    
     console.log('\n💡 Tips:');
     console.log('   • Coordinates should typically be between -100 and 100 after transformation');
     console.log('   • If markers appear wrong, re-click locations in admin panel 3D map');
@@ -2444,7 +2468,7 @@ window.debugCoordinates = function () {
 // Call window.debugPaths() from the browser console to:
 //   1. Print every route + every raw waypoint from the DB
 //   2. Place a visible yellow sphere at each parsed waypoint on the 3D map
-window.debugPaths = async function () {
+window.debugPaths = async function() {
     console.log('%c🛤️ debugPaths — fetching all routes...', 'font-weight:bold;color:#F4D03F;');
 
     // Remove previous debug spheres
@@ -2455,7 +2479,7 @@ window.debugPaths = async function () {
     try {
         const res = await fetch(`${API_HOST}/navigation-routes`);
         allRoutes = await res.json();
-    } catch (e) {
+    } catch(e) {
         console.error('Failed to fetch routes:', e);
         return;
     }
@@ -2465,7 +2489,7 @@ window.debugPaths = async function () {
     for (const route of allRoutes) {
         const rawWps = route.waypoints;
         const rawCount = _waypointCount(rawWps);
-        const parsed = _parseWaypointArray(rawWps);
+        const parsed   = _parseWaypointArray(rawWps);
 
         console.group(`Route #${route.id} "${route.name}" | start:${route.start_location_id} → end:${route.end_location_id}`);
         console.log('  Raw waypoints count :', rawCount);
@@ -2494,7 +2518,7 @@ window.debugPaths = async function () {
 };
 
 // Also expose a quick route check for a specific location
-window.debugLocation = async function (locationId) {
+window.debugLocation = async function(locationId) {
     console.log(`%c🔍 Routes for location ${locationId}`, 'font-weight:bold;color:#4A90E2;');
     try {
         const res = await fetch(`${API_HOST}/api/routes/for-location/${locationId}`);
@@ -2507,7 +2531,7 @@ window.debugLocation = async function (locationId) {
             console.log(`  #${r.id} "${r.name}" — DB waypoints: ${count}, parsed: ${parsed.length}`);
             console.log('  Raw:', JSON.stringify(r.waypoints).slice(0, 200));
         });
-    } catch (e) {
+    } catch(e) {
         console.error('Error:', e);
     }
 };
@@ -2521,10 +2545,10 @@ console.log('  → debugLocation(id)   - Check exact DB data for a specific loca
 console.log('  → Press F12 to see detailed loading logs');
 
 // ============ INIT ============
-window.onload = function () {
+window.onload = function() {
     // ── Set initial sidebar state ────────────────────────────────────────────
-    const sb = document.getElementById('sidebar');
-    const mc = document.getElementById('mapContainer');
+    const sb  = document.getElementById('sidebar');
+    const mc  = document.getElementById('mapContainer');
     const tab = document.getElementById('sidebarEdgeTab');
     const isMobile = window.innerWidth <= 768;
     if (isMobile) {
@@ -2545,4 +2569,7 @@ window.onload = function () {
     // Enable drag-to-scroll on horizontal pill bars
     enableDragScroll(document.getElementById('filterBar'));
     enableDragScroll(document.getElementById('floorBar'));
+
+    // Init mobile sheet AFTER layout is ready
+    if (isMobile) initMobileSheet();
 };

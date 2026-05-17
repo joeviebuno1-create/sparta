@@ -1101,11 +1101,15 @@ input, textarea,
     background: #fff;
     border-radius: 20px 20px 0 0;
     box-shadow: 0 -4px 28px rgba(0,0,0,0.10);
+    /* Fixed height like Parzellary so offsetHeight is reliable for drag math */
+    height: calc(85vh - var(--bottom-nav-h));
+    height: calc(85dvh - var(--bottom-nav-h));
     transform: translateY(calc(100% - var(--sheet-peek)));
     transition: transform 0.34s cubic-bezier(0.4,0,0.2,1);
-    max-height: calc(90vh - var(--bottom-nav-h));
     display: flex; flex-direction: column;
-    touch-action: none;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: auto;
   }
   .mobile-bottom-sheet.expanded { transform: translateY(0); }
   .mobile-bottom-sheet.mid      { transform: translateY(calc(100% - var(--sheet-mid))); }
@@ -1157,11 +1161,12 @@ input, textarea,
     box-shadow: 0 2px 8px rgba(230,126,34,0.28);
   }
 
-  /* Sheet scrollable content */
+  /* Sheet scrollable content — scroll freely, no drag interference */
   .sheet-content {
     flex: 1; overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
+    touch-action: pan-y;
   }
 
   /* Filter chips row — like Parzellary's status chips
@@ -1812,4 +1817,72 @@ input, textarea,
   /* ── 14. Floating card — no route stats section (removed from HTML) ── */
   .mlc-route { display: none !important; }
 
+}
+
+/* =====================================================
+   PARZELLARY-PATTERN DRAG FIX
+   touch-action:none on every drag zone tells the browser
+   those elements do NOT scroll — events fire cleanly.
+   ===================================================== */
+
+@media (max-width: 768px) {
+
+  /* ── Handle pill ── */
+  .sheet-handle-bar,
+  .sheet-handle {
+    touch-action: none;
+    cursor: grab;
+    user-select: none;
+  }
+  .sheet-handle-bar:active,
+  .sheet-handle:active { cursor: grabbing; }
+
+  /* ── Drag-top zone (search row + pills) ── */
+  /* Same as Parzellary's .sbar-top — touch-action:none makes it a drag zone */
+  .sheet-drag-top {
+    touch-action: none;
+    flex-shrink: 0;
+    background: #fff;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+
+  /* Search row sits inside drag-top — input still tappable (pointer events fine) */
+  .sheet-drag-top .sheet-search-row {
+    position: static; /* drag-top handles sticky */
+  }
+
+  /* Pills rows inside drag-top */
+  .sheet-drag-top .sheet-pills-row {
+    position: static;
+    touch-action: pan-x; /* allow horizontal scroll of pills */
+  }
+
+  /* Reset row inside drag-top */
+  .sheet-drag-top .sheet-reset-row {
+    position: static;
+  }
+
+  /* ── Scroll content — normal touch, no drag-top override ── */
+  .sheet-content {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    /* Remove touch-action restriction so list scrolls freely */
+    touch-action: auto;
+  }
+
+  /* ── Sheet itself — overscroll-behavior stops page from bouncing ── */
+  .mobile-bottom-sheet {
+    overscroll-behavior: none;
+    /* Remove touch-action:none from sheet so content inside can scroll */
+    touch-action: auto;
+  }
+
+  /* ── Sheet snaps — exact Parzellary naming and values ── */
+  /* peek = no class (default transform in base CSS) */
+  /* mid  = .mid */
+  /* full = .expanded */
 }
