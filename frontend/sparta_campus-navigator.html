@@ -44,11 +44,7 @@
     <button class="mlc-close" onclick="closeMobileCard()">✕</button>
   </div>
   <div class="mlc-body" id="mlcBody"></div>
-  <div class="mlc-route" id="mlcRoute" style="display:none;">
-    <div class="mlc-route-stat"><span>📏</span><span id="mlcDist">—</span></div>
-    <div class="mlc-route-stat"><span>⏱️</span><span id="mlcTime">—</span></div>
-    <div class="mlc-route-stat"><span>🚶</span><span id="mlcWp">—</span></div>
-  </div>
+
   <div class="mlc-actions">
     <button class="mlc-dir-btn" id="mlcDirBtn" onclick="getDirections()">
       <span>📍</span> Get Directions
@@ -399,58 +395,30 @@
     </button>
   </div>
 
-  <!-- Sticky header — shows search/filter for the active tab (outside scroll area) -->
-  <div class="sheet-sticky-header" id="sheetStickyHeader">
+  <!-- Sheet content panels -->
+  <div class="sheet-content" id="sheetContent">
 
-    <!-- Pane: Locations (search + type filter + floor filter) -->
-    <div class="sheet-sth-pane active" id="sthLocations">
+    <!-- Locations panel -->
+    <div class="sheet-panel active" id="sheet-panel-locations">
+      <!-- Mobile search bar (inside sheet, replaces floating search) -->
       <div class="sheet-search-row">
         <span class="sheet-search-icon">🔍</span>
         <input type="text" class="sheet-search-input" id="mobileSheetSearch"
                placeholder="Search location on map…" autocomplete="off">
         <button class="sheet-search-clear" id="mobileSearchClear" style="display:none;">✕</button>
       </div>
+      <!-- Filter pills -->
       <div class="sheet-pills-row" id="sheetFilterBar">
         <button class="filter-pill active" data-filter="all" onclick="applyFilter('all',this)">All</button>
       </div>
+      <!-- Floor pills -->
       <div class="sheet-pills-row" id="sheetFloorBar">
         <button class="floor-pill active" data-floor="all" onclick="applyFloor('all',this)">All Floors</button>
       </div>
+      <!-- Reset filters button — shown only when non-default filter active -->
       <div class="sheet-reset-row" id="sheetResetRow" style="display:none;">
         <button class="sheet-reset-btn" onclick="resetFilters()">✕ Reset Filters</button>
       </div>
-    </div>
-
-    <!-- Pane: Saved -->
-    <div class="sheet-sth-pane" id="sthFavorites">
-      <div class="sheet-search-row">
-        <span class="sheet-search-icon">🔍</span>
-        <input type="text" class="sheet-search-input" id="favSheetSearch"
-               placeholder="Search saved locations…" autocomplete="off"
-               oninput="filterFavSearch(this.value)">
-        <button class="sheet-search-clear" id="favSearchClear"
-                onclick="filterFavSearch(''); this.style.display='none'; document.getElementById('favSheetSearch').value='';"
-                style="display:none;">✕</button>
-      </div>
-    </div>
-
-    <!-- Pane: Evacuation -->
-    <div class="sheet-sth-pane" id="sthEvacuation">
-      <div class="sheet-search-row">
-        <span class="sheet-search-icon">🔍</span>
-        <input type="text" class="sheet-search-input" id="evacSheetSearch"
-               placeholder="Search emergency exits…" autocomplete="off"
-               oninput="filterEvacSearch(this.value)">
-      </div>
-    </div>
-
-  </div>
-
-  <!-- Sheet content panels -->
-  <div class="sheet-content" id="sheetContent">
-
-    <!-- Locations panel -->
-    <div class="sheet-panel active" id="sheet-panel-locations">
       <!-- Location list -->
       <div class="sheet-loc-list" id="sheetLocList">
         <div class="empty-state"><div class="es-icon">🗺️</div><p>Loading…</p></div>
@@ -466,72 +434,64 @@
           <div class="sheet-detail-sub" id="sheetDetailSub">—</div>
         </div>
       </div>
-      <!-- Compact navigating bar — shown after Get Directions, replaces full detail -->
-      <div class="sheet-nav-active" id="sheetNavActive" style="display:none;">
-        <span class="sna-icon">📍</span>
-        <div class="sna-text">
-          <div class="sna-label">Navigating to</div>
-          <div class="sna-name" id="snaName">—</div>
-        </div>
-        <button class="sna-clear" onclick="closeInfo(); closeSheetDetail();">✕ Clear</button>
-      </div>
       <!-- Location info rows rendered here by JS -->
       <div id="sheetDetailContent"></div>
+      <!-- Route info card -->
+      <div class="sheet-route-card" id="sheetRouteCard">
+        <div class="route-info-title">🛤️ Route Info</div>
+        <div class="route-stats-row">
+          <div class="route-stat"><div class="rs-icon">📏</div><div class="rs-label">Distance</div><div class="rs-value" id="sheetPathDistance">—</div></div>
+          <div class="route-stat"><div class="rs-icon">⏱️</div><div class="rs-label">Walk time</div><div class="rs-value" id="sheetPathTime">—</div></div>
+          <div class="route-stat"><div class="rs-icon">🚶</div><div class="rs-label">Stops</div><div class="rs-value" id="sheetPathWaypoints">—</div></div>
+        </div>
+      </div>
       <!-- Action buttons -->
-      <div class="info-actions" id="sheetDetailActions" style="padding: 0.55rem 0 0.85rem;">
+      <div class="info-actions" style="padding: 0.55rem 0 0.85rem;">
         <button class="directions-btn" id="sheetDirectionsBtn" onclick="getDirections()">
           <span id="sheetDirectionsBtnIcon">📍</span>
           <span>Get Directions</span>
         </button>
-        <button class="clear-btn" id="sheetClearBtn" onclick="closeInfo(); closeSheetDetail();" style="display:none;">✕ Clear</button>
+        <button class="clear-btn" id="sheetClearBtn" onclick="closeInfo()">✕ Clear</button>
       </div>
     </div>
 
     <!-- Favorites panel -->
     <div class="sheet-panel" id="sheet-panel-favorites">
+      <div class="sheet-search-row">
+        <span class="sheet-search-icon">🔍</span>
+        <input type="text" class="sheet-search-input" id="favSearch"
+               placeholder="Search saved locations…" autocomplete="off">
+        <button class="sheet-search-clear" id="favSearchClear" style="display:none;">✕</button>
+      </div>
       <div class="sheet-loc-list" id="sheetFavList">
-        <div class="empty-state" style="padding:2.5rem 1rem;">
-          <div class="es-icon">⭐</div>
-          <p>No favorites yet</p>
-          <p class="es-sub">Tap ☆ on any location</p>
-        </div>
+        <div class="empty-state"><div class="es-icon">⭐</div><p>No favorites yet</p><p class="es-sub">Tap ☆ on any location</p></div>
       </div>
     </div>
 
     <!-- Evacuation panel -->
     <div class="sheet-panel" id="sheet-panel-evacuation">
-      <div class="evac-inner" style="padding:.75rem;">
-        <div class="evac-compact-banner">
-          <span class="evac-compact-icon">🚨</span>
-          <div>
-            <div class="evac-compact-title">Emergency Evacuation</div>
-            <div class="evac-compact-sub">Know your nearest emergency exits</div>
-          </div>
-        </div>
-        <div class="evac-section">
-          <div class="evac-section-title"><span>📋</span> Evacuation Procedures</div>
-          <div class="evac-info-box">
-            <p><strong>1. Stay Calm:</strong> Follow instructions from faculty or emergency personnel.</p>
-            <p><strong>2. Use Nearest Exit:</strong> Proceed to the closest safe exit. Do not use elevators.</p>
-            <p><strong>3. Assembly Point:</strong> Gather at the open field near Main Gate.</p>
-            <p><strong>4. Account for Everyone:</strong> Faculty will conduct headcount.</p>
-            <p><strong>5. Wait for Instructions:</strong> Do not re-enter until authorized.</p>
-          </div>
-        </div>
-        <div class="evac-section">
-          <div class="evac-section-title"><span>📞</span> Emergency Contacts</div>
-          <div class="evac-info-box">
-            <p><strong>Campus Security:</strong> (043) 756-5555 local 101</p>
-            <p><strong>Medical Clinic:</strong> (043) 756-5555 local 201</p>
-            <p><strong>Lipa City Emergency:</strong> 911</p>
-            <p><strong>Fire Department:</strong> (043) 756-1234</p>
-          </div>
-        </div>
-        <div class="evac-section">
-          <div class="evac-section-title"><span>🚪</span> Emergency Exits</div>
-          <div id="sheetExitsList"><div class="empty-state"><div class="es-icon">🚪</div><p>Loading…</p></div></div>
+      <div class="sheet-search-row">
+        <span class="sheet-search-icon">🚨</span>
+        <input type="text" class="sheet-search-input" id="evacSearch"
+               placeholder="Search emergency exits…" autocomplete="off">
+        <button class="sheet-search-clear" id="evacSearchClear" style="display:none;">✕</button>
+      </div>
+      <!-- Collapsible info — tap to expand -->
+      <div class="evac-collapsible" id="evacInfoToggle" onclick="this.classList.toggle('open')">
+        <span class="evac-coll-icon">🚨</span>
+        <span class="evac-coll-label">Emergency Info &amp; Contacts</span>
+        <span class="evac-coll-arrow">›</span>
+      </div>
+      <div class="evac-collapsible-body" id="evacInfoBody">
+        <div class="evac-info-box" style="margin:.4rem .75rem;">
+          <p><strong>1. Stay Calm.</strong> Follow faculty/emergency instructions.</p>
+          <p><strong>2. Nearest Exit.</strong> Do not use elevators.</p>
+          <p><strong>3. Assembly.</strong> Open field near Main Gate.</p>
+          <p><strong>Security:</strong> (043) 756-5555 loc 101 &nbsp;|&nbsp; <strong>Emergency:</strong> 911</p>
         </div>
       </div>
+      <div class="evac-list-label">🚪 Emergency Exits</div>
+      <div id="sheetExitsList"><div class="empty-state"><div class="es-icon">🚪</div><p>Loading…</p></div></div>
     </div>
 
     <!-- Legend panel -->
@@ -562,8 +522,9 @@
         </div>
         <div class="legend-card">
           <div class="legend-card-title">🕹️ Controls</div>
-          <div class="legend-row"><span class="legend-emoji">🖱️</span><div><div class="legend-label">Rotate</div><div class="legend-desc">Click + drag</div></div></div>
-          <div class="legend-row"><span class="legend-emoji">🔍</span><div><div class="legend-label">Zoom</div><div class="legend-desc">Pinch or scroll</div></div></div>
+          <div class="legend-row"><span class="legend-emoji">👆</span><div><div class="legend-label">Rotate</div><div class="legend-desc">One finger drag</div></div></div>
+          <div class="legend-row"><span class="legend-emoji">🤏</span><div><div class="legend-label">Zoom</div><div class="legend-desc">Pinch in / out</div></div></div>
+          <div class="legend-row"><span class="legend-emoji">✌️</span><div><div class="legend-label">Pan</div><div class="legend-desc">Two finger drag</div></div></div>
           <div class="legend-row"><span class="legend-emoji">🧭</span><div><div class="legend-label">Reset View</div><div class="legend-desc">🧭 button bottom right</div></div></div>
         </div>
       </div>
@@ -630,49 +591,44 @@
 
 <script>
 // ============================================================
-// MOBILE UI PATCHES — all mobile-only, desktop unaffected
+// MOBILE UI PATCHES v2 — all mobile-only, desktop unaffected
 // ============================================================
 (function() {
+    if (typeof isMobile !== 'function' || !isMobile()) return;
 
-    // ── 1. Override showSheetDetail to use floating card on mobile ──
-    var _origShowSheetDetail = window.showSheetDetail;
+    // ── 1. Override showSheetDetail → Parzellary floating card ──
+    var _orig = window.showSheetDetail;
     window.showSheetDetail = function(loc) {
-        if (typeof isMobile === 'function' && isMobile()) {
-            _showMobileCard(loc);
-        } else {
-            _origShowSheetDetail && _origShowSheetDetail(loc);
-        }
+        if (isMobile()) _showMobileCard(loc);
+        else if (_orig) _orig(loc);
     };
 
     function _showMobileCard(loc) {
         var card = document.getElementById('mobileLocCard');
         if (!card) return;
-        // Icon
-        document.getElementById('mlcIcon').textContent = (typeof getTypeIcon === 'function' ? getTypeIcon(loc.type) : null) || loc.icon || '📍';
-        // Name + subtitle
+        document.getElementById('mlcIcon').textContent =
+            (typeof getTypeIcon === 'function' ? getTypeIcon(loc.type) : null) || loc.icon || '📍';
         document.getElementById('mlcName').textContent = loc.name || '—';
-        var parts = [loc.building, loc.floor != null ? 'Floor ' + loc.floor : '', loc.type].filter(Boolean);
+        var parts = [loc.building, loc.floor != null ? 'Floor ' + loc.floor : '', loc.type]
+            .filter(Boolean);
         document.getElementById('mlcSub').textContent = parts.join(' · ');
-        // Info rows
         var body = document.getElementById('mlcBody');
         var html = '';
-        if (loc.building)     html += _mlcRow('🏢','Building', loc.building);
-        if (loc.floor != null)html += _mlcRow('🏬','Floor', 'Floor ' + loc.floor);
-        if (loc.type)         html += _mlcRow('🏷️','Type', loc.type.charAt(0).toUpperCase() + loc.type.slice(1));
-        if (loc.capacity)     html += _mlcRow('👥','Capacity', loc.capacity + ' persons');
-        if (loc.accessible)   html += _mlcRow('♿','Access', '<span style="color:#16a34a;font-weight:700;">Wheelchair Accessible</span>');
-        if (loc.description)  html += _mlcRow('📝','Note', loc.description);
+        if (loc.building)      html += _row('🏢','Building',  loc.building);
+        if (loc.floor != null) html += _row('🏬','Floor',     'Floor ' + loc.floor);
+        if (loc.type)          html += _row('🏷️','Type',      loc.type.charAt(0).toUpperCase() + loc.type.slice(1));
+        if (loc.capacity)      html += _row('👥','Capacity',  loc.capacity + ' persons');
+        if (loc.accessible)    html += _row('♿','Access',    '<span style="color:#16a34a;font-weight:700;">Wheelchair Accessible</span>');
+        if (loc.description)   html += _row('📝','Note',      loc.description);
         body.innerHTML = html;
-        // Reset route section
-        document.getElementById('mlcRoute').style.display = 'none';
-        // Show card
+        // Reset to full view
+        card.classList.remove('minimized');
         card.classList.add('show');
-        // Hide sheet
-        var sheet = document.getElementById('mobileBottomSheet');
-        if (sheet) sheet.classList.add('card-open');
+        // Collapse sheet to peek so card is visible
+        if (typeof expandSheet === 'function') expandSheet('peek');
     }
 
-    function _mlcRow(icon, label, val) {
+    function _row(icon, label, val) {
         return '<div class="mlc-row"><span class="mlc-row-icon">' + icon + '</span>'
              + '<div><div class="mlc-row-label">' + label + '</div>'
              + '<div class="mlc-row-val">' + val + '</div></div></div>';
@@ -681,65 +637,116 @@
     // ── 2. Close mobile card ────────────────────────────────────
     window.closeMobileCard = function() {
         var card = document.getElementById('mobileLocCard');
-        if (card) card.classList.remove('show');
+        if (card) { card.classList.remove('show', 'minimized'); }
         var sheet = document.getElementById('mobileBottomSheet');
         if (sheet) sheet.classList.remove('card-open');
         if (typeof expandSheet === 'function') expandSheet('mid');
         if (typeof closeInfo === 'function') closeInfo();
-        // Clear active item highlight
-        document.querySelectorAll('.loc-item.active').forEach(function(el){ el.classList.remove('active'); });
+        document.querySelectorAll('.loc-item.active, .sheet-loc-item.active')
+            .forEach(function(el){ el.classList.remove('active'); });
     };
 
-    // ── 3. Mirror route stats into floating card ────────────────
-    // Observe sheetPathDistance for changes so we can mirror them
-    var _dist = document.getElementById('sheetPathDistance');
-    var _time = document.getElementById('sheetPathTime');
-    var _wp   = document.getElementById('sheetPathWaypoints');
-    if (_dist && _time) {
-        var obs = new MutationObserver(function() {
-            var d = _dist.textContent, t = _time.textContent, w = _wp ? _wp.textContent : '';
-            if (d && d !== '—') {
-                var route = document.getElementById('mlcRoute');
-                if (route) {
-                    document.getElementById('mlcDist').textContent = d;
-                    document.getElementById('mlcTime').textContent = t;
-                    if (w) document.getElementById('mlcWp').textContent = w;
-                    route.style.display = 'flex';
-                }
+    // ── 3. Minimize card when Get Directions fires ──────────────
+    var _origGetDir = window.getDirections;
+    window.getDirections = function() {
+        if (_origGetDir) _origGetDir.apply(this, arguments);
+        // After directions triggered, minimize the card
+        var card = document.getElementById('mobileLocCard');
+        if (card && card.classList.contains('show')) {
+            card.classList.add('minimized');
+        }
+    };
+
+    // ── 4. Content-aware sheet snap (issue 5) ────────────────────
+    var _origRender = window.renderSheetLocList;
+    window.renderSheetLocList = function(locs) {
+        if (_origRender) _origRender(locs);
+        _autoSnapSheet();
+    };
+    function _autoSnapSheet() {
+        var sheet = document.getElementById('mobileBottomSheet');
+        if (!sheet) return;
+        var content = document.getElementById('sheetContent');
+        if (!content) return;
+        // Use setTimeout to let DOM update
+        setTimeout(function() {
+            var scrollH = content.scrollHeight;
+            var handleH = 52;
+            var total   = scrollH + handleH;
+            var midSnap = window.innerHeight * 0.52;
+            if (total < midSnap && sheet.classList.contains('mid')) {
+                // Content is shorter than mid snap — set a custom transform
+                var navH   = parseInt(getComputedStyle(document.documentElement)
+                    .getPropertyValue('--bottom-nav-h')) || 64;
+                var available = window.innerHeight - navH;
+                var newT = Math.max(0, available - total);
+                sheet.style.transform = 'translateY(' + newT + 'px)';
             }
-        });
-        obs.observe(_dist, { childList: true, characterData: true, subtree: true });
+        }, 60);
     }
 
-    // ── 4. Reset filters ───────────────────────────────────────
-    window.resetFilters = function() {
-        document.querySelectorAll('.filter-pill').forEach(function(p){ p.classList.remove('active'); });
-        var aType = document.querySelector('[data-filter="all"]');
-        if (aType) { aType.classList.add('active'); if (typeof applyFilter === 'function') applyFilter('all', aType); }
-        document.querySelectorAll('.floor-pill').forEach(function(p){ p.classList.remove('active'); });
-        var aFloor = document.querySelector('[data-floor="all"]');
-        if (aFloor) { aFloor.classList.add('active'); if (typeof applyFloor === 'function') applyFloor('all', aFloor); }
-        document.getElementById('sheetResetRow') && (document.getElementById('sheetResetRow').style.display = 'none');
-    };
+    // ── 5. Evac search ──────────────────────────────────────────
+    var evacSrch = document.getElementById('evacSearch');
+    var evacClr  = document.getElementById('evacSearchClear');
+    if (evacSrch) {
+        evacSrch.addEventListener('input', function() {
+            _filterEvacList(this.value);
+            if (evacClr) evacClr.style.display = this.value ? 'block' : 'none';
+        });
+    }
+    if (evacClr) {
+        evacClr.addEventListener('click', function() {
+            if (evacSrch) { evacSrch.value = ''; _filterEvacList(''); }
+            this.style.display = 'none';
+        });
+    }
+    function _filterEvacList(q) {
+        var list = document.getElementById('sheetExitsList');
+        if (!list) return;
+        if (!q) { if (typeof renderSheetExitsList === 'function') renderSheetExitsList(); return; }
+        var items = list.querySelectorAll('.loc-item, .evac-loc-item');
+        items.forEach(function(item) {
+            var name = (item.querySelector('.loc-name') || {}).textContent || '';
+            var sub  = (item.querySelector('.loc-sub')  || {}).textContent || '';
+            item.style.display = (name + sub).toLowerCase().includes(q.toLowerCase()) ? '' : 'none';
+        });
+    }
 
-    // Show reset button when non-default filter active
-    document.addEventListener('click', function(e) {
-        if (!e.target.matches('.filter-pill, .floor-pill')) return;
-        setTimeout(function() {
-            var hasType  = !document.querySelector('[data-filter="all"].active');
-            var hasFloor = !document.querySelector('[data-floor="all"].active');
-            var row = document.getElementById('sheetResetRow');
-            if (row) row.style.display = (hasType || hasFloor) ? 'flex' : 'none';
-        }, 15);
-    });
+    // ── 6. Saved/Favorites search ───────────────────────────────
+    var favSrch = document.getElementById('favSearch');
+    var favClr  = document.getElementById('favSearchClear');
+    if (favSrch) {
+        favSrch.addEventListener('input', function() {
+            _filterFavList(this.value);
+            if (favClr) favClr.style.display = this.value ? 'block' : 'none';
+        });
+    }
+    if (favClr) {
+        favClr.addEventListener('click', function() {
+            if (favSrch) { favSrch.value = ''; _filterFavList(''); }
+            this.style.display = 'none';
+        });
+    }
+    function _filterFavList(q) {
+        var list = document.getElementById('sheetFavList');
+        if (!list) return;
+        var items = list.querySelectorAll('.sheet-loc-item, .loc-item');
+        items.forEach(function(item) {
+            var txt = item.textContent || '';
+            item.style.display = !q || txt.toLowerCase().includes(q.toLowerCase()) ? '' : 'none';
+        });
+    }
 
-    // ── 5. Mobile sheet search ─────────────────────────────────
+    // ── 7. Locations sheet search ───────────────────────────────
     var mSrch = document.getElementById('mobileSheetSearch');
     var mClr  = document.getElementById('mobileSearchClear');
     if (mSrch) {
         mSrch.addEventListener('input', function() {
             if (typeof liveSearch === 'function') liveSearch(this.value);
             if (mClr) mClr.style.display = this.value ? 'block' : 'none';
+        });
+        mSrch.addEventListener('focus', function() {
+            if (typeof expandSheet === 'function') expandSheet('full');
         });
     }
     if (mClr) {
@@ -749,34 +756,58 @@
         });
     }
 
-    // ── 6. Bell badge sync from popup_announcements ────────────
-    function _syncBell() {
-        var cnt = document.getElementById('spBellCount');
-        var badge = document.getElementById('mtbBellBadge');
-        if (!cnt || !badge) return;
-        var n = cnt.textContent || '0';
-        badge.textContent = n;
-        badge.style.display = (parseInt(n) > 0) ? 'flex' : 'none';
-    }
-    // Poll until announcements load
-    var _bellTimer = setInterval(function() {
-        var bell = document.getElementById('spNotifBell');
-        if (bell && bell.classList.contains('visible')) { _syncBell(); clearInterval(_bellTimer); }
-    }, 500);
-    setTimeout(function(){ clearInterval(_bellTimer); }, 10000);
+    // ── 8. Reset filters ────────────────────────────────────────
+    window.resetFilters = function() {
+        var aType  = document.querySelector('[data-filter="all"]');
+        var aFloor = document.querySelector('[data-floor="all"]');
+        if (aType  && typeof applyFilter === 'function') applyFilter('all', aType);
+        if (aFloor && typeof applyFloor  === 'function') applyFloor('all', aFloor);
+        var row = document.getElementById('sheetResetRow');
+        if (row) row.style.display = 'none';
+    };
+    // Show reset button when non-default filter active
+    document.addEventListener('click', function(e) {
+        if (!e.target.matches('.filter-pill, .floor-pill')) return;
+        setTimeout(function() {
+            var hasType  = !document.querySelector('#sheetFilterBar [data-filter="all"].active');
+            var hasFloor = !document.querySelector('#sheetFloorBar [data-floor="all"].active');
+            var row = document.getElementById('sheetResetRow');
+            if (row) row.style.display = (hasType || hasFloor) ? 'flex' : 'none';
+        }, 20);
+    });
 
-    // ── 7. Camera adjustment for mobile portrait ───────────────
-    function _adjustMobileCamera() {
-        if (typeof isMobile !== 'function' || !isMobile()) return;
-        if (typeof camera === 'undefined' || !camera) return;
-        camera.position.set(0, 200, -220);
-        if (typeof controls !== 'undefined' && controls) {
-            controls.target.set(0, 0, 0);
-            controls.update();
+    // ── 9. Bell badge sync ──────────────────────────────────────
+    var _bellTimer = setInterval(function() {
+        var src   = document.getElementById('spBellCount');
+        var badge = document.getElementById('mtbBellBadge');
+        if (src && badge) {
+            badge.textContent = src.textContent || '0';
+            badge.style.display = parseInt(src.textContent) > 0 ? 'flex' : 'none';
+            clearInterval(_bellTimer);
         }
+    }, 400);
+    setTimeout(function(){ clearInterval(_bellTimer); }, 12000);
+
+    // ── 10. Camera centering on mobile (after model loads) ──────
+    setTimeout(function() {
+        if (typeof camera === 'undefined' || !camera) return;
+        if (typeof controls === 'undefined' || !controls) return;
+        camera.position.set(0, 150, -250);
+        controls.target.set(0, 0, 0);
+        controls.update();
+    }, 4000);
+
+    // ── 11. Evac collapsible info ──────────────────────────────
+    var evacBody = document.getElementById('evacInfoBody');
+    if (evacBody) evacBody.style.display = 'none';
+    var evacToggle = document.getElementById('evacInfoToggle');
+    if (evacToggle) {
+        evacToggle.addEventListener('click', function() {
+            if (!evacBody) return;
+            var open = this.classList.contains('open');
+            evacBody.style.display = open ? 'block' : 'none';
+        });
     }
-    // Wait for 3D model to load before adjusting
-    setTimeout(_adjustMobileCamera, 3500);
 
 })();
 </script>
