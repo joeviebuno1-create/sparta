@@ -349,24 +349,45 @@ function renderLocationsList() {
 
 // ============ NEARBY (simulated from entrance) ============
 function renderNearby() {
-    const entrance = locations.find(l => l.isExit);
-    if (!entrance) return;
-    const sorted = locations.filter(l => l.id !== entrance.id).sort((a,b) => {
-        const da = Math.sqrt(Math.pow(a.coordinates.x-entrance.coordinates.x,2)+Math.pow(a.coordinates.y-entrance.coordinates.y,2)+Math.pow(a.coordinates.z-entrance.coordinates.z,2));
-        const db = Math.sqrt(Math.pow(b.coordinates.x-entrance.coordinates.x,2)+Math.pow(b.coordinates.y-entrance.coordinates.y,2)+Math.pow(b.coordinates.z-entrance.coordinates.z,2));
-        return da - db;
-    }).slice(0, 4);
+    // Sort all locations by distance from entrance gate
+    const entrance = locations.find(l =>
+        l.type === 'entrance' ||
+        (l.name && l.name.toLowerCase().includes('main entrance'))
+    );
+    if (!entrance || !entrance.coordinates) return;
+
+    const sorted = locations
+        .filter(l => l.id !== entrance.id && l.coordinates)
+        .map(l => {
+            const dx = (l.coordinates.x||0) - (entrance.coordinates.x||0);
+            const dy = (l.coordinates.y||0) - (entrance.coordinates.y||0);
+            const dz = (l.coordinates.z||0) - (entrance.coordinates.z||0);
+            return { loc: l, dist: Math.sqrt(dx*dx + dy*dy + dz*dz) };
+        })
+        .sort((a, b) => a.dist - b.dist)
+        .slice(0, 6)   // show top 6 nearest
+        .map(x => x.loc);
 
     if (!sorted.length) return;
-    document.getElementById('nearbySection').style.display = 'block';
-    let html = '';
-    sorted.forEach(loc => {
-        html += `<div class="loc-item" style="margin-bottom:.25rem;" onclick="selectLocation(${loc.id},this)">
-            <span class="loc-icon">${loc.icon}</span>
-            <div><div class="loc-name">${loc.name}</div><div class="loc-sub">Floor ${loc.floor} · ${loc.type}</div></div>
+
+    const section = document.getElementById('nearbySection');
+    const list    = document.getElementById('nearbyList');
+    if (!section || !list) return;
+
+    section.style.display = 'block';
+
+    // Render as horizontal snap-scroll cards
+    list.innerHTML = sorted.map(loc => {
+        const icon  = loc.icon || '📍';
+        const floor = loc.floor != null ? `Floor ${loc.floor}` : '';
+        const type  = loc.type || '';
+        const sub   = [floor, type].filter(Boolean).join(' · ');
+        return `<div class="loc-item" onclick="selectLocation(${loc.id},this)" title="${loc.name}">
+            <span class="loc-icon">${icon}</span>
+            <div class="loc-name">${loc.name}</div>
+            <div class="loc-sub">${sub}</div>
         </div>`;
-    });
-    document.getElementById('nearbyList').innerHTML = html;
+    }).join('');
 }
 
 // ============ FAVORITES ============
@@ -635,6 +656,11 @@ function toggleSidebar() {
 function closeInfo(){
     document.getElementById('infoPanel').classList.remove('show');
     document.getElementById('pathStats').classList.remove('show');
+    // Hide route info card and clear button
+    const ric = document.getElementById('routeInfoCard');
+    if (ric) ric.classList.remove('show');
+    const clrBtn = document.getElementById('clearRouteBtn');
+    if (clrBtn) clrBtn.classList.remove('show');
     // Clear path when user dismisses the panel
     if (scene) {
         pathLines.forEach(line => scene.remove(line));
@@ -645,7 +671,7 @@ function closeInfo(){
     selectedLocation = null;
     // Show idle hint again
     const hint = document.getElementById('mapIdleHint');
-    if (hint) hint.style.opacity = '1';
+    if (hint) hint.classList.remove('hidden');
 }
 function resetView(){ 
     selectedLocation=null; 
@@ -884,7 +910,14 @@ function init3DScene() {
             // NOTE: paths are NOT drawn on load — they appear only when
             // the user selects a location and clicks "Get Directions".
         },
-        xhr=>console.log('Loading model: '+(xhr.loaded/xhr.total*100).toFixed(0)+'%'),
+        xhr=>{
+            const pct = xhr.total > 0 ? Math.round(xhr.loaded/xhr.total*100) : 0;
+            console.log('Loading model: '+pct+'%');
+            const bar = document.getElementById('loadingBar');
+            const status = document.getElementById('loadingStatus');
+            if (bar) bar.style.width = pct + '%';
+            if (status) status.textContent = pct < 100 ? `Loading 3D Map… ${pct}%` : 'Almost ready…';
+        },
         err=>{ 
             console.error('Failed to load 3D model:', err); 
             document.getElementById('mapLoading').innerHTML='<div style="color:#dc3545;text-align:center;"><div style="font-size:2.5rem;margin-bottom:.6rem;">⚠️</div><p style="font-size:.82rem;">Failed to load 3D map</p><p style="font-size:.7rem;margin-top:.3rem;">Please upload a 3D model in the Admin panel (Admin → Navigation → 3D Map Upload)</p></div>'; 
@@ -1231,6 +1264,10 @@ function resetOrientation() {
     if (em) scene.remove(em);
     
     document.getElementById('pathStats').classList.remove('show');
+    const ric2 = document.getElementById('routeInfoCard');
+    if (ric2) ric2.classList.remove('show');
+    const clrBtn2 = document.getElementById('clearRouteBtn');
+    if (clrBtn2) clrBtn2.classList.remove('show');
     // Path cleared — user must select a location and Get Directions to redraw
 }
 
@@ -1769,6 +1806,11 @@ async function drawSavedRoute(route) {
         : `${seconds}s`;
     document.getElementById('pathWaypoints').textContent = waypointPositions.length;
     pathStats.classList.add('show');
+    // Show route info card + clear button inside info panel
+    const ric = document.getElementById('routeInfoCard');
+    if (ric) ric.classList.add('show');
+    const clrBtn = document.getElementById('clearRouteBtn');
+    if (clrBtn) clrBtn.classList.add('show');
 }
 
 // ============ COORDINATE VERIFICATION ============
