@@ -19,13 +19,9 @@
             -webkit-backdrop-filter: blur(4px);
             z-index: 9999;
             display: none;
-            align-items: flex-end;
+            align-items: center;
             justify-content: center;
-            padding: 0.75rem;
-            padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
-        }
-        @media (min-width: 540px) {
-            #spPopupOverlay { align-items: center; padding: 1rem; }
+            padding: 1rem;
         }
         #spPopupOverlay.visible {
             display: flex;
@@ -48,13 +44,8 @@
             animation: spCardDrop 0.45s cubic-bezier(0.175,0.885,0.32,1.275) both;
         }
         @media (max-width: 539px) {
-            .sp-card {
-                border-radius: 20px 20px 16px 16px;
-                max-height: 94dvh; width: 100%;
-                animation: spCardSheet 0.38s cubic-bezier(0.22,1,0.36,1) both;
-            }
+            .sp-card { border-radius: 20px; max-height: 88dvh; }
         }
-        @keyframes spCardSheet { from{transform:translateY(60px);opacity:0} to{transform:translateY(0);opacity:1} }
         @keyframes spCardDrop  { from{transform:scale(0.88) translateY(30px);opacity:0} to{transform:scale(1) translateY(0);opacity:1} }
 
         .sp-hero {
@@ -467,7 +458,10 @@
             // Track which announcement IDs have already been seen
             seenIds = new Set(popups.map(p => p.id));
 
-            setTimeout(openPopup, 800);
+            if (!sessionStorage.getItem('spartaAnnouncementsShown')) {
+                sessionStorage.setItem('spartaAnnouncementsShown', '1');
+                setTimeout(openPopup, 800);
+            }
 
             // ── Poll every 30 seconds for new announcements ──────────────
             setInterval(pollForNew, 30_000);

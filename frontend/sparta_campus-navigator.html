@@ -15,6 +15,48 @@
 </head>
 <body>
 
+<!-- ============ MOBILE TOP BAR (mobile only) ============ -->
+<div class="mobile-top-bar" id="mobileTopBar">
+  <div class="mtb-left">
+    <img src="https://sparta-production-0acb.up.railway.app/images/logo.png" alt="BSU" class="mtb-logo">
+    <div class="mtb-text">
+      <div class="mtb-title">BSU LIPA</div>
+      <div class="mtb-sub">Campus Navigator</div>
+    </div>
+  </div>
+  <button class="mtb-bell" id="mtbBell" title="Announcements"
+          onclick="var b=document.getElementById('spNotifBell');if(b)b.click();">
+    🔔
+    <span class="mtb-bell-badge" id="mtbBellBadge" style="display:none;">0</span>
+  </button>
+</div>
+
+<!-- ============ MOBILE FLOATING LOCATION CARD (mobile only) ============ -->
+<div class="mobile-loc-card" id="mobileLocCard">
+  <div class="mlc-header">
+    <div class="mlc-title-group">
+      <span class="mlc-icon" id="mlcIcon">📍</span>
+      <div class="mlc-name-wrap">
+        <div class="mlc-name" id="mlcName">—</div>
+        <div class="mlc-sub"  id="mlcSub">—</div>
+      </div>
+    </div>
+    <button class="mlc-close" onclick="closeMobileCard()">✕</button>
+  </div>
+  <div class="mlc-body" id="mlcBody"></div>
+  <div class="mlc-route" id="mlcRoute" style="display:none;">
+    <div class="mlc-route-stat"><span>📏</span><span id="mlcDist">—</span></div>
+    <div class="mlc-route-stat"><span>⏱️</span><span id="mlcTime">—</span></div>
+    <div class="mlc-route-stat"><span>🚶</span><span id="mlcWp">—</span></div>
+  </div>
+  <div class="mlc-actions">
+    <button class="mlc-dir-btn" id="mlcDirBtn" onclick="getDirections()">
+      <span>📍</span> Get Directions
+    </button>
+    <button class="mlc-clear-btn" onclick="closeMobileCard()">✕ Clear</button>
+  </div>
+</div>
+
 <!-- ============ SIDEBAR ============ -->
 <div class="sidebar" id="sidebar">
   <div class="sidebar-header">
@@ -362,6 +404,13 @@
 
     <!-- Locations panel -->
     <div class="sheet-panel active" id="sheet-panel-locations">
+      <!-- Mobile search bar (inside sheet, replaces floating search) -->
+      <div class="sheet-search-row">
+        <span class="sheet-search-icon">🔍</span>
+        <input type="text" class="sheet-search-input" id="mobileSheetSearch"
+               placeholder="Search location on map…" autocomplete="off">
+        <button class="sheet-search-clear" id="mobileSearchClear" style="display:none;">✕</button>
+      </div>
       <!-- Filter pills -->
       <div class="sheet-pills-row" id="sheetFilterBar">
         <button class="filter-pill active" data-filter="all" onclick="applyFilter('all',this)">All</button>
@@ -369,6 +418,10 @@
       <!-- Floor pills -->
       <div class="sheet-pills-row" id="sheetFloorBar">
         <button class="floor-pill active" data-floor="all" onclick="applyFloor('all',this)">All Floors</button>
+      </div>
+      <!-- Reset filters button — shown only when non-default filter active -->
+      <div class="sheet-reset-row" id="sheetResetRow" style="display:none;">
+        <button class="sheet-reset-btn" onclick="resetFilters()">✕ Reset Filters</button>
       </div>
       <!-- Location list -->
       <div class="sheet-loc-list" id="sheetLocList">
@@ -524,6 +577,159 @@
             setTimeout(function(){ location.href = href; }, 220);
         }
     });
+})();
+</script>
+
+<script>
+// ============================================================
+// MOBILE UI PATCHES — all mobile-only, desktop unaffected
+// ============================================================
+(function() {
+
+    // ── 1. Override showSheetDetail to use floating card on mobile ──
+    var _origShowSheetDetail = window.showSheetDetail;
+    window.showSheetDetail = function(loc) {
+        if (typeof isMobile === 'function' && isMobile()) {
+            _showMobileCard(loc);
+        } else {
+            _origShowSheetDetail && _origShowSheetDetail(loc);
+        }
+    };
+
+    function _showMobileCard(loc) {
+        var card = document.getElementById('mobileLocCard');
+        if (!card) return;
+        // Icon
+        document.getElementById('mlcIcon').textContent = (typeof getTypeIcon === 'function' ? getTypeIcon(loc.type) : null) || loc.icon || '📍';
+        // Name + subtitle
+        document.getElementById('mlcName').textContent = loc.name || '—';
+        var parts = [loc.building, loc.floor != null ? 'Floor ' + loc.floor : '', loc.type].filter(Boolean);
+        document.getElementById('mlcSub').textContent = parts.join(' · ');
+        // Info rows
+        var body = document.getElementById('mlcBody');
+        var html = '';
+        if (loc.building)     html += _mlcRow('🏢','Building', loc.building);
+        if (loc.floor != null)html += _mlcRow('🏬','Floor', 'Floor ' + loc.floor);
+        if (loc.type)         html += _mlcRow('🏷️','Type', loc.type.charAt(0).toUpperCase() + loc.type.slice(1));
+        if (loc.capacity)     html += _mlcRow('👥','Capacity', loc.capacity + ' persons');
+        if (loc.accessible)   html += _mlcRow('♿','Access', '<span style="color:#16a34a;font-weight:700;">Wheelchair Accessible</span>');
+        if (loc.description)  html += _mlcRow('📝','Note', loc.description);
+        body.innerHTML = html;
+        // Reset route section
+        document.getElementById('mlcRoute').style.display = 'none';
+        // Show card
+        card.classList.add('show');
+        // Hide sheet
+        var sheet = document.getElementById('mobileBottomSheet');
+        if (sheet) sheet.classList.add('card-open');
+    }
+
+    function _mlcRow(icon, label, val) {
+        return '<div class="mlc-row"><span class="mlc-row-icon">' + icon + '</span>'
+             + '<div><div class="mlc-row-label">' + label + '</div>'
+             + '<div class="mlc-row-val">' + val + '</div></div></div>';
+    }
+
+    // ── 2. Close mobile card ────────────────────────────────────
+    window.closeMobileCard = function() {
+        var card = document.getElementById('mobileLocCard');
+        if (card) card.classList.remove('show');
+        var sheet = document.getElementById('mobileBottomSheet');
+        if (sheet) sheet.classList.remove('card-open');
+        if (typeof expandSheet === 'function') expandSheet('mid');
+        if (typeof closeInfo === 'function') closeInfo();
+        // Clear active item highlight
+        document.querySelectorAll('.loc-item.active').forEach(function(el){ el.classList.remove('active'); });
+    };
+
+    // ── 3. Mirror route stats into floating card ────────────────
+    // Observe sheetPathDistance for changes so we can mirror them
+    var _dist = document.getElementById('sheetPathDistance');
+    var _time = document.getElementById('sheetPathTime');
+    var _wp   = document.getElementById('sheetPathWaypoints');
+    if (_dist && _time) {
+        var obs = new MutationObserver(function() {
+            var d = _dist.textContent, t = _time.textContent, w = _wp ? _wp.textContent : '';
+            if (d && d !== '—') {
+                var route = document.getElementById('mlcRoute');
+                if (route) {
+                    document.getElementById('mlcDist').textContent = d;
+                    document.getElementById('mlcTime').textContent = t;
+                    if (w) document.getElementById('mlcWp').textContent = w;
+                    route.style.display = 'flex';
+                }
+            }
+        });
+        obs.observe(_dist, { childList: true, characterData: true, subtree: true });
+    }
+
+    // ── 4. Reset filters ───────────────────────────────────────
+    window.resetFilters = function() {
+        document.querySelectorAll('.filter-pill').forEach(function(p){ p.classList.remove('active'); });
+        var aType = document.querySelector('[data-filter="all"]');
+        if (aType) { aType.classList.add('active'); if (typeof applyFilter === 'function') applyFilter('all', aType); }
+        document.querySelectorAll('.floor-pill').forEach(function(p){ p.classList.remove('active'); });
+        var aFloor = document.querySelector('[data-floor="all"]');
+        if (aFloor) { aFloor.classList.add('active'); if (typeof applyFloor === 'function') applyFloor('all', aFloor); }
+        document.getElementById('sheetResetRow') && (document.getElementById('sheetResetRow').style.display = 'none');
+    };
+
+    // Show reset button when non-default filter active
+    document.addEventListener('click', function(e) {
+        if (!e.target.matches('.filter-pill, .floor-pill')) return;
+        setTimeout(function() {
+            var hasType  = !document.querySelector('[data-filter="all"].active');
+            var hasFloor = !document.querySelector('[data-floor="all"].active');
+            var row = document.getElementById('sheetResetRow');
+            if (row) row.style.display = (hasType || hasFloor) ? 'flex' : 'none';
+        }, 15);
+    });
+
+    // ── 5. Mobile sheet search ─────────────────────────────────
+    var mSrch = document.getElementById('mobileSheetSearch');
+    var mClr  = document.getElementById('mobileSearchClear');
+    if (mSrch) {
+        mSrch.addEventListener('input', function() {
+            if (typeof liveSearch === 'function') liveSearch(this.value);
+            if (mClr) mClr.style.display = this.value ? 'block' : 'none';
+        });
+    }
+    if (mClr) {
+        mClr.addEventListener('click', function() {
+            if (mSrch) { mSrch.value = ''; if (typeof liveSearch === 'function') liveSearch(''); }
+            this.style.display = 'none';
+        });
+    }
+
+    // ── 6. Bell badge sync from popup_announcements ────────────
+    function _syncBell() {
+        var cnt = document.getElementById('spBellCount');
+        var badge = document.getElementById('mtbBellBadge');
+        if (!cnt || !badge) return;
+        var n = cnt.textContent || '0';
+        badge.textContent = n;
+        badge.style.display = (parseInt(n) > 0) ? 'flex' : 'none';
+    }
+    // Poll until announcements load
+    var _bellTimer = setInterval(function() {
+        var bell = document.getElementById('spNotifBell');
+        if (bell && bell.classList.contains('visible')) { _syncBell(); clearInterval(_bellTimer); }
+    }, 500);
+    setTimeout(function(){ clearInterval(_bellTimer); }, 10000);
+
+    // ── 7. Camera adjustment for mobile portrait ───────────────
+    function _adjustMobileCamera() {
+        if (typeof isMobile !== 'function' || !isMobile()) return;
+        if (typeof camera === 'undefined' || !camera) return;
+        camera.position.set(0, 200, -220);
+        if (typeof controls !== 'undefined' && controls) {
+            controls.target.set(0, 0, 0);
+            controls.update();
+        }
+    }
+    // Wait for 3D model to load before adjusting
+    setTimeout(_adjustMobileCamera, 3500);
+
 })();
 </script>
 </body>

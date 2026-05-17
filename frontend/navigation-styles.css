@@ -1402,3 +1402,255 @@ input, textarea,
     .sidebar-edge-tab { left: max(0px, env(safe-area-inset-left)); }
   }
 }
+
+/* =====================================================
+   MOBILE UI REVAMP — all rules scoped to ≤768px
+   Desktop layout is completely unaffected.
+   ===================================================== */
+
+/* ── 1. Mobile top bar ── */
+.mobile-top-bar { display: none; }
+
+@media (max-width: 768px) {
+  :root { --mobile-header-h: 54px; }
+
+  .mobile-top-bar {
+    display: flex;
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: var(--mobile-header-h);
+    padding: 0 0.9rem;
+    padding-top: max(0px, env(safe-area-inset-top));
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(135deg, var(--red), var(--red-dark));
+    z-index: 650;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.22);
+  }
+
+  .mtb-left {
+    display: flex; align-items: center; gap: 0.55rem;
+  }
+  .mtb-logo {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.35);
+    object-fit: cover;
+  }
+  .mtb-title {
+    font-family: var(--font); font-weight: 800;
+    font-size: 0.88rem; color: #fff; letter-spacing: 0.02em; line-height: 1.2;
+  }
+  .mtb-sub {
+    font-size: 0.6rem; color: rgba(255,255,255,0.72); font-weight: 500;
+  }
+
+  .mtb-bell {
+    position: relative;
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    border: 1.5px solid rgba(255,255,255,0.35);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; cursor: pointer;
+    transition: background 0.18s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mtb-bell:active { background: rgba(255,255,255,0.28); }
+
+  .mtb-bell-badge {
+    position: absolute; top: -3px; right: -3px;
+    background: var(--gold); color: #7a0000;
+    font-size: 0.6rem; font-weight: 900;
+    width: 17px; height: 17px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid var(--red);
+    font-family: var(--font);
+  }
+
+  /* Shift map container below header */
+  .map-container {
+    top: var(--mobile-header-h) !important;
+  }
+
+  /* ── 2. Hide injected floating bell ── */
+  #spNotifBell { display: none !important; }
+
+  /* ── 3. Hide floating search pill on mobile ── */
+  .m-float-search { display: none !important; }
+
+  /* ── 4. Hide Reset View FAB ── */
+  .m-map-fab { display: none !important; }
+
+  /* ── 5. Hide sheet tab bar (bottom nav handles switching) ── */
+  .sheet-tab-bar { display: none !important; }
+
+  /* ── 6. Map controls — lower right, above sheet peek ── */
+  .map-controls {
+    top: auto !important;
+    bottom: calc(var(--bottom-nav-h) + var(--sheet-peek) + 0.65rem) !important;
+    right: 0.65rem !important;
+  }
+
+  /* ── 7. Mobile sheet search ── */
+  .sheet-search-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.6rem 0.85rem 0.5rem;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .sheet-search-icon {
+    font-size: 0.85rem; color: #94a3b8; flex-shrink: 0;
+  }
+  .sheet-search-input {
+    flex: 1; border: none; background: transparent;
+    font-size: 0.85rem; font-family: var(--font);
+    color: var(--text-1); outline: none; min-width: 0;
+  }
+  .sheet-search-input::placeholder { color: #94a3b8; }
+  .sheet-search-clear {
+    background: none; border: none; color: #94a3b8;
+    font-size: 0.78rem; cursor: pointer; padding: 0 0.2rem;
+    flex-shrink: 0;
+  }
+
+  /* ── 8. Reset filters row ── */
+  .sheet-reset-row {
+    display: none;
+    padding: 0.3rem 0.85rem 0.2rem;
+    justify-content: flex-end;
+  }
+  .sheet-reset-btn {
+    font-size: 0.68rem; font-weight: 700;
+    font-family: var(--font); color: var(--red);
+    background: rgba(230,57,47,0.07);
+    border: 1.5px solid rgba(230,57,47,0.2);
+    border-radius: 50px; padding: 0.22rem 0.7rem;
+    cursor: pointer; transition: background 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .sheet-reset-btn:active { background: rgba(230,57,47,0.14); }
+
+  /* ── 9. Sheet content auto-sizing ── */
+  .sheet-loc-list {
+    min-height: 60px; /* allow small content without forced height */
+  }
+  .empty-state {
+    padding: 2rem 1rem; /* consistent empty state padding */
+  }
+
+  /* ── 10. Sheet hidden when card is open ── */
+  .mobile-bottom-sheet.card-open {
+    transform: translateY(110%) !important;
+    transition: transform 0.28s cubic-bezier(0.4,0,0.2,1) !important;
+  }
+
+  /* ── 11. Floating location card (Parzellary style) ── */
+  .mobile-loc-card {
+    display: none;
+    position: fixed;
+    left: 0.75rem; right: 0.75rem;
+    bottom: calc(var(--bottom-nav-h) + 0.65rem);
+    background: #fff;
+    border-radius: 18px;
+    box-shadow:
+      0 -2px 8px rgba(0,0,0,0.06),
+      0 8px 32px rgba(0,0,0,0.14),
+      0 20px 60px rgba(0,0,0,0.12);
+    z-index: 560;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid rgba(0,0,0,0.06);
+  }
+  .mobile-loc-card.show {
+    display: flex;
+    animation: mlcSlideUp 0.3s cubic-bezier(0.34,1.2,0.64,1) both;
+  }
+  @keyframes mlcSlideUp {
+    from { transform: translateY(18px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+
+  .mlc-header {
+    display: flex; align-items: flex-start;
+    justify-content: space-between;
+    padding: 0.85rem 1rem 0.6rem;
+    border-bottom: 1px solid #f1f5f9;
+    gap: 0.5rem;
+  }
+  .mlc-title-group {
+    display: flex; align-items: flex-start; gap: 0.55rem; flex: 1; min-width: 0;
+  }
+  .mlc-icon { font-size: 1.35rem; flex-shrink: 0; margin-top: 1px; }
+  .mlc-name-wrap { flex: 1; min-width: 0; }
+  .mlc-name {
+    font-size: 0.9rem; font-weight: 800; color: #0f172a;
+    line-height: 1.3; word-break: break-word;
+  }
+  .mlc-sub {
+    font-size: 0.68rem; color: #94a3b8; margin-top: 2px; line-height: 1.4;
+  }
+  .mlc-close {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #f1f5f9; border: none; cursor: pointer;
+    font-size: 0.78rem; color: #64748b; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mlc-close:active { background: #e2e8f0; }
+
+  .mlc-body {
+    padding: 0.65rem 1rem;
+    display: flex; flex-direction: column; gap: 0.4rem;
+  }
+  .mlc-row {
+    display: flex; align-items: flex-start; gap: 0.55rem;
+  }
+  .mlc-row-icon { font-size: 0.95rem; flex-shrink: 0; margin-top: 1px; }
+  .mlc-row-label {
+    font-size: 0.6rem; font-weight: 700; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .mlc-row-val {
+    font-size: 0.8rem; font-weight: 600; color: #0f172a; margin-top: 1px;
+  }
+
+  .mlc-route {
+    display: flex; gap: 0.5rem;
+    padding: 0.55rem 1rem;
+    background: #fffdf0;
+    border-top: 1px solid rgba(244,208,63,0.3);
+    border-bottom: 1px solid rgba(244,208,63,0.3);
+  }
+  .mlc-route-stat {
+    display: flex; align-items: center; gap: 0.3rem;
+    font-size: 0.72rem; font-weight: 600; color: #475569;
+    flex: 1; justify-content: center;
+  }
+
+  .mlc-actions {
+    display: flex; gap: 0.5rem;
+    padding: 0.65rem 1rem max(0.65rem, env(safe-area-inset-bottom));
+    border-top: 1px solid #f1f5f9;
+  }
+  .mlc-dir-btn {
+    flex: 1; background: linear-gradient(135deg, var(--red), var(--red-dark));
+    color: #fff; border: none; border-radius: 10px;
+    padding: 0.7rem 1rem; font-size: 0.82rem; font-weight: 700;
+    font-family: var(--font); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+    transition: opacity 0.18s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mlc-dir-btn:active { opacity: 0.85; }
+  .mlc-clear-btn {
+    padding: 0.7rem 0.9rem; background: #f8fafc;
+    border: 1.5px solid #e2e8f0; border-radius: 10px;
+    font-size: 0.78rem; font-weight: 700; font-family: var(--font);
+    color: #64748b; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s;
+  }
+  .mlc-clear-btn:active { background: #eef2f7; }
+}
