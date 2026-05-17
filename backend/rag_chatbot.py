@@ -553,6 +553,23 @@ class EnhancedDatabaseRAG:
                     best_intent = 'location_query'
                     confidence = min(confidence * 1.1, 1.0)
 
+            # ── History hard override ─────────────────────────────────────────
+            # FIX: "Tell me about Major Milestone", "BSU Lipa history",
+            # "major milestones", etc. must always be history_query.
+            # The bare-name override was incorrectly hijacking these queries.
+            _HISTORY_TRIGGERS = (
+                'milestone', 'milestones', 'major milestone', 'major milestones',
+                'achievement', 'achievements', 'kasaysayan', 'nagsimula', 'itinatag',
+                'founded', 'established', 'republic act', 'historical',
+                'history of bsu', 'bsu history', 'history of batangas',
+            )
+            if best_intent != 'history_query':
+                ql2 = query_lower.strip()
+                if any(t in ql2 for t in _HISTORY_TRIGGERS):
+                    best_intent = 'history_query'
+                    confidence = max(confidence, 0.72)
+                    print(f"[intent_override] history hard override: '{query_lower}' -> history_query")
+
             return best_intent, confidence
 
         return 'general_info', 0.25
@@ -2161,6 +2178,12 @@ class EnhancedDatabaseRAG:
                     continue
                 keywords = [k.strip().lower() for k in intent.keywords.split(',') if k.strip()]
 
+                # FIX: Score-based matching replaces longest-keyword-wins.
+                # Rewards: exact phrase matches (high), multiple keyword hits,
+                # and penalizes intents with only single very-short keyword matches.
+                intent_score = 0
+                matched_kws = 0
+
                 for keyword in keywords:
                     kw_len = len(keyword)
 
@@ -2169,24 +2192,40 @@ class EnhancedDatabaseRAG:
                         continue
 
                     # Word-boundary match for short keywords (≤6 chars)
-                    # Prevents "sir" matching inside "desire" or triggering on "who is sir X"
                     if kw_len <= 6:
                         if not re.search(rf'\b{re.escape(keyword)}\b', query_lower):
                             continue
-                        # Even with word boundary, skip if it's just an honorific
-                        # and query looks like a name search
                         if keyword in HONORIFICS and is_person_search:
                             continue
+                        # Short keyword matched — low base score
+                        kw_score = kw_len * 1.0
                     else:
-                        # Longer keywords: simple substring is fine
+                        # Multi-word / long keyword: substring match
                         if keyword not in query_lower:
                             continue
+                        # FIX: Phrase match bonus — longer phrase = higher precision
+                        word_count = len(keyword.split())
+                        kw_score = kw_len * (1.0 + (word_count - 1) * 0.5)
 
-                    # This keyword matched — update best if it's the longest match
-                    if kw_len > best_score:
-                        best_score = kw_len
-                        best_match_en = intent.response_template
-                        best_match_tl = getattr(intent, 'response_template_tl', None) or None
+                    intent_score += kw_score
+                    matched_kws += 1
+
+                # FIX: Require at least one match; penalize single short-keyword hits
+                # to avoid false positives (e.g. "sir" matching on any query with "sir")
+                if matched_kws == 0:
+                    continue
+                if matched_kws == 1 and intent_score < 8:
+                    # Single match on a very short keyword — too weak, skip
+                    continue
+
+                # Multi-keyword bonus: each additional keyword match boosts score
+                if matched_kws > 1:
+                    intent_score *= (1.0 + (matched_kws - 1) * 0.2)
+
+                if intent_score > best_score:
+                    best_score = intent_score
+                    best_match_en = intent.response_template
+                    best_match_tl = getattr(intent, 'response_template_tl', None) or None
 
             if best_match_en is None:
                 return None
@@ -2436,20 +2475,37 @@ class EnhancedDatabaseRAG:
             # force authority_query so it hits the person DB instead of FAQ.
             _BARE_HONORIFICS = {'sir', 'maam', 'mam', 'dr', 'mr', 'ms', 'mrs',
                                  'prof', 'engr', 'atty', 'asst', 'assoc'}
+            # FIX: Common non-name words that look valid but are NOT person names.
+            # Prevents "tell me about Major Milestone" from looking like a name query.
+            _COMMON_NON_NAMES = {
+                'tell', 'about', 'me', 'the', 'what', 'is', 'are', 'who',
+                'give', 'show', 'explain', 'describe', 'list', 'get',
+                'major', 'milestone', 'milestones', 'achievement', 'achievements',
+                'history', 'historical', 'timeline', 'organization', 'org',
+                'announcement', 'location', 'building', 'room', 'floor', 'campus',
+                'info', 'information', 'details', 'more', 'latest', 'recent',
+                'college', 'department', 'school', 'university', 'vision', 'mission',
+            }
             _bare_words = [re.sub(r"[^a-z]", '', w)
                            for w in original_query.strip().lower().split()]
             _name_words = [w for w in _bare_words
                            if w and w not in _BARE_HONORIFICS and len(w) >= 2]
             _only_honorific_and_names = (
-                len(_bare_words) >= 1
+                # FIX: Bare-name queries are SHORT — 1-4 words max.
+                # "Tell me about Major Milestone" is 5 words → never a bare-name query.
+                1 <= len(_bare_words) <= 4
                 and all(w in _BARE_HONORIFICS or (len(w) >= 2) for w in _bare_words)
                 and _name_words  # at least one non-honorific word
+                # FIX: Reject if any word is a common non-name content word
+                and not any(w in _COMMON_NON_NAMES for w in _bare_words)
                 # query must NOT contain intent keywords that already gave a strong signal
-                and intent_confidence < 0.55
+                and intent_confidence < 0.65
                 and not any(kw in original_query.lower() for kw in [
                     'where', 'location', 'history', 'org', 'organization',
                     'announcement', 'when', 'founded', 'club', 'building',
-                    'room', 'floor', 'saan', 'kailan', 'kasaysayan'
+                    'room', 'floor', 'saan', 'kailan', 'kasaysayan',
+                    'milestone', 'milestones', 'achievement', 'achievements',
+                    'tell me', 'about the', 'what is', 'what are',
                 ])
             )
             if _only_honorific_and_names and intent != 'authority_query':

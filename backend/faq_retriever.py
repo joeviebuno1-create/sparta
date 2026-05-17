@@ -76,7 +76,7 @@ def _is_qa_chunk(text: str) -> bool:
                 re.search(r'^\s*Q\s*\d*[:\.]', text, re.MULTILINE))
 
 
-def _score_chunk(query_words: set, chunk_words: set, chunk_text: str = "") -> float:
+def _score_chunk(query_words: set, chunk_words: set, chunk_text: str = "", original_query: str = "") -> float:
     """Score pre-computed chunk word set against query words."""
     if not query_words or not chunk_words:
         return 0.0
@@ -89,6 +89,19 @@ def _score_chunk(query_words: set, chunk_words: set, chunk_text: str = "") -> fl
     # Boost Q&A formatted chunks — they are more likely to be accurate answers
     if chunk_text and _is_qa_chunk(chunk_text):
         score *= 1.3
+    # FIX: Exact phrase match bonus — if the query phrase appears verbatim in the
+    # chunk, it's a very strong signal. Boost significantly.
+    if original_query and len(original_query) >= 6:
+        if original_query.lower() in chunk_text.lower():
+            score *= 1.8
+        else:
+            # Partial phrase: check 3+ word sub-phrases
+            words = original_query.lower().split()
+            for i in range(len(words) - 2):
+                phrase = ' '.join(words[i:i+3])
+                if phrase in chunk_text.lower():
+                    score *= 1.25
+                    break
     return score
 
 
@@ -199,7 +212,7 @@ def retrieve_faq_context(
     db: Session,
     query: str,
     top_k: int = 3,
-    min_score: float = 0.15,
+    min_score: float = 0.22,   # FIX: raised from 0.15 — reduces low-quality chunk returns
 ) -> str:
     """
     Search cached FAQ chunks for the query and return top-k as context string.
@@ -224,7 +237,8 @@ def retrieve_faq_context(
     for doc_id, doc_data in _chunk_cache.items():
         chunks = doc_data["chunks"]
         for chunk in chunks:
-            score = _score_chunk(query_words, chunk["words"], chunk["text"])
+            # FIX: Pass original query for exact phrase match bonus
+            score = _score_chunk(query_words, chunk["words"], chunk["text"], query)
             if score >= min_score:
                 scored.append((score, chunk["text"]))
 
