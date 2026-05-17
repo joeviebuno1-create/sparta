@@ -547,6 +547,9 @@ function selectLocation(idOrObj, clickedEl) {
         }
         
         console.log(`\n📍 Selecting: ${location.name}`);
+    // Hide idle hint when a location is selected
+    const hint = document.getElementById('mapIdleHint');
+    if (hint) hint.style.opacity = '0';
         console.log(`   DB Coordinates: (${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)})`);
         
         // Check coordinate validity
@@ -556,11 +559,12 @@ function selectLocation(idOrObj, clickedEl) {
             console.warn('   May be in wrong coordinate space - recapture in admin panel');
         }
         
-        // Clear previous "Get Directions" paths (not the persistent all-paths layer)
+        // Clear any existing path from a previous selection
         pathLines.forEach(line => scene.remove(line));
         pathLines = [];
         pathParticles.forEach(p => { scene.remove(p.mesh); if (p.tail) p.tail.forEach(b => scene.remove(b)); });
         pathParticles = [];
+        document.getElementById('pathStats').classList.remove('show');
         const em = scene.getObjectByName('entrance-marker');
         if (em) scene.remove(em);
         document.getElementById('pathStats').classList.remove('show');
@@ -628,7 +632,21 @@ function toggleSidebar() {
         }
     }, 320);
 }
-function closeInfo(){ document.getElementById('infoPanel').classList.remove('show'); }
+function closeInfo(){
+    document.getElementById('infoPanel').classList.remove('show');
+    document.getElementById('pathStats').classList.remove('show');
+    // Clear path when user dismisses the panel
+    if (scene) {
+        pathLines.forEach(line => scene.remove(line));
+        pathLines = [];
+        pathParticles.forEach(p => { scene.remove(p.mesh); if (p.tail) p.tail.forEach(b => scene.remove(b)); });
+        pathParticles = [];
+    }
+    selectedLocation = null;
+    // Show idle hint again
+    const hint = document.getElementById('mapIdleHint');
+    if (hint) hint.style.opacity = '1';
+}
 function resetView(){ 
     selectedLocation=null; 
     document.getElementById('currentLocation').textContent='Main Building'; 
@@ -863,8 +881,8 @@ function init3DScene() {
             
             // Verify coordinates after model loads
             setTimeout(() => verifyLocationCoordinates(), 500);
-            // Draw all manually created paths on top of the loaded model
-            setTimeout(() => drawAllSavedPaths(), 900);
+            // NOTE: paths are NOT drawn on load — they appear only when
+            // the user selects a location and clicks "Get Directions".
         },
         xhr=>console.log('Loading model: '+(xhr.loaded/xhr.total*100).toFixed(0)+'%'),
         err=>{ 
@@ -1146,6 +1164,26 @@ function drawAllEvacRoutes() {
 }
 
 
+// ============ CAMERA ANIMATION ============
+function animateCamera(pos) {
+    if (!camera || !controls) return;
+    const startCamPos    = camera.position.clone();
+    const startTarget    = controls.target.clone();
+    const endTarget      = pos.clone();
+    // Pull back and up so the location is nicely framed
+    const endCamPos = new THREE.Vector3(pos.x, pos.y + 60, pos.z - 100);
+    const startTime = Date.now();
+    const duration  = 900;
+    (function step() {
+        const raw  = Math.min((Date.now() - startTime) / duration, 1);
+        const ease = raw < 0.5 ? 2*raw*raw : 1 - Math.pow(-2*raw+2, 2)/2;
+        camera.position.lerpVectors(startCamPos, endCamPos, ease);
+        controls.target.lerpVectors(startTarget, endTarget, ease);
+        controls.update();
+        if (raw < 1) requestAnimationFrame(step);
+    })();
+}
+
 // ============ CONTROLS ============
 function zoomIn() {
     if (!controls) return;
@@ -1193,7 +1231,7 @@ function resetOrientation() {
     if (em) scene.remove(em);
     
     document.getElementById('pathStats').classList.remove('show');
-    if (scene) drawAllSavedPaths();
+    // Path cleared — user must select a location and Get Directions to redraw
 }
 
 function focusOn3D() {
@@ -1255,6 +1293,11 @@ async function getDirections() {
     
     try {
         // Fetch ALL routes for this location
+        const btn = document.getElementById('directionsBtn');
+        const btnIcon = document.getElementById('directionsBtnIcon');
+        if (btn) { btn.disabled = true; btn.style.opacity = '0.7'; }
+        if (btnIcon) btnIcon.textContent = '⏳';
+
         const response = await fetch(`${API_HOST}/api/routes/for-location/${selectedLocation.id}`);
         
         console.log('Route fetch response status:', response.status);
@@ -1398,6 +1441,12 @@ async function getDirections() {
     } catch (error) {
         console.error('Error fetching route:', error);
         alert('❌ Error loading route. Please try again or contact the administrator.');
+    } finally {
+        // Always re-enable the directions button
+        const btn = document.getElementById('directionsBtn');
+        const btnIcon = document.getElementById('directionsBtnIcon');
+        if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+        if (btnIcon) btnIcon.textContent = '📍';
     }
 }
 
