@@ -32,21 +32,11 @@ const chatMessages = document.getElementById('chatMessages');
     }
 
     // Mobile-specific: Better scrolling for quick questions
+    // FIX: Removed e.preventDefault() on touchend — it was blocking both scroll
+    // and button clicks. Horizontal scrolling is now handled via CSS touch-action: pan-x.
     if (isMobile) {
-        let isScrolling = false;
-        quickQuestionsContainer.addEventListener('touchstart', () => {
-            isScrolling = false;
-        });
-        
-        quickQuestionsContainer.addEventListener('touchmove', () => {
-            isScrolling = true;
-        });
-        
-        quickQuestionsContainer.addEventListener('touchend', (e) => {
-            if (isScrolling) {
-                e.preventDefault();
-            }
-        });
+        // Allow momentum scrolling on iOS (already set via CSS, belt-and-suspenders)
+        quickQuestionsContainer.style.webkitOverflowScrolling = 'touch';
     }
 
     // ── Two hardcoded sets that never change ──────────────────────────────────
@@ -320,13 +310,64 @@ const chatMessages = document.getElementById('chatMessages');
         /^(hi|hello|hey|good morning|good afternoon|good evening|kumusta|magandang)/i,
         /^(thanks|thank you|salamat|ok|okay|sure|got it|noted)/i,
         /^(help|tulong|ano ang magagawa mo|what can you do)/i,
+        // FIX: Yes/no affirmatives — don't send to RAG, handle locally
+        /^(yes|no|yep|nope|yeah|nah|oo|hindi|sige|oo nga|oo naman|sige nga|ayaw|ayoko|gusto ko|oo po|hindi po)$/i,
     ];
+
+    // FIX: Yes/no follow-up handler — avoids RAG hallucinating answers to affirmatives
+    const YES_NO_PATTERN = /^(yes|no|yep|nope|yeah|nah|oo|hindi|sige|oo nga|oo naman|sige nga|ayaw|ayoko|gusto ko|oo po|hindi po)$/i;
+
+    function handleYesNoReply(msg) {
+        const isTagalog = langSelect && langSelect.value === 'tl-PH';
+        const isYes = /^(yes|yep|yeah|oo|sige|oo nga|oo naman|sige nga|gusto ko|oo po)$/i.test(msg);
+
+        if (isYes) {
+            const replies = isTagalog
+                ? [
+                    'Ano pa ang gusto mong malaman tungkol sa BSU Lipa? 😊',
+                    'Sige! Ano pa ang iyong katanungan tungkol sa campus?',
+                    'OK! Mayroon ka pa bang ibang tanong tungkol sa BSU Lipa?',
+                  ]
+                : [
+                    'Great! What else would you like to know about BSU Lipa? 😊',
+                    'Sure! Do you have another question about the campus?',
+                    'Of course! What other information can I help you with?',
+                  ];
+            return replies[Math.floor(Math.random() * replies.length)];
+        } else {
+            const replies = isTagalog
+                ? [
+                    'Sige, walang problema! May iba ka pa bang tanong tungkol sa campus? 😊',
+                    'OK lang! Anong iba pa ang gusto mong malaman tungkol sa BSU Lipa?',
+                  ]
+                : [
+                    "No worries! Is there anything else about BSU Lipa I can help you with? 😊",
+                    "That's OK! Feel free to ask me anything about the campus.",
+                  ];
+            return replies[Math.floor(Math.random() * replies.length)];
+        }
+    }
 
     // Patterns that are clearly off-topic / nonsense
     const NONSENSE_PATTERNS = [
         /^[^a-zA-Z0-9\u00C0-\u024F\s.,!?'-]{3,}$/,   // Only symbols/emoji spam
         /^(.)\1{4,}$/,                                   // Repeated character: aaaaa
         /^[a-z]{1,2}(\s[a-z]{1,2}){3,}$/i,             // Short random word soup
+    ];
+
+    // FIX: Personal/off-topic Filipino phrases that have zero campus relevance
+    // These bypass all keyword checks and go directly to the OOS response
+    const PERSONAL_PROBLEM_PATTERNS = [
+        /\b(nawawala|nawala|nawalang)\b/i,              // "nawawala yung phone ko"
+        /\b(gutom|pagkain|kain|kumain|magluto)\b/i,     // food/hunger queries
+        /\b(sakit|masakit|magpagamot|ospital)\b/i,      // health issues
+        /\b(pautang|pera ko|salapi|bayad|utang)\b/i,    // money/loans
+        /\b(jowa|ex|girlfriend|boyfriend|lovelife)\b/i, // relationship
+        /\b(mahal kita|gusto kita|crush)\b/i,            // romantic
+        /\b(weather|panahon|uulan|umulan)\b/i,           // weather
+        /\b(recipe|lutuin|paano magluto)\b/i,            // cooking
+        /\b(palaro|laro|game|netflix|movie|pelikula)\b/i, // entertainment
+        /\b(basketball|football|nba|pba)\b/i,            // sports
     ];
 
     function isOutOfScope(text) {
@@ -339,6 +380,9 @@ const chatMessages = document.getElementById('chatMessages');
         // Flag obvious nonsense patterns
         if (NONSENSE_PATTERNS.some(p => p.test(lower))) return true;
 
+        // FIX: Block known personal/off-topic Filipino phrases immediately
+        if (PERSONAL_PROBLEM_PATTERNS.some(p => p.test(lower))) return true;
+
         // Very short (1-2 chars) that aren't meaningful
         if (lower.length <= 2) return true;
 
@@ -348,7 +392,12 @@ const chatMessages = document.getElementById('chatMessages');
 
         // "Tell me about X" / "What is X" — always send to backend
         // The backend knows if X is in the DB or not; don't block here
-        if (/^(tell me about|what is|what are|sino ang|ano ang|about)\s+\S/i.test(lower)) return false;
+        if (/^(tell me about|what is|what are|sino ang|ano ang|about|mayroon bang|may|anong)\s+\S/i.test(lower)) return false;
+
+        // FIX: If 4+ words and NO campus keywords → out of scope
+        // Previously this only fired for English question words; now any long
+        // non-campus sentence is blocked (e.g. "nawawala yung phone ko ano ang gawin")
+        if (wordCount >= 4 && !hasCampusKeyword) return true;
 
         // If it's a longer sentence (5+ words) with NO campus keywords,
         // only flag if it's clearly off-topic (has question word + no proper noun)
@@ -409,6 +458,23 @@ const chatMessages = document.getElementById('chatMessages');
         // Add user message (show corrected version)
         addMessage(message, 'user');
         userInput.value = '';
+
+        // ── FIX: Yes/No guard — RAG cannot meaningfully answer bare affirmatives.
+        //    Handle locally with a context-aware follow-up prompt instead. ──────
+        if (YES_NO_PATTERN.test(message.trim())) {
+            conversationHistory.push({ role: 'user', content: message });
+            const ynReply = handleYesNoReply(message.trim());
+            typingIndicator.style.display = 'block';
+            scrollToBottom();
+            await new Promise(r => setTimeout(r, 500));
+            typingIndicator.style.display = 'none';
+            addMessage(ynReply, 'bot', false, 1.0, lastIntent || 'general_info');
+            conversationHistory.push({ role: 'assistant', content: ynReply, intent: lastIntent || 'general_info' });
+            updateQuickQuestions(lastIntent || 'general_info');
+            speak(ynReply);
+            return;
+        }
+        // ──────────────────────────────────────────────────────────────────────
 
         // ── Out-of-scope / nonsense guard ──────────────────────────────────
         if (isOutOfScope(message)) {

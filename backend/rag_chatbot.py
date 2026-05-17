@@ -3020,7 +3020,24 @@ def is_off_topic(message: str) -> bool:
         'horoscope', 'zodiac', 'astrology',
         'dating', 'relationship advice', 'breakup',
     ]
+    # FIX: Filipino personal problem phrases that should never hit RAG
+    filipino_personal = [
+        'nawawala', 'nawala', 'nawalang',        # lost items
+        'gutom', 'pagkain ko', 'magluto',         # food/hunger
+        'jowa', 'ex ko', 'lovelife', 'crush ko',  # relationships
+        'pautang', 'utang ko', 'pera ko',          # money
+        'mahal kita', 'gusto kita',                # romantic
+        'sakit ko', 'nagkasakit',                  # personal health
+        'umuulan', 'panahon ngayon',               # weather in Filipino
+        'palaro', 'laro ko',                       # games
+    ]
     message_lower = message.lower()
+    # Check Filipino personal phrases — these are ALWAYS off-topic regardless of other words
+    if any(phrase in message_lower for phrase in filipino_personal):
+        # Only pass if it clearly has a campus-specific follow-up (e.g. "nawawala ID ko sa registrar")
+        campus_exception = ['bsu', 'batangas state', 'campus', 'registrar', 'student', 'college', 'lipa']
+        if not any(t in message_lower for t in campus_exception):
+            return True
     if any(kw in message_lower for kw in off_topic_keywords):
         university_terms = ['bsu', 'batangas state', 'university', 'campus',
                             'engineering', 'technology', 'college', 'student',
