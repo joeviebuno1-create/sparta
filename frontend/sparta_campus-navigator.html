@@ -20,7 +20,7 @@
   <div class="mtb-left">
     <img src="https://sparta-production-0acb.up.railway.app/images/logo.png" alt="BSU" class="mtb-logo">
     <div class="mtb-text">
-      <div class="mtb-title">BSU LIPA</div>
+      <div class="mtb-title">SPARTA</div>
       <div class="mtb-sub">Campus Navigator</div>
     </div>
   </div>
@@ -399,30 +399,58 @@
     </button>
   </div>
 
-  <!-- Sheet content panels -->
-  <div class="sheet-content" id="sheetContent">
+  <!-- Sticky header — shows search/filter for the active tab (outside scroll area) -->
+  <div class="sheet-sticky-header" id="sheetStickyHeader">
 
-    <!-- Locations panel -->
-    <div class="sheet-panel active" id="sheet-panel-locations">
-      <!-- Mobile search bar (inside sheet, replaces floating search) -->
+    <!-- Pane: Locations (search + type filter + floor filter) -->
+    <div class="sheet-sth-pane active" id="sthLocations">
       <div class="sheet-search-row">
         <span class="sheet-search-icon">🔍</span>
         <input type="text" class="sheet-search-input" id="mobileSheetSearch"
                placeholder="Search location on map…" autocomplete="off">
         <button class="sheet-search-clear" id="mobileSearchClear" style="display:none;">✕</button>
       </div>
-      <!-- Filter pills -->
       <div class="sheet-pills-row" id="sheetFilterBar">
         <button class="filter-pill active" data-filter="all" onclick="applyFilter('all',this)">All</button>
       </div>
-      <!-- Floor pills -->
       <div class="sheet-pills-row" id="sheetFloorBar">
         <button class="floor-pill active" data-floor="all" onclick="applyFloor('all',this)">All Floors</button>
       </div>
-      <!-- Reset filters button — shown only when non-default filter active -->
       <div class="sheet-reset-row" id="sheetResetRow" style="display:none;">
         <button class="sheet-reset-btn" onclick="resetFilters()">✕ Reset Filters</button>
       </div>
+    </div>
+
+    <!-- Pane: Saved -->
+    <div class="sheet-sth-pane" id="sthFavorites">
+      <div class="sheet-search-row">
+        <span class="sheet-search-icon">🔍</span>
+        <input type="text" class="sheet-search-input" id="favSheetSearch"
+               placeholder="Search saved locations…" autocomplete="off"
+               oninput="filterFavSearch(this.value)">
+        <button class="sheet-search-clear" id="favSearchClear"
+                onclick="filterFavSearch(''); this.style.display='none'; document.getElementById('favSheetSearch').value='';"
+                style="display:none;">✕</button>
+      </div>
+    </div>
+
+    <!-- Pane: Evacuation -->
+    <div class="sheet-sth-pane" id="sthEvacuation">
+      <div class="sheet-search-row">
+        <span class="sheet-search-icon">🔍</span>
+        <input type="text" class="sheet-search-input" id="evacSheetSearch"
+               placeholder="Search emergency exits…" autocomplete="off"
+               oninput="filterEvacSearch(this.value)">
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Sheet content panels -->
+  <div class="sheet-content" id="sheetContent">
+
+    <!-- Locations panel -->
+    <div class="sheet-panel active" id="sheet-panel-locations">
       <!-- Location list -->
       <div class="sheet-loc-list" id="sheetLocList">
         <div class="empty-state"><div class="es-icon">🗺️</div><p>Loading…</p></div>
@@ -438,33 +466,35 @@
           <div class="sheet-detail-sub" id="sheetDetailSub">—</div>
         </div>
       </div>
+      <!-- Compact navigating bar — shown after Get Directions, replaces full detail -->
+      <div class="sheet-nav-active" id="sheetNavActive" style="display:none;">
+        <span class="sna-icon">📍</span>
+        <div class="sna-text">
+          <div class="sna-label">Navigating to</div>
+          <div class="sna-name" id="snaName">—</div>
+        </div>
+        <button class="sna-clear" onclick="closeInfo(); closeSheetDetail();">✕ Clear</button>
+      </div>
       <!-- Location info rows rendered here by JS -->
       <div id="sheetDetailContent"></div>
-      <!-- Route info card -->
-      <div class="sheet-route-card" id="sheetRouteCard">
-        <div class="route-info-title">🛤️ Route Info</div>
-        <div class="route-stats-row">
-          <div class="route-stat"><div class="rs-icon">📏</div><div class="rs-label">Distance</div><div class="rs-value" id="sheetPathDistance">—</div></div>
-          <div class="route-stat"><div class="rs-icon">⏱️</div><div class="rs-label">Walk time</div><div class="rs-value" id="sheetPathTime">—</div></div>
-          <div class="route-stat"><div class="rs-icon">🚶</div><div class="rs-label">Stops</div><div class="rs-value" id="sheetPathWaypoints">—</div></div>
-        </div>
-      </div>
       <!-- Action buttons -->
-      <div class="info-actions" style="padding: 0.55rem 0 0.85rem;">
+      <div class="info-actions" id="sheetDetailActions" style="padding: 0.55rem 0 0.85rem;">
         <button class="directions-btn" id="sheetDirectionsBtn" onclick="getDirections()">
           <span id="sheetDirectionsBtnIcon">📍</span>
           <span>Get Directions</span>
         </button>
-        <button class="clear-btn" id="sheetClearBtn" onclick="closeInfo()">✕ Clear</button>
+        <button class="clear-btn" id="sheetClearBtn" onclick="closeInfo(); closeSheetDetail();" style="display:none;">✕ Clear</button>
       </div>
     </div>
 
     <!-- Favorites panel -->
     <div class="sheet-panel" id="sheet-panel-favorites">
-      <div class="empty-state" style="padding:2.5rem 1rem;">
-        <div class="es-icon">⭐</div>
-        <p>No favorites yet</p>
-        <p class="es-sub">Tap ☆ on any location</p>
+      <div class="sheet-loc-list" id="sheetFavList">
+        <div class="empty-state" style="padding:2.5rem 1rem;">
+          <div class="es-icon">⭐</div>
+          <p>No favorites yet</p>
+          <p class="es-sub">Tap ☆ on any location</p>
+        </div>
       </div>
     </div>
 
@@ -511,6 +541,24 @@
           <div class="legend-card-title">📍 Map Markers</div>
           <div class="legend-row"><div class="legend-dot green"></div><div><div class="legend-label">Start Point</div><div class="legend-desc">Main Entrance Gate</div></div></div>
           <div class="legend-row"><div class="legend-dot blue"></div><div><div class="legend-label">Destination</div><div class="legend-desc">Your selected location</div></div></div>
+          <div class="legend-row"><div class="legend-dot evac"></div><div><div class="legend-label">Emergency Exit</div><div class="legend-desc">Evacuation points</div></div></div>
+        </div>
+        <div class="legend-card">
+          <div class="legend-card-title">🛤️ Path Types</div>
+          <div class="legend-row"><div class="legend-line"></div><div><div class="legend-label">Navigation Path</div><div class="legend-desc">Animated golden route</div></div></div>
+          <div class="legend-row"><div class="legend-line evac"></div><div><div class="legend-label">Evacuation Route</div><div class="legend-desc">Orange emergency path</div></div></div>
+        </div>
+        <div class="legend-card">
+          <div class="legend-card-title">🏢 Location Types</div>
+          <div class="legend-row"><span class="legend-emoji">🏫</span><div><div class="legend-label">Classroom</div><div class="legend-desc">Lecture halls &amp; rooms</div></div></div>
+          <div class="legend-row"><span class="legend-emoji">🏛️</span><div><div class="legend-label">Office / Admin</div><div class="legend-desc">Administrative offices</div></div></div>
+          <div class="legend-row"><span class="legend-emoji">📚</span><div><div class="legend-label">Library</div><div class="legend-desc">Reading &amp; study areas</div></div></div>
+          <div class="legend-row"><span class="legend-emoji">🔬</span><div><div class="legend-label">Laboratory</div><div class="legend-desc">Science &amp; computer labs</div></div></div>
+          <div class="legend-row"><span class="legend-emoji">🍽️</span><div><div class="legend-label">Cafeteria</div><div class="legend-desc">Dining &amp; food areas</div></div></div>
+          <div class="legend-row"><span class="legend-emoji">🏋️</span><div><div class="legend-label">Gymnasium</div><div class="legend-desc">Sports &amp; fitness</div></div></div>
+          <div class="legend-row"><span class="legend-emoji">🏥</span><div><div class="legend-label">Clinic</div><div class="legend-desc">Medical services</div></div></div>
+          <div class="legend-row"><span class="legend-emoji">🚻</span><div><div class="legend-label">Restroom</div><div class="legend-desc">Comfort rooms</div></div></div>
+          <div class="legend-row"><span class="legend-emoji">🚪</span><div><div class="legend-label">Entrance / Exit</div><div class="legend-desc">Campus access points</div></div></div>
         </div>
         <div class="legend-card">
           <div class="legend-card-title">🕹️ Controls</div>
@@ -538,7 +586,7 @@
     <svg class="bn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>
     </svg>
-    <span class="bn-label">Map</span>
+    <span class="bn-label">Locations</span>
   </button>
   <button class="bottom-nav-btn" onclick="switchSheetTab('favorites',this); expandSheet('mid')">
     <svg class="bn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">

@@ -311,11 +311,11 @@ function buildFilterPills() {
 
 function applyFilter(val, btn) {
     activeTypeFilter = val;
-    document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
+    document.querySelectorAll('.filter-pill').forEach(p => {
+        p.classList.toggle('active', p.dataset.filter === val);
+    });
     renderLocationsList();
     renderSheetLocList(getFilteredLocations());
-    syncSheetPills();
 }
 
 // ============ FLOOR PILLS ============
@@ -331,11 +331,11 @@ function buildFloorPills() {
 
 function applyFloor(val, btn) {
     activeFloorFilter = val;
-    document.querySelectorAll('.floor-pill').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
+    document.querySelectorAll('.floor-pill').forEach(p => {
+        p.classList.toggle('active', String(p.dataset.floor) === String(val));
+    });
     renderLocationsList();
     renderSheetLocList(getFilteredLocations());
-    syncSheetPills();
 }
 
 // ============ TYPE → ICON MAP (matches Legend tab) ============
@@ -614,8 +614,9 @@ function initSheetDrag() {
         if (!dragging || !isMobile()) return;
         const y    = e.touches ? e.touches[0].clientY : e.clientY;
         const diff = y - startY;
-        const newTop = Math.max(window.innerHeight * 0.12, startTop + diff);
-        sheet.style.transform = `translateY(${newTop - (window.innerHeight - sheet.offsetHeight)}px)`;
+        const navH = document.getElementById('mobileBottomNav')?.offsetHeight || 58;
+        const newTop = Math.max(window.innerHeight * 0.08, startTop + diff);
+        sheet.style.transform = `translateY(${newTop - (window.innerHeight - navH - sheet.offsetHeight)}px)`;
     }
     function onEnd(e) {
         if (!dragging || !isMobile()) return;
@@ -624,15 +625,16 @@ function initSheetDrag() {
         sheet.style.transform  = '';
         const y      = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
         const diff   = y - startY;
-        const vh     = window.innerHeight;
-        if (diff < -60)       expandSheet('full');
-        else if (diff > 80)   expandSheet('peek');
-        else                  expandSheet('mid');
+        if (diff < -50)      expandSheet('full');
+        else if (diff > 50)  expandSheet('peek');
+        else                 expandSheet('mid');
     }
 
+    // Touch: start on handle, move+end on document so drag isn't lost if finger slips
     handle.addEventListener('touchstart', onStart, { passive: true });
-    handle.addEventListener('touchmove',  onMove,  { passive: true });
-    handle.addEventListener('touchend',   onEnd);
+    document.addEventListener('touchmove',  onMove,  { passive: true });
+    document.addEventListener('touchend',   onEnd);
+    // Mouse (desktop testing)
     handle.addEventListener('mousedown',  onStart);
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup',   onEnd);
@@ -640,6 +642,23 @@ function initSheetDrag() {
 
 // ── Sheet tabs ───────────────────────────────────────────────
 function switchSheetTab(tabName, btn) {
+    // Always clear active route + reset detail view when switching tabs
+    const detail   = document.getElementById('sheetLocationDetail');
+    const listPane = document.getElementById('sheet-panel-locations');
+    if (detail)   detail.style.display = 'none';
+    if (listPane) listPane.style.display = '';
+    _resetNavActiveBar();
+    closeInfo();
+
+    // Activate the correct sticky header pane for this tab
+    document.querySelectorAll('.sheet-sth-pane').forEach(p => p.classList.remove('active'));
+    const sthMap = { locations: 'sthLocations', favorites: 'sthFavorites', evacuation: 'sthEvacuation' };
+    const sthId  = sthMap[tabName];
+    if (sthId) {
+        const pane = document.getElementById(sthId);
+        if (pane) pane.classList.add('active');
+    }
+
     // Panels
     document.querySelectorAll('#mobileBottomSheet .sheet-panel').forEach(p => p.classList.remove('active'));
     const panel = document.getElementById(`sheet-panel-${tabName}`);
@@ -665,7 +684,7 @@ function switchSheetTab(tabName, btn) {
     });
 
     // Tab-specific renders
-    if (tabName === 'favorites')  { renderFavorites(); renderSheetLocList(locations.filter(l => favorites.includes(l.id))); }
+    if (tabName === 'favorites')  { renderSheetFavList(locations.filter(l => favorites.includes(l.id))); }
     if (tabName === 'evacuation') { renderEvacExits(); renderSheetExitsList(); }
 }
 
@@ -680,26 +699,25 @@ function showSheetDetail(loc) {
     // Hide list, show detail
     listPane.style.display = 'none';
     detail.style.display   = 'block';
+    // Hide sticky header when detail is showing
+    const stickyHdr = document.getElementById('sheetStickyHeader');
+    if (stickyHdr) stickyHdr.style.display = 'none';
 
     // Header
-    const badge = loc.icon || '📍';
     document.getElementById('sheetDetailName').textContent = loc.name;
     document.getElementById('sheetDetailSub').textContent  =
         [loc.building, loc.floor != null ? `Floor ${loc.floor}` : '', loc.type]
         .filter(Boolean).join(' · ');
 
-    // Content — reuse the same info rows format
+    // Content
     const content = document.getElementById('sheetDetailContent');
     if (content) content.innerHTML = buildInfoRows(loc);
 
+    // Reset nav active bar + action buttons visibility
+    _resetNavActiveBar();
+
     // Expand to mid snap
     expandSheet('mid');
-
-    // Hide/reset route card
-    const rc = document.getElementById('sheetRouteCard');
-    if (rc) rc.classList.remove('show');
-    const clr = document.getElementById('sheetClearBtn');
-    if (clr) clr.style.display = 'none';
 }
 
 function closeSheetDetail() {
@@ -707,6 +725,10 @@ function closeSheetDetail() {
     const listPane = document.getElementById('sheet-panel-locations');
     if (detail)   detail.style.display   = 'none';
     if (listPane) listPane.style.display = '';
+    // Restore sticky header
+    const stickyHdr = document.getElementById('sheetStickyHeader');
+    if (stickyHdr) stickyHdr.style.display = '';
+    _resetNavActiveBar();
     closeInfo();
     expandSheet('mid');
 }
@@ -772,20 +794,91 @@ function renderSheetLocList(locs) {
     }).join('');
 }
 
-// ── After route drawn on mobile — show stats in sheet ────────
+// ── After route drawn on mobile — show clear button only (no stats) ─────────
 function syncSheetRouteCard(distance, time, waypoints) {
-    const rc = document.getElementById('sheetRouteCard');
-    if (!rc || !isMobile()) return;
-    document.getElementById('sheetPathDistance').textContent  = distance;
-    document.getElementById('sheetPathTime').textContent      = time;
-    document.getElementById('sheetPathWaypoints').textContent = waypoints;
-    rc.classList.add('show');
-    const clr = document.getElementById('sheetClearBtn');
-    if (clr) clr.style.display = 'block';
-    expandSheet('mid');
+    if (!isMobile()) return;
+    // Compact mode: hide detail content, show navigating bar, snap to peek
+    if (selectedLocation) {
+        const navActive  = document.getElementById('sheetNavActive');
+        const snaName    = document.getElementById('snaName');
+        const detContent = document.getElementById('sheetDetailContent');
+        const actions    = document.getElementById('sheetDetailActions');
+        const hdr        = document.querySelector('.sheet-detail-header');
+        if (snaName)    snaName.textContent      = selectedLocation.name;
+        if (navActive)  navActive.style.display  = 'flex';
+        if (detContent) detContent.style.display = 'none';
+        if (actions)    actions.style.display    = 'none';
+        if (hdr)        hdr.style.display        = 'none';
+        expandSheet('peek');
+    }
 }
 
-// ── Render evacuation exits into the sheet panel ─────────────────────────────
+// ── Helper: reset the compact nav-active bar to default ──────
+function _resetNavActiveBar() {
+    const navActive = document.getElementById('sheetNavActive');
+    if (navActive) navActive.style.display = 'none';
+    const detailContent = document.getElementById('sheetDetailContent');
+    if (detailContent) detailContent.style.display = '';
+    const actions = document.getElementById('sheetDetailActions');
+    if (actions) actions.style.display = '';
+    const hdr = document.querySelector('.sheet-detail-header');
+    if (hdr) hdr.style.display = '';
+    const clr = document.getElementById('sheetClearBtn');
+    if (clr) clr.style.display = 'none';
+}
+
+// ── Render favorites list into sheet fav panel ─────────────────────────────
+function renderSheetFavList(locs) {
+    const list = document.getElementById('sheetFavList');
+    if (!list) return;
+    if (!locs || !locs.length) {
+        list.innerHTML = '<div class="empty-state" style="padding:2.5rem 1rem;"><div class="es-icon">⭐</div><p>No favorites yet</p><p class="es-sub">Tap ☆ on any location</p></div>';
+        return;
+    }
+    list.innerHTML = locs.map(loc => {
+        const sub = [loc.building, loc.floor != null ? `Floor ${loc.floor}` : '', typeLabel(loc.type)]
+            .filter(Boolean).join(' · ');
+        return `<div class="sheet-loc-item" onclick="selectLocation(${loc.id}, this)">
+            <span class="loc-icon">${getTypeIcon(loc.type) || loc.icon || '📍'}</span>
+            <div style="flex:1;min-width:0;">
+                <div class="loc-name">${loc.name}</div>
+                <div class="loc-sub">${sub}</div>
+            </div>
+            <span class="loc-fav active" onclick="event.stopPropagation();toggleFav(${loc.id})">⭐</span>
+        </div>`;
+    }).join('');
+}
+
+// ── Filter favorites by search query ──────────────────────────────────────
+function filterFavSearch(val) {
+    const clr = document.getElementById('favSearchClear');
+    if (clr) clr.style.display = val ? 'block' : 'none';
+    const favLocs = locations.filter(l => favorites.includes(l.id));
+    const filtered = val ? favLocs.filter(l => l.name.toLowerCase().includes(val.toLowerCase())) : favLocs;
+    renderSheetFavList(filtered);
+}
+
+// ── Filter evac exits by search query ─────────────────────────────────────
+function filterEvacSearch(val) {
+    const exits = locations.filter(l => l.isExit);
+    const filtered = val ? exits.filter(l => l.name.toLowerCase().includes(val.toLowerCase())) : exits;
+    const container = document.getElementById('sheetExitsList');
+    if (!container) return;
+    if (!filtered.length) {
+        container.innerHTML = '<div class="empty-state"><div class="es-icon">🔍</div><p>No exits match your search</p></div>';
+        return;
+    }
+    container.innerHTML = filtered.map((loc, i) => `
+        <div class="loc-item evac-loc-item" onclick="selectLocation(${loc.id},this)">
+            <div class="evac-exit-num">${i + 1}</div>
+            <div style="flex:1;min-width:0;">
+                <div class="loc-name">${loc.name}</div>
+                <div class="loc-sub">${loc.building||''} ${loc.floor!=null?'· Floor '+loc.floor:''}</div>
+            </div>
+        </div>`).join('');
+}
+
+
 function renderSheetExitsList() {
     const container = document.getElementById('sheetExitsList');
     if (!container) return;
@@ -819,10 +912,41 @@ function initMobileSheet() {
     if (bottomNav)   bottomNav.style.display   = 'flex';
     if (floatSearch) floatSearch.style.display  = 'flex';
 
+    // Ensure Locations sticky pane is active on init
+    document.querySelectorAll('.sheet-sth-pane').forEach(p => p.classList.remove('active'));
+    const sthLoc = document.getElementById('sthLocations');
+    if (sthLoc) sthLoc.classList.add('active');
+
+    // Wire mobile sheet search
+    const mss = document.getElementById('mobileSheetSearch');
+    const msc = document.getElementById('mobileSearchClear');
+    if (mss) {
+        mss.addEventListener('input', function() {
+            const v = this.value;
+            if (msc) msc.style.display = v ? 'block' : 'none';
+            const si = document.getElementById('searchInput');
+            if (si) si.value = v;
+            if (v) {
+                const hits = locations.filter(l => l.name.toLowerCase().includes(v.toLowerCase()));
+                renderSheetLocList(hits);
+            } else {
+                renderSheetLocList(getFilteredLocations());
+            }
+        });
+    }
+    if (msc) {
+        msc.addEventListener('click', function() {
+            const mss2 = document.getElementById('mobileSheetSearch');
+            if (mss2) mss2.value = '';
+            this.style.display = 'none';
+            renderSheetLocList(getFilteredLocations());
+        });
+    }
+
     // Start at mid snap
     expandSheet('mid');
 
-    // Ensure "Map" tab (index 1) is active in bottom nav
+    // Ensure "Locations" tab (index 1) is active in bottom nav
     document.querySelectorAll('.bottom-nav-btn').forEach((b, i) => {
         b.classList.remove('active');
         if (i === 1) b.classList.add('active');

@@ -32,8 +32,8 @@
   --bg-page:    #EDEEF2;
   --bg-card:    #ffffff;
   --font:       'Sora', sans-serif;
-  --sheet-peek:    130px;   /* how much sheet peeks above bottom on mobile */
-  --sheet-mid:     52vh;    /* mid-snap position */
+  --sheet-peek:    130px;   /* peek: shows handle + tab bar (closed state) */
+  --sheet-mid:     56vh;    /* mid: shows sticky header + ~2.5 list rows */
   --bottom-nav-h:  58px;    /* mobile bottom nav height */
 }
 
@@ -1104,11 +1104,21 @@ input, textarea,
     transform: translateY(calc(100% - var(--sheet-peek)));
     transition: transform 0.34s cubic-bezier(0.4,0,0.2,1);
     max-height: calc(90vh - var(--bottom-nav-h));
+    min-height: var(--sheet-mid);
     display: flex; flex-direction: column;
     touch-action: none;
   }
   .mobile-bottom-sheet.expanded { transform: translateY(0); }
   .mobile-bottom-sheet.mid      { transform: translateY(calc(100% - var(--sheet-mid))); }
+
+  /* Unified sticky header — sits above scroll area, switches pane per tab */
+  .sheet-sticky-header {
+    flex-shrink: 0;
+    background: #fff;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .sheet-sth-pane { display: none; }
+  .sheet-sth-pane.active { display: block; }
 
   /* Drag handle — centered pill */
   .sheet-handle-bar {
@@ -1467,9 +1477,10 @@ input, textarea,
     font-family: var(--font);
   }
 
-  /* Shift map container below header */
+  /* Shift map container below header and above sheet */
   .map-container {
     top: var(--mobile-header-h) !important;
+    bottom: calc(var(--bottom-nav-h) + var(--sheet-peek)) !important;
   }
 
   /* ── 2. Hide injected floating bell ── */
@@ -1484,14 +1495,15 @@ input, textarea,
   /* ── 5. Hide sheet tab bar (bottom nav handles switching) ── */
   .sheet-tab-bar { display: none !important; }
 
-  /* ── 6. Map controls — lower right, above sheet peek ── */
+  /* ── 6. Map controls — lower right, above sheet peek, always on top ── */
   .map-controls {
     top: auto !important;
     bottom: calc(var(--bottom-nav-h) + var(--sheet-peek) + 0.65rem) !important;
     right: 0.65rem !important;
+    z-index: 550 !important;
   }
 
-  /* ── 7. Mobile sheet search ── */
+  /* ── 7. Mobile sheet search (inside loc-header, not sheet-content) ── */
   .sheet-search-row {
     display: flex;
     align-items: center;
@@ -1653,4 +1665,25 @@ input, textarea,
     transition: background 0.15s;
   }
   .mlc-clear-btn:active { background: #eef2f7; }
+
+  /* ── Compact navigation active bar (shown after Get Directions) ── */
+  .sheet-nav-active {
+    display: none;
+    align-items: center; gap: 0.65rem;
+    padding: 0.65rem 0.85rem 0.6rem;
+    border-bottom: 1px solid #f1f5f9;
+    animation: fadeSlideIn 0.22s ease;
+  }
+  .sna-icon { font-size: 1.1rem; flex-shrink: 0; }
+  .sna-text { flex: 1; min-width: 0; }
+  .sna-label { font-size: 0.6rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; }
+  .sna-name { font-size: 0.82rem; font-weight: 800; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sna-clear {
+    flex-shrink: 0; padding: 0.3rem 0.7rem;
+    background: #f8fafc; border: 1.5px solid #e2e8f0;
+    border-radius: 50px; font-size: 0.7rem; font-weight: 700;
+    color: #64748b; font-family: var(--font); cursor: pointer;
+    transition: all 0.15s;
+  }
+  .sna-clear:active { background: #fef2f2; border-color: var(--red); color: var(--red); }
 }
