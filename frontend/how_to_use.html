@@ -6,33 +6,76 @@
     <title>How to Use SPARTA - BSU Lipa</title>
     <link rel="icon" type="image/png" href="https://sparta-production-0acb.up.railway.app/images/logo.png">
     <link rel="apple-touch-icon" href="https://sparta-production-0acb.up.railway.app/images/logo.png">
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --spartha-red: #C93030;
-            --spartha-dark-red: #A32020;
-            --spartha-gold: #F4D03F;
-            --spartha-dark-gold: #D4B030;
+            --sparta-red:      #E6392F;
+            --sparta-deep-red: #8B0000;
+            --sparta-gold:     #F7C21B;
+            --sparta-cream:    #FFF7E6;
+            --sparta-black:    #111111;
+            --sparta-success:  #2ECC71;
         }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html { opacity: 0; transition: opacity 0.22s ease; }
+        html.page-ready { opacity: 1; }
 
         body {
-            font-family: 'Poppins', sans-serif;
+            font-family: 'Sora', sans-serif;
             background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
-            color: #333;
+            color: var(--sparta-black);
             overflow-x: hidden;
         }
 
-        /* Hero Section */
+        /* ── Back button ── */
+        .back-bar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 100;
+            padding: 0.65rem 1.2rem;
+            padding-top: max(0.65rem, env(safe-area-inset-top, 0px));
+            background: rgba(230,57,47,0.97);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px 6px 10px;
+            background: rgba(255,255,255,0.15);
+            border: 1.5px solid rgba(255,255,255,0.4);
+            border-radius: 50px;
+            text-decoration: none;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 700;
+            font-family: 'Sora', sans-serif;
+            transition: background 0.18s, transform 0.18s;
+            cursor: pointer;
+        }
+        .back-btn:hover { background: rgba(255,255,255,0.25); transform: translateX(-2px); }
+        .back-btn-arrow { font-size: 15px; }
+
+        .back-bar-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: rgba(255,255,255,0.92);
+            letter-spacing: 0.02em;
+        }
+
+        /* ── Hero ── */
         .hero {
-            background: linear-gradient(135deg, var(--spartha-red) 0%, var(--spartha-dark-red) 100%);
+            background: linear-gradient(135deg, var(--sparta-red) 0%, var(--sparta-deep-red) 100%);
             color: white;
-            padding: 4rem 2rem;
+            padding: 5.5rem 2rem 3rem;
             text-align: center;
             position: relative;
             overflow: hidden;
@@ -41,602 +84,316 @@
         .hero::before {
             content: '';
             position: absolute;
-            top: -50%;
-            right: -20%;
-            width: 600px;
-            height: 600px;
-            background: radial-gradient(circle, rgba(244, 208, 63, 0.2) 0%, transparent 70%);
+            top: -50%; right: -20%;
+            width: 600px; height: 600px;
+            background: radial-gradient(circle, rgba(247,194,27,0.2) 0%, transparent 70%);
             border-radius: 50%;
             animation: float 6s ease-in-out infinite;
         }
+        @keyframes float { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-24px,-24px)} }
 
-        @keyframes float {
-            0%, 100% { transform: translate(0, 0); }
-            50% { transform: translate(-30px, -30px); }
-        }
-
-        .hero-content {
-            position: relative;
-            z-index: 1;
-            max-width: 800px;
-            margin: 0 auto;
-        }
+        .hero-content { position: relative; z-index: 1; max-width: 760px; margin: 0 auto; }
 
         .logo-hero {
-            width: 120px;
-            height: 120px;
-            margin: 0 auto 2rem;
+            width: 110px; height: 110px;
+            margin: 0 auto 1.5rem;
             border-radius: 50%;
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
-            animation: pulse 2s ease-in-out infinite;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+            animation: pulseLogo 2s ease-in-out infinite;
         }
+        @keyframes pulseLogo { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
 
         .hero h1 {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 4rem;
-            letter-spacing: 3px;
-            margin-bottom: 1rem;
-            text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.3);
-            animation: slideDown 0.8s ease-out;
+            font-family: 'Sora', sans-serif;
+            font-size: 3rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            margin-bottom: 0.75rem;
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.25);
+            animation: slideDown 0.7s ease-out;
         }
+        @keyframes slideDown { from{opacity:0;transform:translateY(-24px)} to{opacity:1;transform:translateY(0)} }
 
-        .hero p {
-            font-size: 1.3rem;
-            opacity: 0.95;
-            margin-bottom: 2rem;
-            animation: slideUp 0.8s ease-out;
-        }
+        .hero p { font-size: 1.15rem; font-weight: 400; opacity: 0.92; margin-bottom: 1.8rem; animation: slideUp2 0.7s ease-out; }
+        @keyframes slideUp2 { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
 
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-30px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
+        /* ── Stats row ── */
         .quick-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 2rem;
-            max-width: 1200px;
-            margin: 3rem auto 0;
-            padding: 0 2rem;
+            display: flex;
+            justify-content: center;
+            gap: 1.2rem;
+            flex-wrap: wrap;
+            margin-top: 0;
         }
 
         .stat-card {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            padding: 1.5rem;
-            border-radius: 16px;
-            border: 2px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255,255,255,0.12);
+            border: 1.5px solid rgba(255,255,255,0.3);
+            border-radius: 14px;
+            padding: 1rem 1.4rem;
+            backdrop-filter: blur(8px);
             text-align: center;
-            transition: all 0.3s ease;
+            min-width: 110px;
         }
+        .stat-icon  { font-size: 1.6rem; margin-bottom: 0.3rem; }
+        .stat-number { font-size: 1.5rem; font-weight: 800; display: block; color: var(--sparta-gold); }
+        .stat-label  { font-size: 0.78rem; font-weight: 500; opacity: 0.85; }
 
-        .stat-card:hover {
-            transform: translateY(-5px);
-            background: rgba(255, 255, 255, 0.15);
-        }
-
-        .stat-icon {
-            font-size: 3rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .stat-number {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 2.5rem;
-            color: var(--spartha-gold);
-        }
-
-        .stat-label {
-            font-size: 0.9rem;
-            opacity: 0.9;
-        }
-
-        /* Main Content */
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 4rem 2rem;
-        }
+        /* ── Content sections ── */
+        .container { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
 
         .section {
-            margin-bottom: 4rem;
+            padding: 3.5rem 0 2rem;
         }
 
         .section-title {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 3rem;
-            color: var(--spartha-red);
+            font-family: 'Sora', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: var(--sparta-black);
             margin-bottom: 2rem;
             text-align: center;
-            letter-spacing: 2px;
             position: relative;
-            padding-bottom: 1rem;
+            padding-bottom: 0.75rem;
         }
-
         .section-title::after {
             content: '';
             position: absolute;
-            bottom: 0;
-            left: 50%;
+            bottom: 0; left: 50%;
             transform: translateX(-50%);
-            width: 100px;
-            height: 4px;
-            background: var(--spartha-gold);
-            border-radius: 2px;
+            width: 48px; height: 3px;
+            background: var(--sparta-red);
+            border-radius: 99px;
         }
 
-        /* Feature Cards */
+        /* ── Features grid ── */
         .features-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-            margin-top: 3rem;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.25rem;
         }
 
         .feature-card {
             background: white;
-            border-radius: 20px;
-            padding: 2.5rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            border: 3px solid transparent;
-            position: relative;
-            overflow: hidden;
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+            border: 1px solid rgba(0,0,0,0.06);
+            transition: transform 0.22s, box-shadow 0.22s;
         }
+        .feature-card:hover { transform: translateY(-4px); box-shadow: 0 8px 28px rgba(0,0,0,0.12); }
 
-        .feature-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 6px;
-            background: linear-gradient(90deg, var(--spartha-red), var(--spartha-gold));
-            transform: scaleX(0);
-            transform-origin: left;
-            transition: transform 0.4s ease;
-        }
-
-        .feature-card:hover::before {
-            transform: scaleX(1);
-        }
-
-        .feature-card:hover {
-            transform: translateY(-10px) scale(1.02);
-            box-shadow: 0 20px 50px rgba(201, 48, 48, 0.2);
-            border-color: var(--spartha-red);
-        }
-
-        .feature-icon {
-            font-size: 4rem;
-            margin-bottom: 1.5rem;
-            display: inline-block;
-            animation: bounce 2s ease-in-out infinite;
-        }
-
-        @keyframes bounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
-        }
-
-        .feature-card h3 {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 2rem;
-            color: var(--spartha-red);
-            margin-bottom: 1rem;
-            letter-spacing: 1px;
-        }
-
-        .feature-card p {
+        .feature-icon { font-size: 2rem; margin-bottom: 0.75rem; display: block; }
+        .feature-card h3 { font-size: 1rem; font-weight: 700; color: var(--sparta-red); margin-bottom: 0.5rem; }
+        .feature-card p  { font-size: 0.88rem; color: #555; line-height: 1.6; margin-bottom: 0.75rem; }
+        .feature-card ul { list-style: none; }
+        .feature-card ul li {
+            font-size: 0.82rem;
             color: #666;
-            line-height: 1.8;
-            margin-bottom: 1.5rem;
-        }
-
-        .feature-card ul {
-            list-style: none;
-            margin-top: 1rem;
-        }
-
-        .feature-card li {
-            padding: 0.5rem 0;
-            padding-left: 2rem;
+            padding: 4px 0;
+            padding-left: 18px;
             position: relative;
-            color: #555;
         }
+        .feature-card ul li::before { content:'›'; position:absolute; left:0; color:var(--sparta-red); font-weight:700; }
 
-        .feature-card li::before {
-            content: '✓';
-            position: absolute;
-            left: 0;
-            color: var(--spartha-gold);
-            font-weight: bold;
-            font-size: 1.2rem;
-        }
-
-        /* Step-by-Step Guide */
-        .steps-container {
-            margin-top: 3rem;
-        }
+        /* ── Steps ── */
+        .steps-container { display: flex; flex-direction: column; gap: 1.5rem; max-width: 740px; margin: 0 auto; }
 
         .step {
             display: flex;
-            gap: 2rem;
-            margin-bottom: 3rem;
-            opacity: 0;
-            animation: fadeInLeft 0.8s ease-out forwards;
-        }
-
-        .step:nth-child(1) { animation-delay: 0.1s; }
-        .step:nth-child(2) { animation-delay: 0.2s; }
-        .step:nth-child(3) { animation-delay: 0.3s; }
-        .step:nth-child(4) { animation-delay: 0.4s; }
-        .step:nth-child(5) { animation-delay: 0.5s; }
-
-        @keyframes fadeInLeft {
-            from { opacity: 0; transform: translateX(-50px); }
-            to { opacity: 1; transform: translateX(0); }
+            align-items: flex-start;
+            gap: 1.25rem;
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+            border: 1px solid rgba(0,0,0,0.06);
         }
 
         .step-number {
-            flex-shrink: 0;
-            width: 80px;
-            height: 80px;
-            background: linear-gradient(135deg, var(--spartha-red), var(--spartha-dark-red));
-            color: white;
+            width: 44px; height: 44px;
             border-radius: 50%;
+            background: linear-gradient(135deg, var(--sparta-red), var(--sparta-deep-red));
+            color: white;
+            font-size: 1.1rem;
+            font-weight: 800;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 2.5rem;
-            box-shadow: 0 8px 20px rgba(201, 48, 48, 0.3);
-            position: relative;
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(230,57,47,0.35);
         }
 
-        .step-number::after {
-            content: '';
-            position: absolute;
-            width: 120%;
-            height: 120%;
-            border: 3px solid var(--spartha-gold);
-            border-radius: 50%;
-            opacity: 0;
-            animation: ripple 2s ease-out infinite;
-        }
-
-        @keyframes ripple {
-            0% { transform: scale(0.8); opacity: 1; }
-            100% { transform: scale(1.2); opacity: 0; }
-        }
-
-        .step-content {
-            flex: 1;
-            background: white;
-            padding: 2rem;
-            border-radius: 16px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-        }
-
-        .step-content h3 {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 2rem;
-            color: var(--spartha-red);
-            margin-bottom: 1rem;
-            letter-spacing: 1px;
-        }
-
-        .step-content p {
-            color: #666;
-            line-height: 1.8;
-            margin-bottom: 1rem;
-        }
+        .step-content h3 { font-size: 1rem; font-weight: 700; color: var(--sparta-black); margin-bottom: 0.4rem; }
+        .step-content p  { font-size: 0.88rem; color: #555; line-height: 1.65; }
 
         .step-example {
-            background: #f8f9fa;
-            padding: 1rem;
-            border-radius: 10px;
-            border-left: 4px solid var(--spartha-gold);
-            margin-top: 1rem;
-            font-style: italic;
+            margin-top: 0.6rem;
+            background: var(--sparta-cream);
+            border-left: 3px solid var(--sparta-red);
+            border-radius: 0 8px 8px 0;
+            padding: 0.55rem 0.75rem;
+            font-size: 0.82rem;
             color: #555;
+            line-height: 1.5;
         }
+        .step-example strong { color: var(--sparta-red); }
 
-        /* Tips Section */
+        /* ── Tips section ── */
         .tips-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 1.5rem;
-            margin-top: 2rem;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
         }
 
         .tip-card {
-            background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
-            padding: 2rem;
-            border-radius: 16px;
-            border-left: 5px solid var(--spartha-gold);
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-            transition: all 0.3s ease;
+            background: white;
+            border-radius: 14px;
+            padding: 1.25rem;
+            border-left: 4px solid var(--sparta-gold);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.06);
         }
+        .tip-card h4 { font-size: 0.9rem; font-weight: 700; color: var(--sparta-black); margin-bottom: 0.4rem; }
+        .tip-card p  { font-size: 0.82rem; color: #666; line-height: 1.55; }
 
-        .tip-card:hover {
-            transform: translateX(10px);
-            box-shadow: 0 8px 25px rgba(201, 48, 48, 0.15);
-        }
-
-        .tip-icon {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
-        }
-
-        .tip-card h4 {
-            color: var(--spartha-red);
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-            font-size: 1.2rem;
-        }
-
-        .tip-card p {
-            color: #666;
-            line-height: 1.6;
-            font-size: 0.95rem;
-        }
-
-        /* CTA Section */
+        /* ── CTA ── */
         .cta-section {
-            background: linear-gradient(135deg, var(--spartha-red) 0%, var(--spartha-dark-red) 100%);
+            background: linear-gradient(135deg, var(--sparta-red), var(--sparta-deep-red));
             color: white;
-            padding: 4rem 2rem;
-            border-radius: 24px;
+            padding: 3.5rem 2rem;
             text-align: center;
-            margin-top: 4rem;
-            position: relative;
-            overflow: hidden;
         }
+        .cta-section h2 { font-size: 1.8rem; font-weight: 800; margin-bottom: 0.75rem; }
+        .cta-section p  { font-size: 1rem; opacity: 0.88; margin-bottom: 2rem; }
 
-        .cta-section::before {
-            content: '';
-            position: absolute;
-            top: -100px;
-            right: -100px;
-            width: 300px;
-            height: 300px;
-            background: radial-gradient(circle, rgba(244, 208, 63, 0.2) 0%, transparent 70%);
-            border-radius: 50%;
-        }
-
-        .cta-section h2 {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 3rem;
-            margin-bottom: 1rem;
-            letter-spacing: 2px;
-            position: relative;
-            z-index: 1;
-        }
-
-        .cta-section p {
-            font-size: 1.2rem;
-            margin-bottom: 2rem;
-            opacity: 0.95;
-            position: relative;
-            z-index: 1;
-        }
-
-        .cta-buttons {
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-            flex-wrap: wrap;
-            position: relative;
-            z-index: 1;
-        }
+        .cta-buttons { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
 
         .btn {
-            padding: 1rem 2.5rem;
-            border-radius: 50px;
-            font-weight: 700;
-            font-size: 1.1rem;
-            text-decoration: none;
-            transition: all 0.3s ease;
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            cursor: pointer;
-            border: none;
-            font-family: 'Poppins', sans-serif;
-        }
-
-        .btn-primary {
-            background: var(--spartha-gold);
-            color: #333;
-            box-shadow: 0 8px 20px rgba(244, 208, 63, 0.4);
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 12px 30px rgba(244, 208, 63, 0.6);
-            background: var(--spartha-dark-gold);
-        }
-
-        .btn-secondary {
-            background: white;
-            color: var(--spartha-red);
-            border: 3px solid white;
-        }
-
-        .btn-secondary:hover {
-            background: transparent;
-            color: white;
-            transform: translateY(-3px);
-        }
-
-        /* FAQ Section */
-        .faq-container {
-            margin-top: 3rem;
-        }
-
-        .faq-item {
-            background: white;
-            border-radius: 12px;
-            margin-bottom: 1rem;
-            overflow: hidden;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-            transition: all 0.3s ease;
-        }
-
-        .faq-item:hover {
-            box-shadow: 0 4px 20px rgba(201, 48, 48, 0.1);
-        }
-
-        .faq-question {
-            padding: 1.5rem;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: linear-gradient(90deg, transparent, rgba(201, 48, 48, 0.03));
-            transition: background 0.3s ease;
-        }
-
-        .faq-question:hover {
-            background: rgba(201, 48, 48, 0.05);
-        }
-
-        .faq-question h4 {
-            color: var(--spartha-red);
-            font-weight: 600;
-            font-size: 1.1rem;
-        }
-
-        .faq-icon {
-            font-size: 1.5rem;
-            color: var(--spartha-gold);
-            transition: transform 0.3s ease;
-        }
-
-        .faq-item.active .faq-icon {
-            transform: rotate(180deg);
-        }
-
-        .faq-answer {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease, padding 0.3s ease;
-            padding: 0 1.5rem;
-        }
-
-        .faq-item.active .faq-answer {
-            max-height: 500px;
-            padding: 0 1.5rem 1.5rem;
-        }
-
-        .faq-answer p {
-            color: #666;
-            line-height: 1.8;
-        }
-
-        /* Footer */
-        .footer {
-            background: #2c2c2c;
-            color: white;
-            padding: 2rem;
-            text-align: center;
-            margin-top: 4rem;
-        }
-
-        .footer p {
-            opacity: 0.8;
-        }
-
-        .footer a {
-            color: var(--spartha-gold);
+            gap: 8px;
+            padding: 0.85rem 1.8rem;
+            border-radius: 50px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            font-family: 'Sora', sans-serif;
             text-decoration: none;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.22s ease;
+        }
+        .btn-primary { background: var(--sparta-gold); color: var(--sparta-black); }
+        .btn-primary:hover { background: #ffe040; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(247,194,27,0.4); }
+        .btn-secondary { background: transparent; color: white; border-color: rgba(255,255,255,0.6); }
+        .btn-secondary:hover { background: rgba(255,255,255,0.15); border-color: white; }
+
+        /* ── Footer ── */
+        .page-footer {
+            background: var(--sparta-black);
+            color: rgba(255,255,255,0.55);
+            text-align: center;
+            padding: 1.5rem;
+            font-size: 0.82rem;
+        }
+        .page-footer a { color: var(--sparta-gold); text-decoration: none; }
+
+        /* ── Responsive: tablet ── */
+        @media (max-width: 768px) {
+            .hero { padding: 5rem 1.25rem 2.5rem; }
+            .hero h1 { font-size: 2.2rem; }
+            .hero p  { font-size: 1rem; }
+            .section-title { font-size: 1.5rem; }
+            .section { padding: 2.5rem 0 1.5rem; }
+            .quick-stats { gap: 0.85rem; }
+            .stat-card { padding: 0.8rem 1rem; min-width: 90px; }
+            .stat-number { font-size: 1.25rem; }
+            .cta-section h2 { font-size: 1.5rem; }
+            .cta-buttons { flex-direction: column; align-items: center; }
+            .btn { width: 100%; max-width: 300px; justify-content: center; }
         }
 
-        /* Responsive */
-        @media (max-width: 768px) {
-            .hero h1 {
-                font-size: 2.5rem;
-            }
+        /* ── Responsive: large phone ── */
+        @media (max-width: 480px) {
+            .hero { padding: 4.5rem 1rem 2rem; }
+            .hero h1 { font-size: 1.8rem; letter-spacing: 0.02em; }
+            .hero p  { font-size: 0.92rem; }
+            .logo-hero { width: 88px; height: 88px; }
+            .stat-card { padding: 0.7rem 0.85rem; min-width: 80px; }
+            .stat-number { font-size: 1.1rem; }
+            .stat-label  { font-size: 0.7rem; }
+            .step { flex-direction: column; align-items: flex-start; }
+            .step-number { width: 38px; height: 38px; font-size: 1rem; }
+            .features-grid { grid-template-columns: 1fr; }
+            .tips-grid { grid-template-columns: 1fr; }
+            .back-btn { font-size: 12px; padding: 5px 11px 5px 8px; }
+            .back-bar-title { font-size: 13px; }
+            .section { padding: 2rem 0 1rem; }
+            .section-title { font-size: 1.3rem; }
+            .feature-card { padding: 1.2rem; }
+        }
 
-            .hero p {
-                font-size: 1.1rem;
-            }
-
-            .section-title {
-                font-size: 2rem;
-            }
-
-            .step {
-                flex-direction: column;
-                align-items: center;
-                text-align: center;
-            }
-
-            .step-number {
-                margin-bottom: 1rem;
-            }
-
-            .cta-section h2 {
-                font-size: 2rem;
-            }
-
-            .cta-buttons {
-                flex-direction: column;
-            }
-
-            .btn {
-                width: 100%;
-                justify-content: center;
-            }
+        /* ── Responsive: small phone ── */
+        @media (max-width: 360px) {
+            .hero h1 { font-size: 1.5rem; }
+            .logo-hero { width: 76px; height: 76px; }
+            .quick-stats { gap: 0.6rem; }
+            .stat-card { min-width: 70px; padding: 0.6rem 0.75rem; }
+            .section-title { font-size: 1.2rem; }
+            .step-content h3 { font-size: 0.92rem; }
+            .step-content p  { font-size: 0.82rem; }
+            .btn { font-size: 0.88rem; padding: 0.75rem 1.4rem; }
+            .back-bar { padding: 0.5rem 0.9rem; }
         }
     </style>
 </head>
 <body>
-    <!-- Hero Section -->
+
+    <!-- Fixed back bar -->
+    <div class="back-bar">
+        <a href="sparta_main_menu.html" class="back-btn" id="backBtn">
+            <span class="back-btn-arrow">←</span>
+            <span>Back</span>
+        </a>
+        <span class="back-bar-title">How to Use SPARTA</span>
+    </div>
+
+    <!-- Hero -->
     <div class="hero">
         <div class="hero-content">
-            <img src="https://sparta-production-0acb.up.railway.app/images/logo.png" alt="BSU Logo">
-            <h1>HOW TO USE SPARTA</h1>
+            <img src="https://sparta-production-0acb.up.railway.app/images/logo.png" alt="BSU Logo" class="logo-hero">
+            <h1>How to Use SPARTA</h1>
             <p>Your Smart Campus Companion at BSU Lipa</p>
         </div>
-
         <div class="quick-stats">
             <div class="stat-card">
                 <div class="stat-icon">💬</div>
-                <div class="stat-number">24/7</div>
-                <div class="stat-label">Always Available</div>
+                <span class="stat-number">24/7</span>
+                <span class="stat-label">Always Available</span>
             </div>
             <div class="stat-card">
                 <div class="stat-icon">🗺️</div>
-                <div class="stat-number">100+</div>
-                <div class="stat-label">Campus Locations</div>
+                <span class="stat-number">100+</span>
+                <span class="stat-label">Campus Locations</span>
             </div>
             <div class="stat-card">
                 <div class="stat-icon">⚡</div>
-                <div class="stat-number">Fast</div>
-                <div class="stat-label">Instant Answers</div>
+                <span class="stat-number">Fast</span>
+                <span class="stat-label">Instant Answers</span>
             </div>
         </div>
     </div>
 
     <!-- Main Content -->
     <div class="container">
-        <!-- What Can SPARTHA Do? -->
+
+        <!-- What Can SPARTA Do? -->
         <section class="section">
             <h2 class="section-title">What Can SPARTA Do?</h2>
-            
             <div class="features-grid">
                 <div class="feature-card">
-                    <div class="feature-icon">💬</div>
+                    <span class="feature-icon">💬</span>
                     <h3>Answer Questions</h3>
-                    <p>Get instant answers about BSU Lipa - from admissions to academic programs!</p>
+                    <p>Get instant answers about BSU Lipa — from admissions to academic programs.</p>
                     <ul>
                         <li>Admission requirements</li>
                         <li>Course offerings</li>
@@ -644,23 +401,21 @@
                         <li>Contact information</li>
                     </ul>
                 </div>
-
                 <div class="feature-card">
-                    <div class="feature-icon">🗺️</div>
+                    <span class="feature-icon">🗺️</span>
                     <h3>Navigate Campus</h3>
-                    <p>Find your way around campus with our interactive 3D map!</p>
+                    <p>Find your way around campus with our interactive 3D map.</p>
                     <ul>
                         <li>Locate classrooms</li>
-                        <li>Find offices & facilities</li>
+                        <li>Find offices and facilities</li>
                         <li>Get directions</li>
                         <li>Explore buildings</li>
                     </ul>
                 </div>
-
                 <div class="feature-card">
-                    <div class="feature-icon">📅</div>
+                    <span class="feature-icon">📅</span>
                     <h3>Stay Updated</h3>
-                    <p>Never miss important announcements and events!</p>
+                    <p>Never miss important announcements and events.</p>
                     <ul>
                         <li>Latest news</li>
                         <li>Event schedules</li>
@@ -668,11 +423,10 @@
                         <li>Important dates</li>
                     </ul>
                 </div>
-
                 <div class="feature-card">
-                    <div class="feature-icon">👥</div>
+                    <span class="feature-icon">👥</span>
                     <h3>Find People</h3>
-                    <p>Get contact information for university staff and faculty!</p>
+                    <p>Get contact information for university staff and faculty.</p>
                     <ul>
                         <li>Faculty directory</li>
                         <li>Office locations</li>
@@ -686,227 +440,106 @@
         <!-- Step-by-Step Guide -->
         <section class="section">
             <h2 class="section-title">Getting Started in 5 Easy Steps</h2>
-            
             <div class="steps-container">
                 <div class="step">
                     <div class="step-number">1</div>
                     <div class="step-content">
                         <h3>Access SPARTA</h3>
-                        <p>Click on the "Talk to SPARTA" button from the main menu. SPARTA is available 24/7 on any device - computer, tablet, or smartphone!</p>
-                        <div class="step-example">
-                            <strong>Tip:</strong> Bookmark the page for quick access anytime!
-                        </div>
+                        <p>Tap "Talk to SPARTA" from the main menu. SPARTA is available 24/7 on any device — phone, tablet, or computer.</p>
+                        <div class="step-example"><strong>Tip:</strong> Bookmark the page for quick access anytime!</div>
                     </div>
                 </div>
-
                 <div class="step">
                     <div class="step-number">2</div>
                     <div class="step-content">
                         <h3>Type Your Question</h3>
-                        <p>Simply type your question in natural language - no special commands needed! SPARTA understands casual conversation.</p>
-                        <div class="step-example">
-                            <strong>Example:</strong> "Where is Room 301?" or "What are the admission requirements for Engineering?"
-                        </div>
+                        <p>Just type in plain language — no special commands needed. SPARTA understands casual conversation.</p>
+                        <div class="step-example"><strong>Example:</strong> "Where is Room 301?" or "What are the admission requirements for Engineering?"</div>
                     </div>
                 </div>
-
                 <div class="step">
                     <div class="step-number">3</div>
                     <div class="step-content">
                         <h3>Get Instant Answers</h3>
-                        <p>SPARTHA will respond immediately with accurate, helpful information. If you need more details, just ask follow-up questions!</p>
-                        <div class="step-example">
-                            <strong>Follow-up:</strong> "Can you tell me more?" or "How do I get there?"
-                        </div>
+                        <p>SPARTA responds right away with accurate, helpful information. Ask follow-up questions anytime.</p>
+                        <div class="step-example"><strong>Follow-up:</strong> "Can you tell me more?" or "How do I get there?"</div>
                     </div>
                 </div>
-
                 <div class="step">
                     <div class="step-number">4</div>
                     <div class="step-content">
-                        <h3>Use the 3D Campus Map</h3>
-                        <p>Click "Navigate the Campus" to explore BSU Lipa in 3D! Search for locations, get directions, and virtually tour the campus.</p>
-                        <div class="step-example">
-                            <strong>Features:</strong> Zoom, rotate, and click on buildings to explore different floors!
-                        </div>
+                        <h3>Explore the 3D Map</h3>
+                        <p>Tap "Navigate the Campus" to explore the interactive 3D campus map — find buildings, rooms, and plan your route.</p>
+                        <div class="step-example"><strong>Try:</strong> Searching for "Library" or "College of Engineering" to see directions.</div>
                     </div>
                 </div>
-
                 <div class="step">
                     <div class="step-number">5</div>
                     <div class="step-content">
-                        <h3>Explore More Features</h3>
-                        <p>Check out announcements, browse university history, and discover everything BSU Lipa has to offer through SPARTHA!</p>
-                        <div class="step-example">
-                            <strong>Pro Tip:</strong> Use specific keywords like "deadline," "schedule," or "contact" for faster results!
-                        </div>
+                        <h3>Use Voice Input</h3>
+                        <p>Tap the 🎤 microphone button and speak your question naturally. SPARTA supports both English and Tagalog.</p>
+                        <div class="step-example"><strong>Say:</strong> "Saan ang library?" or "Who is the dean of COE?"</div>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- Tips & Tricks -->
+        <!-- Pro Tips -->
         <section class="section">
-            <h2 class="section-title">Tips & Tricks for Best Results</h2>
-            
+            <h2 class="section-title">Pro Tips</h2>
             <div class="tips-grid">
                 <div class="tip-card">
-                    <div class="tip-icon">💡</div>
-                    <h4>Be Specific</h4>
-                    <p>Instead of "What about engineering?" try "What are the requirements for BS Mechanical Engineering?"</p>
+                    <h4>🎯 Be Specific</h4>
+                    <p>The more specific your question, the better the answer. Try "Where is the COE Dean's office?" instead of just "dean".</p>
                 </div>
-
                 <div class="tip-card">
-                    <div class="tip-icon">🎯</div>
-                    <h4>Use Keywords</h4>
-                    <p>Include important words like "admission," "tuition," "scholarship," "location," or "contact" in your questions.</p>
+                    <h4>🌐 Switch Languages</h4>
+                    <p>Tap the EN|TL toggle in the chatbot header to switch between English and Tagalog in one tap.</p>
                 </div>
-
                 <div class="tip-card">
-                    <div class="tip-icon">📱</div>
-                    <h4>Works on Mobile</h4>
-                    <p>Access SPARTHA on your phone while walking around campus - perfect for finding your way!</p>
+                    <h4>⚡ Quick Questions</h4>
+                    <p>Swipe the chip row below the chat to see popular quick-questions. Tap any chip to send instantly.</p>
                 </div>
-
                 <div class="tip-card">
-                    <div class="tip-icon">🔄</div>
-                    <h4>Ask Follow-ups</h4>
-                    <p>SPARTHA remembers your conversation! Ask follow-up questions for more details without repeating yourself.</p>
-                </div>
-
-                <div class="tip-card">
-                    <div class="tip-icon">🗣️</div>
-                    <h4>Natural Language</h4>
-                    <p>Chat like you're talking to a friend - no need for formal or technical language!</p>
-                </div>
-
-                <div class="tip-card">
-                    <div class="tip-icon">⏱️</div>
-                    <h4>Save Time</h4>
-                    <p>Get instant answers instead of searching through multiple websites or waiting for office hours!</p>
+                    <h4>🔔 Announcements</h4>
+                    <p>Tap the bell icon on the main menu to see the latest campus announcements and events.</p>
                 </div>
             </div>
         </section>
 
-        <!-- FAQ Section -->
-        <section class="section">
-            <h2 class="section-title">Frequently Asked Questions</h2>
-            
-            <div class="faq-container">
-                <div class="faq-item" onclick="toggleFAQ(this)">
-                    <div class="faq-question">
-                        <h4>Is SPARTHA free to use?</h4>
-                        <span class="faq-icon">▼</span>
-                    </div>
-                    <div class="faq-answer">
-                        <p>Yes! SPARTHA is completely free for all BSU Lipa students, faculty, staff, and visitors. No registration or login required!</p>
-                    </div>
-                </div>
+    </div>
 
-                <div class="faq-item" onclick="toggleFAQ(this)">
-                    <div class="faq-question">
-                        <h4>What kind of questions can I ask?</h4>
-                        <span class="faq-icon">▼</span>
-                    </div>
-                    <div class="faq-answer">
-                        <p>You can ask about admissions, academic programs, campus locations, faculty contacts, events, schedules, university history, facilities, and much more! If it's related to BSU Lipa, SPARTHA can help!</p>
-                    </div>
-                </div>
-
-                <div class="faq-item" onclick="toggleFAQ(this)">
-                    <div class="faq-question">
-                        <h4>How accurate is the information?</h4>
-                        <span class="faq-icon">▼</span>
-                    </div>
-                    <div class="faq-answer">
-                        <p>SPARTHA's information is regularly updated by university administrators to ensure accuracy. However, for official transactions, always verify with the relevant office.</p>
-                    </div>
-                </div>
-
-                <div class="faq-item" onclick="toggleFAQ(this)">
-                    <div class="faq-question">
-                        <h4>Can SPARTHA help me find my classroom?</h4>
-                        <span class="faq-icon">▼</span>
-                    </div>
-                    <div class="faq-answer">
-                        <p>Absolutely! Use the "Navigate the Campus" feature to search for any room, building, or facility. The 3D map will show you exactly where it is and how to get there!</p>
-                    </div>
-                </div>
-
-                <div class="faq-item" onclick="toggleFAQ(this)">
-                    <div class="faq-question">
-                        <h4>What if SPARTHA doesn't understand my question?</h4>
-                        <span class="faq-icon">▼</span>
-                    </div>
-                    <div class="faq-answer">
-                        <p>Try rephrasing your question or being more specific. If SPARTHA still can't help, you can contact the university directly - SPARTHA can provide you with the right contact information!</p>
-                    </div>
-                </div>
-
-                <div class="faq-item" onclick="toggleFAQ(this)">
-                    <div class="faq-question">
-                        <h4>Can I use SPARTHA on my phone?</h4>
-                        <span class="faq-icon">▼</span>
-                    </div>
-                    <div class="faq-answer">
-                        <p>Yes! SPARTHA works perfectly on smartphones, tablets, and computers. The interface automatically adapts to your screen size for the best experience.</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- CTA Section -->
-        <div class="cta-section">
-            <h2>Ready to Explore BSU Lipa?</h2>
-            <p>Start your journey with SPARTHA - your smart campus companion!</p>
-            <div class="cta-buttons">
-                <a href="chatbot.html" class="btn btn-primary">
-                    💬 Talk to SPARTHA
-                </a>
-                <a href="campus-navigator.html" class="btn btn-secondary">
-                    🗺️ Explore Campus Map
-                </a>
-            </div>
+    <!-- CTA -->
+    <div class="cta-section">
+        <h2>Ready to Explore BSU Lipa?</h2>
+        <p>Start chatting with SPARTA or navigate the 3D campus map right now.</p>
+        <div class="cta-buttons">
+            <a href="sparta_chatbot.html" class="btn btn-primary">💬 Talk to SPARTA</a>
+            <a href="sparta_campus-navigator.html" class="btn btn-secondary">🗺️ Explore Campus</a>
         </div>
     </div>
 
-    <!-- Footer -->
-    <div class="footer">
-        <p><strong>Batangas State University - The National Engineering University</strong></p>
-        <p>SPARTHA - Smart Campus Companion | © 2024 BSU Lipa</p>
-        <p>Need help? Contact us at <a href="/cdn-cgi/l/email-protection#a3d0d3c2d1d7cbc2e3c1d0d68dc6c7d68dd3cb"><span class="__cf_email__" data-cfemail="89faf9e8fbfde1e8c9ebfafca7ecedfca7f9e1">[email&#160;protected]</span></a></p>
+    <div class="page-footer">
+        Batangas State University — The National Engineering University &nbsp;|&nbsp;
+        <a href="sparta_main_menu.html">← Back to Main Menu</a>
     </div>
 
-    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
-        function toggleFAQ(element) {
-            // Close all other FAQs
-            document.querySelectorAll('.faq-item').forEach(item => {
-                if (item !== element && item.classList.contains('active')) {
-                    item.classList.remove('active');
+    <script>
+        // Page transition
+        (function(){
+            window.addEventListener('DOMContentLoaded', function(){
+                document.documentElement.classList.add('page-ready');
+            });
+            document.addEventListener('click', function(e){
+                var a = e.target.closest('a[href]');
+                if(a && !a.target && !e.ctrlKey && !e.metaKey && a.hostname === location.hostname){
+                    e.preventDefault();
+                    var href = a.href;
+                    document.documentElement.style.opacity = '0';
+                    setTimeout(function(){ location.href = href; }, 220);
                 }
             });
-            
-            // Toggle current FAQ
-            element.classList.toggle('active');
-        }
-
-        // Scroll animations
-        const observerOptions = {
-            threshold: 0.1,
-            rootMargin: '0px 0px -100px 0px'
-        };
-
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.style.opacity = '1';
-                    entry.target.style.transform = 'translateY(0)';
-                }
-            });
-        }, observerOptions);
-
-        document.querySelectorAll('.feature-card, .tip-card').forEach(card => {
-            card.style.opacity = '0';
-            card.style.transform = 'translateY(30px)';
-            observer.observe(card);
-        });
+        })();
+    </script>
+</body>
+</html>

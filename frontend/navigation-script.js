@@ -148,6 +148,11 @@ async function loadLocationsFromAPI() {
         renderFavorites();
         renderEvacExits();
         renderNearby();
+        // Mobile sheet — sync pills + render list
+        syncSheetPills();
+        renderSheetLocList(getFilteredLocations());
+        // Also populate sheet evacuation list
+        renderSheetExitsList();
     } catch(e) {
         console.error('Error loading locations:', e);
         locations = [];
@@ -273,14 +278,33 @@ function formatDescription(text) {
 }
 
 // ============ FILTER PILLS ============
+const TYPE_LABELS = {
+    classroom:'Classroom', classromm:'Classroom', laboratory:'Lab',
+    lab:'Lab', office:'Office', library:'Library', cafeteria:'Cafeteria',
+    gymnasium:'Gym', clinic:'Clinic', restroom:'Restroom',
+    entrance:'Entrance', exit:'Exit', evacuation:'Evacuation',
+    auditorium:'Auditorium', chapel:'Chapel', storage:'Storage',
+    conference:'Conference', hallway:'Hallway', stairs:'Stairs',
+    comfort_room:'CR', cr:'CR',
+};
+function typeLabel(t) {
+    return TYPE_LABELS[t?.toLowerCase()] || (t ? t.charAt(0).toUpperCase()+t.slice(1) : 'Other');
+}
+
 function buildFilterPills() {
-    const types = [...new Set(locations.map(l => l.type))].sort();
+    // Deduplicate by normalised label so "classroom" and "classromm" merge
+    const labelMap = {};
+    locations.forEach(l => {
+        const label = typeLabel(l.type);
+        if (!labelMap[label]) labelMap[label] = l.type; // keep first raw value
+    });
     const bar = document.getElementById('filterBar');
     let html = '<button class="filter-pill active" data-filter="all" onclick="applyFilter(\'all\',this)">All</button>';
-    types.forEach(t => {
-        html += `<button class="filter-pill" data-filter="${t}" onclick="applyFilter('${t}',this)">${t.charAt(0).toUpperCase()+t.slice(1)}</button>`;
+    Object.entries(labelMap).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([label, rawType]) => {
+        html += `<button class="filter-pill" data-filter="${rawType}" data-label="${label}" onclick="applyFilter('${rawType}',this)">${label}</button>`;
     });
     bar.innerHTML = html;
+    enableDragScroll(bar);
 }
 
 function applyFilter(val, btn) {
@@ -288,6 +312,8 @@ function applyFilter(val, btn) {
     document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
     renderLocationsList();
+    renderSheetLocList(getFilteredLocations());
+    syncSheetPills();
 }
 
 // ============ FLOOR PILLS ============
@@ -306,12 +332,15 @@ function applyFloor(val, btn) {
     document.querySelectorAll('.floor-pill').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
     renderLocationsList();
+    renderSheetLocList(getFilteredLocations());
+    syncSheetPills();
 }
 
 // ============ RENDER LOCATIONS ============
 function getFilteredLocations() {
+    const activeLbl = activeTypeFilter !== 'all' ? typeLabel(activeTypeFilter) : 'all';
     return locations.filter(l => {
-        if (activeTypeFilter !== 'all' && l.type !== activeTypeFilter) return false;
+        if (activeTypeFilter !== 'all' && typeLabel(l.type) !== activeLbl) return false;
         if (activeFloorFilter !== 'all' && l.floor != activeFloorFilter) return false;
         return true;
     });
@@ -337,7 +366,7 @@ function renderLocationsList() {
                 <span class="loc-icon">${loc.icon}</span>
                 <div style="flex:1;min-width:0;">
                     <div class="loc-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:.2rem;">${loc.name}${a11y}</div>
-                    <div class="loc-sub">Floor ${loc.floor} · ${loc.type}</div>
+                    <div class="loc-sub">Floor ${loc.floor} · ${typeLabel(loc.type)}</div>
                 </div>
                 <span class="loc-fav ${isFav?'active':''}" onclick="event.stopPropagation();toggleFav(${loc.id})">${isFav?'⭐':'☆'}</span>
             </div>`;
@@ -375,6 +404,8 @@ function renderNearby() {
     if (!section || !list) return;
 
     section.style.display = 'block';
+    // Enable drag scroll on nearby row after it renders
+    setTimeout(() => enableDragScroll(document.querySelector('.nearby-scroll')), 50);
 
     // Render as horizontal snap-scroll cards
     list.innerHTML = sorted.map(loc => {
@@ -391,13 +422,15 @@ function renderNearby() {
 }
 
 // ============ FAVORITES ============
-function toggleFav(id) {
+function toggleFav(id, event) {
+    if (event) event.stopPropagation();
     const idx = favorites.indexOf(id);
     if (idx > -1) favorites.splice(idx, 1);
     else favorites.push(id);
     localStorage.setItem('spartha_favs', JSON.stringify(favorites));
     renderLocationsList();
     renderFavorites();
+    renderSheetLocList(getFilteredLocations()); // sync sheet
 }
 
 function renderFavorites() {
@@ -480,9 +513,385 @@ function pinEvacExit(id) {
 }
 
 // ============ SEARCH ============
+
+// ============ DRAG-TO-SCROLL (desktop horizontal bars) ============
+function enableDragScroll(el) {
+    if (!el) return;
+    let isDown = false, startX, scrollLeft;
+
+    el.addEventListener('mousedown', e => {
+        isDown = true;
+        el.style.cursor = 'grabbing';
+        startX    = e.pageX - el.offsetLeft;
+        scrollLeft = el.scrollLeft;
+        e.preventDefault();
+    });
+    el.addEventListener('mouseleave', () => { isDown = false; el.style.cursor = ''; });
+    el.addEventListener('mouseup',    () => { isDown = false; el.style.cursor = ''; });
+    el.addEventListener('mousemove',  e => {
+        if (!isDown) return;
+        const x    = e.pageX - el.offsetLeft;
+        const walk = (x - startX) * 1.4;
+        el.scrollLeft = scrollLeft - walk;
+    });
+
+    // Also allow shift+wheel for horizontal scroll on desktop
+    el.addEventListener('wheel', e => {
+        if (e.deltaY !== 0) {
+            e.preventDefault();
+            el.scrollLeft += e.deltaY;
+        }
+    }, { passive: false });
+}
+
+
+// ============================================================
+// MOBILE BOTTOM SHEET — snap, drag, tabs, location detail
+// Only active on ≤768px. Desktop uses the sidebar instead.
+// ============================================================
+
+const MOBILE_BP = 768;
+function isMobile() { return window.innerWidth <= MOBILE_BP; }
+
+// ── Sheet snap positions ──────────────────────────────────────
+function expandSheet(snap) {
+    const sheet  = document.getElementById('mobileBottomSheet');
+    const fsrch  = document.getElementById('mFloatSearch');
+    const fab    = document.getElementById('mMapFab');
+    if (!sheet || !isMobile()) return;
+    sheet.classList.remove('expanded', 'mid');
+    if (snap === 'full') {
+        sheet.classList.add('expanded');
+        // Hide floating elements when sheet is full screen
+        if (fsrch) fsrch.style.opacity = '0';
+        if (fab)   fab.style.opacity   = '0';
+    } else {
+        if (snap === 'mid') sheet.classList.add('mid');
+        // Show floating elements
+        if (fsrch) fsrch.style.opacity = '1';
+        if (fab)   fab.style.display === 'flex' && (fab.style.opacity = '1');
+    }
+}
+
+// ── Drag-to-snap ─────────────────────────────────────────────
+function initSheetDrag() {
+    const sheet  = document.getElementById('mobileBottomSheet');
+    const handle = document.getElementById('sheetHandleBar');
+    if (!sheet || !handle) return;
+
+    let startY = 0, startTop = 0, dragging = false;
+
+    function onStart(e) {
+        if (!isMobile()) return;
+        dragging = true;
+        startY   = e.touches ? e.touches[0].clientY : e.clientY;
+        startTop = sheet.getBoundingClientRect().top;
+        sheet.style.transition = 'none';
+    }
+    function onMove(e) {
+        if (!dragging || !isMobile()) return;
+        const y    = e.touches ? e.touches[0].clientY : e.clientY;
+        const diff = y - startY;
+        const newTop = Math.max(window.innerHeight * 0.12, startTop + diff);
+        sheet.style.transform = `translateY(${newTop - (window.innerHeight - sheet.offsetHeight)}px)`;
+    }
+    function onEnd(e) {
+        if (!dragging || !isMobile()) return;
+        dragging = false;
+        sheet.style.transition = '';
+        sheet.style.transform  = '';
+        const y      = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+        const diff   = y - startY;
+        const vh     = window.innerHeight;
+        if (diff < -60)       expandSheet('full');
+        else if (diff > 80)   expandSheet('peek');
+        else                  expandSheet('mid');
+    }
+
+    handle.addEventListener('touchstart', onStart, { passive: true });
+    handle.addEventListener('touchmove',  onMove,  { passive: true });
+    handle.addEventListener('touchend',   onEnd);
+    handle.addEventListener('mousedown',  onStart);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup',   onEnd);
+}
+
+// ── Sheet tabs ───────────────────────────────────────────────
+function switchSheetTab(tabName, btn) {
+    // Panels
+    document.querySelectorAll('#mobileBottomSheet .sheet-panel').forEach(p => p.classList.remove('active'));
+    const panel = document.getElementById(`sheet-panel-${tabName}`);
+    if (panel) panel.classList.add('active');
+
+    // Clear all active states
+    document.querySelectorAll('.sheet-tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.bottom-nav-btn').forEach(b => b.classList.remove('active'));
+
+    // Activate clicked element (could be bottom nav btn or sheet tab btn)
+    if (btn) btn.classList.add('active');
+
+    // Sync sheet tab bar — match by onclick content
+    document.querySelectorAll('.sheet-tab-btn').forEach(b => {
+        const oc = b.getAttribute('onclick') || '';
+        if (oc.includes(`'${tabName}'`)) b.classList.add('active');
+    });
+
+    // Sync bottom nav — match by onclick content
+    document.querySelectorAll('.bottom-nav-btn').forEach(b => {
+        const oc = b.getAttribute('onclick') || '';
+        if (oc.includes(`'${tabName}'`)) b.classList.add('active');
+    });
+
+    // Tab-specific renders
+    if (tabName === 'favorites')  { renderFavorites(); renderSheetLocList(locations.filter(l => favorites.includes(l.id))); }
+    if (tabName === 'evacuation') { renderEvacExits(); renderSheetExitsList(); }
+}
+
+// ── Show location detail in sheet ───────────────────────────
+function showSheetDetail(loc) {
+    if (!isMobile()) return;
+
+    const detail   = document.getElementById('sheetLocationDetail');
+    const listPane = document.getElementById('sheet-panel-locations');
+    if (!detail || !listPane) return;
+
+    // Hide list, show detail
+    listPane.style.display = 'none';
+    detail.style.display   = 'block';
+
+    // Header
+    const badge = loc.icon || '📍';
+    document.getElementById('sheetDetailName').textContent = loc.name;
+    document.getElementById('sheetDetailSub').textContent  =
+        [loc.building, loc.floor != null ? `Floor ${loc.floor}` : '', loc.type]
+        .filter(Boolean).join(' · ');
+
+    // Content — reuse the same info rows format
+    const content = document.getElementById('sheetDetailContent');
+    if (content) content.innerHTML = buildInfoRows(loc);
+
+    // Expand to mid snap
+    expandSheet('mid');
+
+    // Hide/reset route card
+    const rc = document.getElementById('sheetRouteCard');
+    if (rc) rc.classList.remove('show');
+    const clr = document.getElementById('sheetClearBtn');
+    if (clr) clr.style.display = 'none';
+}
+
+function closeSheetDetail() {
+    const detail   = document.getElementById('sheetLocationDetail');
+    const listPane = document.getElementById('sheet-panel-locations');
+    if (detail)   detail.style.display   = 'none';
+    if (listPane) listPane.style.display = '';
+    closeInfo();
+    expandSheet('mid');
+}
+
+// Build reusable info row HTML from a location object
+function buildInfoRows(loc) {
+    let html = '';
+    if (loc.building)    html += infoRow('🏢','Building', loc.building);
+    if (loc.floor != null) html += infoRow('🏬','Floor', `Floor ${loc.floor}`);
+    if (loc.type)        html += infoRow('🏷️','Type', loc.type);
+    if (loc.capacity)    html += infoRow('👥','Capacity', `${loc.capacity} persons`);
+    if (loc.description) html += infoRow('📝','Description', loc.description);
+    return html || '<div style="color:#94a3b8;font-size:.75rem;padding:.5rem 0">No additional details.</div>';
+}
+function infoRow(icon, label, value) {
+    return `<div class="info-row">
+        <span class="info-row-icon">${icon}</span>
+        <div><div class="info-label">${label}</div><div class="info-value">${value}</div></div>
+    </div>`;
+}
+
+// ── Sync sheet search ─────────────────────────────────────────
+function syncSheetSearch(val) {
+    const si = document.getElementById('searchInput');
+    if (si) si.value = val;
+    // Also sync filter pills into sheet
+    syncSheetPills();
+}
+
+// ── Sync pills from sidebar into sheet ───────────────────────
+function syncSheetPills() {
+    const sfb  = document.getElementById('sheetFilterBar');
+    const sflb = document.getElementById('sheetFloorBar');
+    const fb   = document.getElementById('filterBar');
+    const flb  = document.getElementById('floorBar');
+    if (sfb && fb)   sfb.innerHTML  = fb.innerHTML;
+    if (sflb && flb) sflb.innerHTML = flb.innerHTML;
+    // Re-enable drag scroll on synced pill rows
+    enableDragScroll(sfb);
+    enableDragScroll(sflb);
+}
+
+// ── Render location list into sheet ──────────────────────────
+function renderSheetLocList(locs) {
+    const list = document.getElementById('sheetLocList');
+    if (!list) return;
+    if (!locs || !locs.length) {
+        list.innerHTML = '<div class="empty-state"><div class="es-icon">🔍</div><p>No results found</p></div>';
+        return;
+    }
+    list.innerHTML = locs.map(loc => {
+        const sub = [loc.building, loc.floor != null ? `Floor ${loc.floor}` : '', typeLabel(loc.type)]
+            .filter(Boolean).join(' · ');
+        const isFav = favorites.includes(loc.id);
+        return `<div class="sheet-loc-item" onclick="selectLocation(${loc.id}, this)">
+            <span class="loc-icon">${loc.icon || '📍'}</span>
+            <div style="flex:1;min-width:0;">
+                <div class="loc-name">${loc.name}</div>
+                <div class="loc-sub">${sub}</div>
+            </div>
+            <span class="loc-fav ${isFav?'active':''}" onclick="event.stopPropagation();toggleFav(${loc.id})">${isFav?'⭐':'☆'}</span>
+        </div>`;
+    }).join('');
+}
+
+// ── After route drawn on mobile — show stats in sheet ────────
+function syncSheetRouteCard(distance, time, waypoints) {
+    const rc = document.getElementById('sheetRouteCard');
+    if (!rc || !isMobile()) return;
+    document.getElementById('sheetPathDistance').textContent  = distance;
+    document.getElementById('sheetPathTime').textContent      = time;
+    document.getElementById('sheetPathWaypoints').textContent = waypoints;
+    rc.classList.add('show');
+    const clr = document.getElementById('sheetClearBtn');
+    if (clr) clr.style.display = 'block';
+    expandSheet('mid');
+}
+
+// ── Render evacuation exits into the sheet panel ─────────────────────────────
+function renderSheetExitsList() {
+    const container = document.getElementById('sheetExitsList');
+    if (!container) return;
+    const exits = locations.filter(l => l.isExit);
+    if (!exits.length) {
+        container.innerHTML = '<div class="empty-state"><div class="es-icon">🚪</div><p>No exits configured</p></div>';
+        return;
+    }
+    container.innerHTML = exits.map((loc, i) => `
+        <div class="evac-exit-item" onclick="selectLocation(${loc.id},this)">
+            <div class="evac-exit-icon">${i+1}</div>
+            <div class="evac-exit-info">
+                <div class="evac-exit-name">${loc.name}</div>
+                <div class="evac-exit-details">${loc.building||''} ${loc.floor!=null?'· Floor '+loc.floor:''}</div>
+            </div>
+        </div>`).join('');
+}
+
+// ── Init sheet on load ────────────────────────────────────────────────────────
+function initMobileSheet() {
+    if (!isMobile()) return;
+    initSheetDrag();
+    syncSheetPills();
+    renderSheetLocList(getFilteredLocations());
+
+    // Show mobile-only elements
+    const bottomSheet = document.getElementById('mobileBottomSheet');
+    const bottomNav   = document.getElementById('mobileBottomNav');
+    const floatSearch = document.getElementById('mFloatSearch');
+    if (bottomSheet) bottomSheet.style.display = 'flex';
+    if (bottomNav)   bottomNav.style.display   = 'flex';
+    if (floatSearch) floatSearch.style.display  = 'flex';
+
+    // Start at mid snap
+    expandSheet('mid');
+
+    // Ensure "Map" tab (index 1) is active in bottom nav
+    document.querySelectorAll('.bottom-nav-btn').forEach((b, i) => {
+        b.classList.remove('active');
+        if (i === 1) b.classList.add('active');
+    });
+}
+
+// Re-check on resize
+window.addEventListener('resize', () => {
+    const bs  = document.getElementById('mobileBottomSheet');
+    const bn  = document.getElementById('mobileBottomNav');
+    const mc  = document.querySelector('.map-controls');
+    const hint = document.getElementById('mapIdleHint');
+    if (isMobile()) {
+        if (bs)   bs.style.display   = 'flex';
+        if (bn)   bn.style.display   = 'flex';
+        if (mc)   mc.style.bottom    = 'calc(var(--bottom-nav-h) + var(--sheet-peek) + 0.75rem)';
+        if (hint) hint.style.bottom  = 'calc(var(--bottom-nav-h) + var(--sheet-peek) + 0.5rem)';
+    } else {
+        if (bs)   bs.style.display   = 'none';
+        if (bn)   bn.style.display   = 'none';
+        if (mc)   mc.style.removeProperty('bottom');
+        if (hint) hint.style.removeProperty('bottom');
+    }
+});
+
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('searchInput').addEventListener('input', handleSearch);
     document.addEventListener('click', e => { if (!e.target.closest('.search-wrap')) document.getElementById('searchResults').classList.remove('show'); });
+});
+
+// Called from HTML oninput
+function liveSearch(val) {
+    const rd  = document.getElementById('searchResults');
+    const clr = document.getElementById('searchClear');
+    const mClr = document.getElementById('mFloatClear');
+    if (clr)  clr.style.display  = val.length ? 'block' : 'none';
+    if (mClr) mClr.style.display = val.length ? 'block' : 'none';
+    const q = val.toLowerCase().trim();
+    if (q.length < 2) { rd.classList.remove('show'); return; }
+    if (!locations.length) {
+        rd.innerHTML = '<div class="sr-item" style="text-align:center;padding:1.2rem;color:#999;font-size:.78rem;">No locations available</div>';
+        rd.classList.add('show'); return;
+    }
+    const hits = locations.filter(l =>
+        l.name.toLowerCase().includes(q) ||
+        (l.building||'').toLowerCase().includes(q) ||
+        (l.type||'').toLowerCase().includes(q)
+    );
+    rd.innerHTML = hits.length
+        ? hits.slice(0,8).map(l =>
+            `<div class="sr-item" onclick="selectLocation(${l.id});clearSearch()">
+                ${l.accessible ? '<span class="a11y-badge" style="float:right;">♿</span>' : ''}
+                <div class="sr-name">${l.icon||'📍'} ${l.name}</div>
+                <div class="sr-sub">${l.building||''} · Floor ${l.floor}</div>
+            </div>`).join('')
+        : `<div class="sr-item" style="text-align:center;padding:1rem;color:#999;">
+                <div style="font-size:1.3rem;">🔍</div>
+                <div style="font-size:.76rem;margin-top:.25rem;">No results for "${val}"</div>
+            </div>`;
+    rd.classList.add('show');
+    // Also filter the sheet location list
+    if (isMobile()) {
+        const filtered = q.length >= 2
+            ? locations.filter(l =>
+                l.name.toLowerCase().includes(q) ||
+                (l.building||'').toLowerCase().includes(q) ||
+                (l.type||'').toLowerCase().includes(q))
+            : getFilteredLocations();
+        renderSheetLocList(filtered);
+    }
+}
+
+function clearSearch() {
+    const inp  = document.getElementById('searchInput');
+    const ssi  = document.getElementById('sheetSearchInput');
+    const rd   = document.getElementById('searchResults');
+    const clr  = document.getElementById('searchClear');
+    const mClr = document.getElementById('mFloatClear');
+    if (inp)  inp.value  = '';
+    if (ssi)  ssi.value  = '';
+    if (rd)   rd.classList.remove('show');
+    if (clr)  clr.style.display  = 'none';
+    if (mClr) mClr.style.display = 'none';
+    if (isMobile()) renderSheetLocList(getFilteredLocations());
+}
+
+// Close search results when clicking outside
+document.addEventListener('click', e => {
+    if (!e.target.closest('.search-wrap')) {
+        document.getElementById('searchResults')?.classList.remove('show');
+    }
 });
 
 function handleSearch(e) {
@@ -538,7 +947,7 @@ function selectLocation(idOrObj, clickedEl) {
         ${location.capacity?`<div class="info-row"><span class="info-row-icon">👥</span><div><div class="info-label">Capacity</div><div class="info-value">${location.capacity} people</div></div></div>`:''}
         ${location.accessible?`<div class="info-row"><span class="info-row-icon">♿</span><div><div class="info-label">Accessibility</div><div class="info-value" style="color:#16a34a;font-weight:600;">Wheelchair Accessible</div></div></div>`:''}
         ${location.description?`<div class="info-row"><span class="info-row-icon">📝</span><div style="flex:1;"><div class="info-label">Description</div><div class="info-value desc-formatted">${formatDescription(location.description)}</div></div></div>`:''}
-        <div class="info-row"><span class="info-row-icon">🗺️</span><div><div class="info-label">Coordinates</div><div class="info-value">X:${location.coordinates.x} Y:${location.coordinates.y} Z:${location.coordinates.z}</div></div></div>
+
         ${dirHtml}
     `;
     const panel = document.getElementById('infoPanel');
@@ -563,14 +972,17 @@ function selectLocation(idOrObj, clickedEl) {
         
         if (isNaN(x) || isNaN(y) || isNaN(z)) {
             console.error('Invalid coordinates for location:', location.name, location.coordinates);
-            alert('⚠️ This location has invalid coordinates. Please update them in the admin panel.');
+            document.getElementById('infoContent').innerHTML +=
+                '<div class="no-route-msg"><strong>⚠️ Invalid coordinates</strong>Please ask an admin to update this locations position in the admin panel.</div>';
             return;
         }
         
         console.log(`\n📍 Selecting: ${location.name}`);
     // Hide idle hint when a location is selected
     const hint = document.getElementById('mapIdleHint');
-    if (hint) hint.style.opacity = '0';
+    if (hint) hint.classList.add('hidden');
+    // Mobile: show in bottom sheet detail
+    if (isMobile()) showSheetDetail(location);
         console.log(`   DB Coordinates: (${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)})`);
         
         // Check coordinate validity
@@ -619,29 +1031,34 @@ function clearViewingStrip() {
     closeInfo(); 
     resetOrientation(); 
     selectedLocation=null;
-    document.getElementById('currentLocation').textContent='Main Building';
+    document.getElementById('currentLocation').textContent='BSU Lipa Campus';
     document.getElementById('pathStats').classList.remove('show');
 }
 
 // ============ SIDEBAR ============
-function toggleSidebar() {
+function toggleSidebar(forceClose) {
     const sb  = document.getElementById('sidebar');
     const mc  = document.getElementById('mapContainer');
     const tab = document.getElementById('sidebarEdgeTab');
     const isMobile = window.innerWidth <= 768;
 
-    sb.classList.toggle('open');
-    sb.classList.toggle('collapsed');
+    if (forceClose) {
+        sb.classList.remove('open');
+        sb.classList.add('collapsed');
+    } else {
+        sb.classList.toggle('open');
+        sb.classList.toggle('collapsed');
+    }
 
     const isNowCollapsed = sb.classList.contains('collapsed');
 
     // Desktop: shift map container
     if (!isMobile) mc.classList.toggle('expanded', isNowCollapsed);
 
-    // Show/hide edge tab on both mobile and desktop
+    // Show/hide edge tab
     if (tab) tab.classList.toggle('edge-tab-visible', isNowCollapsed);
 
-    // Resize renderer after sidebar CSS transition completes
+    // Resize renderer after CSS transition
     setTimeout(() => {
         if (renderer && camera) {
             const container = renderer.domElement.parentElement;
@@ -653,6 +1070,19 @@ function toggleSidebar() {
         }
     }, 320);
 }
+
+// Mobile: tap the map area backdrop to close sidebar
+document.addEventListener('click', e => {
+    const sb = document.getElementById('sidebar');
+    if (!sb) return;
+    const isMobile = window.innerWidth <= 768;
+    if (isMobile && sb.classList.contains('open')) {
+        // If click is outside the sidebar, close it
+        if (!sb.contains(e.target) && !e.target.closest('.toggle-sb') && !e.target.closest('.sidebar-edge-tab')) {
+            toggleSidebar(true);
+        }
+    }
+});
 function closeInfo(){
     document.getElementById('infoPanel').classList.remove('show');
     document.getElementById('pathStats').classList.remove('show');
@@ -661,6 +1091,11 @@ function closeInfo(){
     if (ric) ric.classList.remove('show');
     const clrBtn = document.getElementById('clearRouteBtn');
     if (clrBtn) clrBtn.classList.remove('show');
+    // Also hide sheet route card
+    const src = document.getElementById('sheetRouteCard');
+    if (src) src.classList.remove('show');
+    const scl = document.getElementById('sheetClearBtn');
+    if (scl) scl.style.display = 'none';
     // Clear path when user dismisses the panel
     if (scene) {
         pathLines.forEach(line => scene.remove(line));
@@ -675,7 +1110,7 @@ function closeInfo(){
 }
 function resetView(){ 
     selectedLocation=null; 
-    document.getElementById('currentLocation').textContent='Main Building'; 
+    document.getElementById('currentLocation').textContent='BSU Lipa Campus'; 
     closeInfo(); 
     clearViewingStrip(); 
 }
@@ -909,6 +1344,11 @@ function init3DScene() {
             setTimeout(() => verifyLocationCoordinates(), 500);
             // NOTE: paths are NOT drawn on load — they appear only when
             // the user selects a location and clicks "Get Directions".
+            // Show floating FAB on mobile
+            if (isMobile()) {
+                const fab = document.getElementById('mMapFab');
+                if (fab) fab.style.display = 'flex';
+            }
         },
         xhr=>{
             const pct = xhr.total > 0 ? Math.round(xhr.loaded/xhr.total*100) : 0;
@@ -1811,6 +2251,11 @@ async function drawSavedRoute(route) {
     if (ric) ric.classList.add('show');
     const clrBtn = document.getElementById('clearRouteBtn');
     if (clrBtn) clrBtn.classList.add('show');
+    // Sync to mobile sheet route card
+    const dist = document.getElementById('pathDistance') ? document.getElementById('pathDistance').textContent : '—';
+    const time = document.getElementById('pathTime')     ? document.getElementById('pathTime').textContent     : '—';
+    const wpts = document.getElementById('pathWaypoints')? document.getElementById('pathWaypoints').textContent: '—';
+    if (typeof syncSheetRouteCard === 'function') syncSheetRouteCard(dist, time, wpts);
 }
 
 // ============ COORDINATE VERIFICATION ============
@@ -1992,7 +2437,27 @@ console.log('  → Press F12 to see detailed loading logs');
 
 // ============ INIT ============
 window.onload = function() {
+    // ── Set initial sidebar state ────────────────────────────────────────────
+    const sb  = document.getElementById('sidebar');
+    const mc  = document.getElementById('mapContainer');
+    const tab = document.getElementById('sidebarEdgeTab');
+    const isMobile = window.innerWidth <= 768;
+    if (isMobile) {
+        sb.classList.remove('open');
+        sb.classList.add('collapsed');
+        if (tab) tab.classList.add('edge-tab-visible');
+    } else {
+        sb.classList.remove('collapsed');
+        sb.classList.remove('open');
+        mc.classList.remove('expanded');
+        if (tab) tab.classList.remove('edge-tab-visible');
+    }
+
     loadLocationsFromAPI();
-    loadRoutesFromAPI(); // Load navigation routes
+    loadRoutesFromAPI();
     init3DScene();
+
+    // Enable drag-to-scroll on horizontal pill bars
+    enableDragScroll(document.getElementById('filterBar'));
+    enableDragScroll(document.getElementById('floorBar'));
 };

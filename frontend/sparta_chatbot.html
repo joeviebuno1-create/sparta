@@ -2,18 +2,21 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#c41e3a">
-    <title>SPARTA - University Information Chatbot (Enhanced)</title>
-        <link rel="icon" type="image/png" href="https://sparta-production-0acb.up.railway.app/images/logo.png">
-        <link rel="apple-touch-icon" href="https://sparta-production-0acb.up.railway.app/images/logo.png">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#E6392F">
+    <title>SPARTA - University Information Chatbot</title>
+    <link rel="icon" type="image/png" href="https://sparta-production-0acb.up.railway.app/images/logo.png">
+    <link rel="apple-touch-icon" href="https://sparta-production-0acb.up.railway.app/images/logo.png">
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="chatbot_styles.css">
 </head>
 <body>
+    <!-- iOS-safe fixed background layer -->
+    <div class="bg-layer" aria-hidden="true"></div>
+
     <div class="chat-container">
         <!-- Header -->
         <div class="chat-header">
@@ -31,13 +34,21 @@
                     <!-- Back button -->
                     <a href="sparta_main_menu.html" class="nav-icon-btn" title="Back to Menu">
                         <span class="nav-icon-emoji">←</span>
+                        <span class="nav-icon-label">Back</span>
                     </a>
-                    <!-- Campus Navigator shortcut button -->
+                    <!-- Campus Navigator shortcut -->
                     <a href="sparta_campus-navigator.html" class="nav-icon-btn" title="Campus Navigator">
                         <span class="nav-icon-emoji">🗺️</span>
-                        <span class="nav-icon-label">Navigate</span>
+                        <span class="nav-icon-label">Map</span>
                     </a>
-                    <select id="langSelect">
+                    <!-- Language toggle — one-tap EN/TL switch -->
+                    <button class="lang-toggle" id="langToggleBtn" onclick="_toggleLang()" aria-label="Switch language" title="Switch language">
+                        <span class="lang-toggle-active" id="langActive">EN</span>
+                        <span class="lang-toggle-sep">|</span>
+                        <span class="lang-toggle-inactive" id="langInactive">TL</span>
+                    </button>
+                    <!-- Hidden select preserved for JS compatibility -->
+                    <select id="langSelect" aria-hidden="true" tabindex="-1" style="position:absolute;opacity:0;width:0;height:0;pointer-events:none;overflow:hidden;">
                         <option value="en-US">English</option>
                         <option value="tl-PH">Tagalog</option>
                     </select>
@@ -53,7 +64,7 @@
                         <span style="margin-left:3px;">Speaking</span>
                         <span class="tts-mobile-pill-x">✕</span>
                     </div>
-                    <!-- TTS speaking indicator pill -->
+                    <!-- Desktop TTS speaking indicator -->
                     <div class="tts-header-indicator" id="ttsHeaderIndicator">
                         <div class="tts-wave">
                             <div class="tts-wave-bar"></div>
@@ -71,20 +82,19 @@
 
         <!-- Messages -->
         <div class="chat-messages" id="chatMessages">
-            <!-- Welcome message -->
             <div class="message bot">
                 <div class="message-content">
                     <strong>👋 Welcome to SPARTA!</strong>
                     <br><br>
                     I'm your intelligent assistant for BSU Lipa Campus. I can help you with:
                     <br><br>
-                    <strong>👥 People</strong> - Designated officials<br>
-                    <strong>📍 Locations</strong> - Buildings and rooms<br>
-                    <strong>🏛️ History</strong> - BSU Lipa background<br>
-                    <strong>🎓 Organizations</strong> - Student organization
+                    📍 <strong>Campus Navigation</strong> — Find buildings, rooms, offices<br>
+                    👥 <strong>Faculty & Staff</strong> — Contact info and office hours<br>
+                    📅 <strong>Announcements</strong> — Latest news and events<br>
+                    🏛️ <strong>University Info</strong> — History, programs, policies<br>
+                    🏆 <strong>Organizations</strong> — Student clubs and groups
                     <br><br>
-                    <span style="font-size: 13px; opacity: 0.8;">💡 Tip: Try the quick questions below or type your own!</span>
-                    <span class="message-time">Just now</span>
+                    What would you like to know about BSU Lipa?
                 </div>
             </div>
 
@@ -98,33 +108,22 @@
             </div>
         </div>
 
-        <!-- DYNAMIC QUICK QUESTIONS -->
+        <!-- Quick Questions -->
         <div class="quick-questions" id="quickQuestionsContainer">
-            <!-- Default questions (will be dynamically updated) -->
-            <button class="quick-question-btn" onclick="sendQuickQuestion('Who is the dean?')">
-                🎓 Who is the dean?
-            </button>
-            <button class="quick-question-btn" onclick="sendQuickQuestion('Who is the chancellor of BSU Lipa')">
-                🎓 Who is the chancellor of BSU Lipa?
-            </button>
-            <button class="quick-question-btn" onclick="sendQuickQuestion('Where is the speech lab?')">
-                📍 Where is the speech lab?
-            </button>
-            <button class="quick-question-btn" onclick="sendQuickQuestion('Tell me about SETS organization')">
-                🏆 Tell me about SETS org
-            </button>
-            <button class="quick-question-btn" onclick="sendQuickQuestion('When was BSU Lipa Founded?')">
-                🏛️ When was BSU Lipa Founded?
-            </button>
+            <button class="quick-question-btn" onclick="sendQuickQuestion('Who is the dean?')">🎓 Who is the dean?</button>
+            <button class="quick-question-btn" onclick="sendQuickQuestion('Who is the chancellor of BSU Lipa')">🎓 Who is the chancellor?</button>
+            <button class="quick-question-btn" onclick="sendQuickQuestion('Where is the speech lab?')">📍 Where is the speech lab?</button>
+            <button class="quick-question-btn" onclick="sendQuickQuestion('Tell me about SETS organization')">🏆 Tell me about SETS org</button>
+            <button class="quick-question-btn" onclick="sendQuickQuestion('When was BSU Lipa Founded?')">🏛️ When was BSU Lipa Founded?</button>
         </div>
 
         <!-- Input Area -->
         <div class="chat-input-container">
             <div class="input-wrapper">
-                <input 
-                    type="text" 
-                    id="userInput" 
-                    placeholder="Type your question or click the mic to speak..."
+                <input
+                    type="text"
+                    id="userInput"
+                    placeholder="Ask anything about BSU Lipa…"
                     autocomplete="off"
                 />
                 <button id="micBtn" class="input-btn" onclick="startVoice()">
@@ -132,11 +131,43 @@
                 </button>
                 <button id="sendBtn" class="input-btn" onclick="sendMessage()">
                     <span>Send</span>
-                    <span style="font-size: 16px;">→</span>
+                    <span style="font-size:16px;">→</span>
                 </button>
             </div>
         </div>
     </div>
+
+    <script>
+        // ── Page transition ────────────────────────────────
+        (function(){
+            document.documentElement.style.cssText += ';opacity:0;transition:opacity 0.22s ease';
+            window.addEventListener('DOMContentLoaded', function(){
+                requestAnimationFrame(function(){
+                    document.documentElement.style.opacity = '1';
+                });
+            });
+            document.addEventListener('click', function(e){
+                var a = e.target.closest('a[href]');
+                if(a && !a.target && !e.ctrlKey && !e.metaKey && a.hostname === location.hostname){
+                    e.preventDefault();
+                    var href = a.href;
+                    document.documentElement.style.opacity = '0';
+                    setTimeout(function(){ location.href = href; }, 220);
+                }
+            });
+        })();
+
+        // ── Language one-tap toggle ────────────────────────
+        function _toggleLang() {
+            var s = document.getElementById('langSelect');
+            s.value = (s.value === 'en-US') ? 'tl-PH' : 'en-US';
+            s.dispatchEvent(new Event('change'));
+            var a = document.getElementById('langActive');
+            var i = document.getElementById('langInactive');
+            if (s.value === 'en-US') { a.textContent = 'EN'; i.textContent = 'TL'; }
+            else                     { a.textContent = 'TL'; i.textContent = 'EN'; }
+        }
+    </script>
 
 <script src="chatbot_script.js"></script>
 <script src="sparta_popup_announcements.js"></script>

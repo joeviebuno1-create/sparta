@@ -6,8 +6,9 @@
 <title>BSU Lipa Campus Navigator – SPARTA</title>
 <link rel="icon" type="image/png" href="https://sparta-production-0acb.up.railway.app/images/logo.png">
 <link rel="apple-touch-icon" href="https://sparta-production-0acb.up.railway.app/images/logo.png">
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="navigation-styles.css">
+<style>html{opacity:0;transition:opacity 0.22s ease}html.page-ready{opacity:1}</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -286,10 +287,15 @@
     <button class="ctrl-btn" onclick="resetOrientation()" title="Reset view">🧭</button>
   </div>
 
-  <!-- Idle hint -->
+  <!-- Idle hint (desktop only — mobile uses floating search) -->
   <div class="map-idle-hint" id="mapIdleHint">
     <span>🔍</span> Click a location to get directions
   </div>
+
+  <!-- Floating action button on map — like "Hide Parcels" in reference -->
+  <button class="m-map-fab" id="mMapFab" onclick="resetOrientation()" style="display:none;">
+    🧭 Reset View
+  </button>
 
   <!-- ============ INFO PANEL ============ -->
   <div class="info-panel" id="infoPanel">
@@ -350,7 +356,214 @@
 
 </div><!-- /map-container -->
 
+<!-- ============ MOBILE BOTTOM SHEET ============ -->
+<!-- ============ MOBILE: FLOATING SEARCH ON MAP ============ -->
+<div class="m-float-search" id="mFloatSearch">
+  <span class="m-float-search-icon">🔍</span>
+  <input type="text" class="m-float-search-input" id="sheetSearchInput"
+         placeholder="Search location on map…" autocomplete="off"
+         oninput="liveSearch(this.value); syncSheetSearch(this.value)"
+         onfocus="expandSheet('mid')">
+  <button class="m-float-search-clear" id="mFloatClear" onclick="clearSearch()" style="display:none;">✕</button>
+  <div class="search-results" id="searchResults"></div>
+</div>
+
+<!-- ============ MOBILE BOTTOM SHEET ============ -->
+<div class="mobile-bottom-sheet" id="mobileBottomSheet">
+
+  <!-- Drag handle -->
+  <div class="sheet-handle-bar" id="sheetHandleBar">
+    <div class="sheet-handle"></div>
+  </div>
+
+  <!-- Pill tabs — exactly like Parzellary: filled pill for active -->
+  <div class="sheet-tab-bar" id="sheetTabBar">
+    <button class="sheet-tab-btn active" onclick="switchSheetTab('locations',this)">
+      📍 Locations
+    </button>
+    <button class="sheet-tab-btn" onclick="switchSheetTab('favorites',this)">
+      ⭐ Saved
+    </button>
+    <button class="sheet-tab-btn evac-tab" onclick="switchSheetTab('evacuation',this)">
+      🚨 Evac
+    </button>
+    <button class="sheet-tab-btn" onclick="switchSheetTab('about',this)">
+      ☰ More
+    </button>
+  </div>
+
+  <!-- Sheet content panels -->
+  <div class="sheet-content" id="sheetContent">
+
+    <!-- Locations panel -->
+    <div class="sheet-panel active" id="sheet-panel-locations">
+      <!-- Filter pills -->
+      <div class="sheet-pills-row" id="sheetFilterBar">
+        <button class="filter-pill active" data-filter="all" onclick="applyFilter('all',this)">All</button>
+      </div>
+      <!-- Floor pills -->
+      <div class="sheet-pills-row" id="sheetFloorBar">
+        <button class="floor-pill active" data-floor="all" onclick="applyFloor('all',this)">All Floors</button>
+      </div>
+      <!-- Location list -->
+      <div class="sheet-loc-list" id="sheetLocList">
+        <div class="empty-state"><div class="es-icon">🗺️</div><p>Loading…</p></div>
+      </div>
+    </div>
+
+    <!-- Location detail panel (shown when location selected on mobile) -->
+    <div class="sheet-location-detail" id="sheetLocationDetail">
+      <div class="sheet-detail-header">
+        <button class="sheet-detail-back" onclick="closeSheetDetail()">← Back</button>
+        <div>
+          <div class="sheet-detail-name" id="sheetDetailName">—</div>
+          <div class="sheet-detail-sub" id="sheetDetailSub">—</div>
+        </div>
+      </div>
+      <!-- Location info rows rendered here by JS -->
+      <div id="sheetDetailContent"></div>
+      <!-- Route info card -->
+      <div class="sheet-route-card" id="sheetRouteCard">
+        <div class="route-info-title">🛤️ Route Info</div>
+        <div class="route-stats-row">
+          <div class="route-stat"><div class="rs-icon">📏</div><div class="rs-label">Distance</div><div class="rs-value" id="sheetPathDistance">—</div></div>
+          <div class="route-stat"><div class="rs-icon">⏱️</div><div class="rs-label">Walk time</div><div class="rs-value" id="sheetPathTime">—</div></div>
+          <div class="route-stat"><div class="rs-icon">🚶</div><div class="rs-label">Stops</div><div class="rs-value" id="sheetPathWaypoints">—</div></div>
+        </div>
+      </div>
+      <!-- Action buttons -->
+      <div class="info-actions" style="padding: 0.55rem 0 0.85rem;">
+        <button class="directions-btn" id="sheetDirectionsBtn" onclick="getDirections()">
+          <span id="sheetDirectionsBtnIcon">📍</span>
+          <span>Get Directions</span>
+        </button>
+        <button class="clear-btn" id="sheetClearBtn" onclick="closeInfo()">✕ Clear</button>
+      </div>
+    </div>
+
+    <!-- Favorites panel -->
+    <div class="sheet-panel" id="sheet-panel-favorites">
+      <div class="empty-state" style="padding:2.5rem 1rem;">
+        <div class="es-icon">⭐</div>
+        <p>No favorites yet</p>
+        <p class="es-sub">Tap ☆ on any location</p>
+      </div>
+    </div>
+
+    <!-- Evacuation panel -->
+    <div class="sheet-panel" id="sheet-panel-evacuation">
+      <div class="evac-inner" style="padding:.75rem;">
+        <div class="evac-alert">
+          <div class="ea-icon">🚨</div>
+          <h3>EMERGENCY EVACUATION</h3>
+          <p>Know your nearest emergency exits</p>
+        </div>
+        <div class="evac-section">
+          <div class="evac-section-title"><span>📞</span> Emergency Contacts</div>
+          <div class="evac-info-box">
+            <p><strong>Campus Security:</strong> (043) 756-5555 local 101</p>
+            <p><strong>Lipa City Emergency:</strong> 911</p>
+            <p><strong>Fire Department:</strong> (043) 756-1234</p>
+          </div>
+        </div>
+        <div class="evac-section">
+          <div class="evac-section-title"><span>🚪</span> Emergency Exits</div>
+          <div id="sheetExitsList"><div class="empty-state"><div class="es-icon">🚪</div><p>Loading…</p></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Legend panel -->
+    <div class="sheet-panel" id="sheet-panel-legend">
+      <div class="legend-inner">
+        <div class="legend-card">
+          <div class="legend-card-title">📍 Map Markers</div>
+          <div class="legend-row"><div class="legend-dot green"></div><div><div class="legend-label">Start Point</div><div class="legend-desc">Main Entrance Gate</div></div></div>
+          <div class="legend-row"><div class="legend-dot blue"></div><div><div class="legend-label">Destination</div><div class="legend-desc">Your selected location</div></div></div>
+        </div>
+        <div class="legend-card">
+          <div class="legend-card-title">🕹️ Controls</div>
+          <div class="legend-row"><span class="legend-emoji">🖱️</span><div><div class="legend-label">Rotate</div><div class="legend-desc">Click + drag</div></div></div>
+          <div class="legend-row"><span class="legend-emoji">🔍</span><div><div class="legend-label">Zoom</div><div class="legend-desc">Pinch or scroll</div></div></div>
+          <div class="legend-row"><span class="legend-emoji">🧭</span><div><div class="legend-label">Reset View</div><div class="legend-desc">🧭 button bottom right</div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- About panel -->
+    <div class="sheet-panel" id="sheet-panel-about">
+      <div class="about-inner">
+        <div class="about-hero"><h3>SPARTA</h3><p>Smart Campus Companion</p></div>
+        <div class="about-section">
+          <div class="about-section-title">How To Use</div>
+          <div class="about-item"><span class="ab-bullet">1</span>Search or tap a location in the list</div>
+          <div class="about-item"><span class="ab-bullet">2</span>Tap <strong>Get Directions</strong> to draw the route</div>
+          <div class="about-item"><span class="ab-bullet">3</span>View distance and time in the route card</div>
+          <div class="about-item"><span class="ab-bullet">4</span>Tap ✕ Clear to reset the route</div>
+        </div>
+        <div class="about-section">
+          <div class="about-section-title">Contact</div>
+          <div class="about-item"><span class="ab-bullet">›</span>BSU – The NEU, Lipa Campus</div>
+          <div class="about-item"><span class="ab-bullet">›</span>Lipa City, Batangas, Philippines</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /sheet-content -->
+</div><!-- /mobile-bottom-sheet -->
+
+<!-- ============ MOBILE BOTTOM NAV ============ -->
+<div class="mobile-bottom-nav" id="mobileBottomNav">
+  <button class="bottom-nav-btn" onclick="window.location.href='sparta_main_menu.html'">
+    <svg class="bn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+    </svg>
+    <span class="bn-label">Home</span>
+  </button>
+  <button class="bottom-nav-btn active" onclick="switchSheetTab('locations',this); expandSheet('mid')">
+    <svg class="bn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>
+    </svg>
+    <span class="bn-label">Map</span>
+  </button>
+  <button class="bottom-nav-btn" onclick="switchSheetTab('favorites',this); expandSheet('mid')">
+    <svg class="bn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+    </svg>
+    <span class="bn-label">Saved</span>
+  </button>
+  <button class="bottom-nav-btn evac-btn" onclick="switchSheetTab('evacuation',this); expandSheet('mid')">
+    <svg class="bn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+    <span class="bn-label">Evac</span>
+  </button>
+  <button class="bottom-nav-btn" onclick="switchSheetTab('about',this); expandSheet('mid')">
+    <svg class="bn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+    <span class="bn-label">More</span>
+  </button>
+</div>
+
 <script src="navigation-script.js"></script>
 <script src="sparta_popup_announcements.js"></script>
+<script>
+// Page transition — UI only
+(function(){
+    window.addEventListener('DOMContentLoaded', function(){
+        document.documentElement.classList.add('page-ready');
+    });
+    document.addEventListener('click', function(e){
+        var a = e.target.closest('a[href]');
+        if(a && !a.target && !e.ctrlKey && !e.metaKey && a.hostname === location.hostname){
+            e.preventDefault();
+            var href = a.href;
+            document.documentElement.style.opacity = '0';
+            setTimeout(function(){ location.href = href; }, 220);
+        }
+    });
+})();
+</script>
 </body>
 </html>

@@ -4,10 +4,13 @@
    ===================================================== */
 
 :root {
-  --red:        #C93030;
-  --red-dark:   #9B1F1F;
+  --sheet-peek: 72px;
+  --sheet-mid:  52vh;
+  --bottom-nav-h: 60px;
+  --red:        #E6392F; --sparta-red: #E6392F;
+  --red-dark:   #8B0000; --sparta-deep-red: #8B0000;
   --red-light:  rgba(201,48,48,0.08);
-  --gold:       #F4D03F;
+  --gold:       #F7C21B; --sparta-gold: #F7C21B;
   --gold-dark:  #D4B030;
   --evac:       #E67E22;
   --evac-dark:  #D35400;
@@ -28,7 +31,10 @@
   --text-3:     #94a3b8;
   --bg-page:    #EDEEF2;
   --bg-card:    #ffffff;
-  --font:       'DM Sans', sans-serif;
+  --font:       'Sora', sans-serif;
+  --sheet-peek:    130px;   /* how much sheet peeks above bottom on mobile */
+  --sheet-mid:     52vh;    /* mid-snap position */
+  --bottom-nav-h:  58px;    /* mobile bottom nav height */
 }
 
 *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
@@ -51,6 +57,14 @@ input, textarea,
   -webkit-user-select: text;
   user-select: text;
 }
+
+/* =====================================================
+   MOBILE-ONLY ELEMENTS (hidden on desktop)
+   ===================================================== */
+.m-float-search { display: none; }
+.m-map-fab      { display: none; }
+.mobile-bottom-sheet { display: none; }
+.mobile-bottom-nav   { display: none; }
 
 /* =====================================================
    LAYOUT
@@ -244,6 +258,9 @@ input, textarea,
   scrollbar-width: none;
 }
 .filter-bar::-webkit-scrollbar { display: none; }
+/* Desktop grab cursor hint */
+.filter-bar { cursor: grab; }
+.filter-bar:active { cursor: grabbing; }
 .filter-pill {
   padding: 0.24rem 0.55rem;
   border-radius: 20px; border: 1.5px solid #dce0e8;
@@ -262,6 +279,8 @@ input, textarea,
   scrollbar-width: none;
 }
 .floor-bar::-webkit-scrollbar { display: none; }
+.floor-bar { cursor: grab; }
+.floor-bar:active { cursor: grabbing; }
 .floor-pill {
   padding: 0.2rem 0.48rem;
   border-radius: 14px; border: 1.5px solid #dce0e8;
@@ -761,6 +780,22 @@ input, textarea,
 .sidebar-edge-tab:hover .edge-tab-label { opacity: 1; max-height: 60px; }
 
 
+
+/* =====================================================
+   BOTTOM SHEET — hidden on desktop, shown by JS on mobile
+   ===================================================== */
+.mobile-bottom-sheet { display: none; flex-direction: column; }
+.mobile-bottom-nav   { display: none; }
+
+.sheet-panel { display: none; }
+.sheet-panel.active { display: block; }
+
+/* Ensure bottom nav doesn't show on desktop */
+@media (min-width: 769px) {
+  .mobile-bottom-sheet { display: none !important; }
+  .mobile-bottom-nav   { display: none !important; }
+}
+
 /* =====================================================
    NEARBY — sticky bottom card inside locations tab
    ===================================================== */
@@ -813,6 +848,8 @@ input, textarea,
   scroll-snap-type: x mandatory;
 }
 .nearby-scroll::-webkit-scrollbar { display: none; }
+.nearby-scroll { cursor: grab; }
+.nearby-scroll:active { cursor: grabbing; }
 
 /* Nearby items as horizontal cards */
 .nearby-scroll .loc-item {
@@ -863,68 +900,369 @@ input, textarea,
 
 /* =====================================================
    RESPONSIVE — MOBILE (≤768px)
+   Bottom-sheet layout: map fills screen, panel slides up from bottom
    ===================================================== */
 
 @media (max-width: 768px) {
-  .sidebar {
-    transform: translateX(calc(-1 * var(--sidebar-w)));
-    width: min(var(--sidebar-w), 88vw);
-    box-shadow: none;
-  }
-  .sidebar.open {
-    transform: translateX(0);
-    box-shadow: 6px 0 32px rgba(0,0,0,0.22);
-  }
-  .sidebar.open::after {
-    content: '';
-    position: fixed; inset: 0;
-    left: min(var(--sidebar-w), 88vw);
-    background: rgba(0,0,0,0.38);
-    z-index: -1;
-  }
 
+  /* ===================================================
+     BASE LAYOUT — sidebar gone, map fills screen
+     =================================================== */
+  .sidebar, .sidebar-edge-tab, .toggle-sb { display: none !important; }
   .map-container { left: 0 !important; }
-  .toggle-sb { display: flex; }
-  .close-sb  { display: flex; }
 
-  .top-nav { height: auto; min-height: 48px; padding: 0.38rem 0.7rem; gap: 0.3rem; }
-  .breadcrumb { font-size: 0.62rem; flex: 1; }
-  .nav-actions { gap: 0.25rem; }
-  .action-btn { padding: 0.3rem 0.48rem; font-size: 0.65rem; }
+  /* Top nav — completely hidden on mobile; floating search replaces it */
+  .top-nav { display: none !important; }
 
-  /* Info panel — full width overlay from top on mobile */
-  .info-panel {
+  /* Idle hint — hide on mobile (search float handles this) */
+  .map-idle-hint { display: none !important; }
+
+  /* Desktop info panel — hidden; replaced by sheet detail */
+  .info-panel { display: none !important; }
+
+  /* ===================================================
+     FLOATING SEARCH BAR — top left, on the map
+     Like Parzellary's "Search location on map…" pill
+     =================================================== */
+  .m-float-search {
     position: fixed;
-    top: 50px;
-    left: 0.5rem; right: 0.5rem;
-    width: auto; max-width: none;
-    max-height: 54vh;
-    z-index: 300;
-    border-radius: 12px;
+    top: max(0.75rem, env(safe-area-inset-top, 0px) + 0.75rem);
+    left: 0.75rem;
+    right: 3.8rem; /* leave room for map controls */
+    z-index: 400;
+    background: rgba(255,255,255,0.97);
+    border-radius: 50px;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.14);
+    display: flex; align-items: center;
+    padding: 0 0.75rem 0 0.85rem;
+    height: 42px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .m-float-search-icon {
+    font-size: 0.88rem; color: #94a3b8;
+    flex-shrink: 0; margin-right: 0.45rem;
+    pointer-events: none;
+  }
+  .m-float-search-input {
+    flex: 1; border: none; background: transparent;
+    font-size: 0.82rem; font-family: var(--font); color: var(--text-1);
+    outline: none; min-width: 0;
+  }
+  .m-float-search-input::placeholder { color: #94a3b8; }
+  .m-float-search-clear {
+    background: none; border: none;
+    color: #94a3b8; font-size: 0.78rem;
+    cursor: pointer; padding: 0 0.2rem;
+    flex-shrink: 0;
+  }
+  /* Search results dropdown anchored to float search */
+  .m-float-search .search-results {
+    position: absolute;
+    top: calc(100% + 6px); left: 0; right: 0;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    max-height: 240px; overflow-y: auto;
+    border: 1px solid #e2e8f0;
   }
 
-  /* Controls — smaller, safe area */
+  /* ===================================================
+     MAP CONTROLS — right side stacked, like Parzellary
+     =================================================== */
   .map-controls {
-    bottom: max(1rem, env(safe-area-inset-bottom, 0px) + 0.75rem);
-    right: 0.6rem;
+    position: fixed;
+    right: 0.65rem;
+    top: max(0.75rem, env(safe-area-inset-top, 0px) + 0.75rem);
+    bottom: auto; /* override desktop bottom positioning */
+    flex-direction: column;
+    gap: 0.3rem;
+    z-index: 400;
   }
-  .ctrl-btn { width: 38px; height: 38px; font-size: 1rem; }
-
-  /* Idle hint — keep above controls */
-  .map-idle-hint {
-    bottom: max(5rem, env(safe-area-inset-bottom, 0px) + 5rem);
-    font-size: 0.73rem; padding: 0.52rem 1rem;
+  .ctrl-btn {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: #1a2e2e; /* dark teal like Parzellary */
+    color: #a0c8b8;
+    border: none;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.22);
+    font-size: 1rem;
+  }
+  .ctrl-btn:hover {
+    background: #22403e;
+    color: #fff;
+    transform: none;
   }
 
-  /* Edge tab */
-  .sidebar-edge-tab { width: 30px; border-radius: 0 9px 9px 0; }
-  .sidebar-edge-tab:hover { width: 30px; }
-  .edge-tab-label { opacity: 1; max-height: 60px; font-size: 0.5rem; }
+  /* ===================================================
+     FLOATING FAB — "Reset View" like "Hide Parcels"
+     Centered at bottom of map, above sheet peek
+     =================================================== */
+  .m-map-fab {
+    position: fixed;
+    bottom: calc(var(--bottom-nav-h) + var(--sheet-peek) + 0.6rem);
+    left: 50%; transform: translateX(-50%);
+    background: #1a2e2e;
+    color: #e0f0ec;
+    border: none; border-radius: 50px;
+    padding: 0.52rem 1.1rem;
+    font-size: 0.76rem; font-weight: 700;
+    font-family: var(--font); letter-spacing: 0.3px;
+    box-shadow: 0 3px 16px rgba(0,0,0,0.22);
+    cursor: pointer; white-space: nowrap;
+    z-index: 390;
+    display: flex; align-items: center; gap: 0.38rem;
+    transition: all 0.18s;
+  }
+  .m-map-fab:active { background: #0d1f1f; transform: translateX(-50%) scale(0.97); }
 
-  /* Sidebar internals */
-  .tab-btn { font-size: 0.56rem; }
-  .loc-item { padding: 0.46rem 0.52rem; }
-  .loc-name { font-size: 0.73rem; }
+  /* ===================================================
+     BOTTOM SHEET
+     Parzellary: white card slides up, pill handle,
+     filled-pill active tabs, borderless search, card list
+     =================================================== */
+  .mobile-bottom-sheet {
+    position: fixed;
+    left: 0; right: 0;
+    bottom: var(--bottom-nav-h);
+    z-index: 500;
+    background: #fff;
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -4px 28px rgba(0,0,0,0.10);
+    transform: translateY(calc(100% - var(--sheet-peek)));
+    transition: transform 0.34s cubic-bezier(0.4,0,0.2,1);
+    max-height: calc(90vh - var(--bottom-nav-h));
+    display: flex; flex-direction: column;
+    touch-action: none;
+  }
+  .mobile-bottom-sheet.expanded { transform: translateY(0); }
+  .mobile-bottom-sheet.mid      { transform: translateY(calc(100% - var(--sheet-mid))); }
+
+  /* Drag handle — centered pill */
+  .sheet-handle-bar {
+    flex-shrink: 0;
+    display: flex; justify-content: center; align-items: center;
+    padding: 0.6rem 0 0.38rem;
+    cursor: grab;
+  }
+  .sheet-handle-bar:active { cursor: grabbing; }
+  .sheet-handle {
+    width: 36px; height: 3.5px;
+    background: #cbd5e1; border-radius: 99px;
+  }
+
+  /* Tab bar — FILLED PILL style like Parzellary
+     Active = dark filled pill; Inactive = plain text */
+  .sheet-tab-bar {
+    flex-shrink: 0;
+    display: flex; align-items: center;
+    gap: 0.35rem;
+    padding: 0 0.85rem 0.65rem;
+    overflow-x: auto; scrollbar-width: none;
+    border-bottom: none; /* no underline — pills instead */
+  }
+  .sheet-tab-bar::-webkit-scrollbar { display: none; }
+  .sheet-tab-btn {
+    padding: 0.38rem 0.9rem;
+    border-radius: 50px;
+    border: 1.5px solid transparent;
+    background: transparent;
+    font-family: var(--font); font-size: 0.75rem;
+    font-weight: 700; color: #64748b;
+    cursor: pointer; white-space: nowrap;
+    transition: all 0.18s; line-height: 1.3;
+    flex-shrink: 0;
+  }
+  .sheet-tab-btn:hover { background: #f1f5f9; color: var(--text-1); }
+  .sheet-tab-btn.active {
+    background: #1a2e2e; /* dark teal — matches Parzellary active pill */
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 2px 8px rgba(26,46,46,0.22);
+  }
+  .sheet-tab-btn.evac-tab.active {
+    background: var(--evac);
+    box-shadow: 0 2px 8px rgba(230,126,34,0.28);
+  }
+
+  /* Sheet scrollable content */
+  .sheet-content {
+    flex: 1; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  /* Filter chips row — like Parzellary's status chips
+     "All  Available  Sold  Reserved  Encumbered  Pending" */
+  .sheet-pills-row {
+    display: flex; gap: 0.32rem;
+    padding: 0.52rem 0.85rem 0.38rem;
+    overflow-x: auto; scrollbar-width: none;
+    cursor: grab; flex-wrap: nowrap;
+  }
+  .sheet-pills-row:active { cursor: grabbing; }
+  .sheet-pills-row::-webkit-scrollbar { display: none; }
+
+  /* Override pill styles for inside sheet */
+  .sheet-pills-row .filter-pill,
+  .sheet-pills-row .floor-pill {
+    padding: 0.22rem 0.65rem;
+    border-radius: 50px;
+    border: 1.5px solid #e2e8f0;
+    background: #fff;
+    font-size: 0.69rem; font-weight: 600;
+    color: #475569; white-space: nowrap;
+    transition: all 0.14s; cursor: pointer;
+    font-family: var(--font); flex-shrink: 0;
+  }
+  .sheet-pills-row .filter-pill.active {
+    background: #1a2e2e; color: #fff; border-color: #1a2e2e;
+  }
+  .sheet-pills-row .floor-pill.active {
+    background: #1a2e2e; color: #fff; border-color: #1a2e2e;
+  }
+
+  /* Location list — Parzellary card rows */
+  .sheet-loc-list {
+    padding: 0 0.85rem 1rem;
+  }
+  .sheet-loc-item {
+    display: flex; align-items: center; gap: 0.72rem;
+    padding: 0.82rem 0;
+    border-bottom: 1px solid #f1f5f9;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: none;
+  }
+  .sheet-loc-item:last-child { border-bottom: none; }
+  .sheet-loc-item:active { opacity: 0.7; }
+
+  /* Icon square — like Parzellary's property icon */
+  .sheet-loc-item .loc-icon {
+    width: 44px; height: 44px; flex-shrink: 0;
+    background: #f0faf6;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem;
+    border: 1px solid #e0f0e8;
+  }
+  .sheet-loc-item .loc-name {
+    font-size: 0.82rem; font-weight: 700;
+    color: #0f172a; line-height: 1.35;
+  }
+  .sheet-loc-item .loc-sub {
+    font-size: 0.64rem; color: #94a3b8;
+    margin-top: 2px; line-height: 1.3;
+  }
+  .sheet-loc-item .loc-fav {
+    margin-left: auto; font-size: 1rem;
+    color: #cbd5e1; flex-shrink: 0;
+    transition: color 0.18s;
+  }
+  .sheet-loc-item .loc-fav.active { color: #f59e0b; }
+
+  /* Location detail panel */
+  .sheet-location-detail {
+    display: none;
+    padding: 0 0.85rem 1rem;
+    animation: fadeSlideIn 0.22s ease;
+  }
+  .sheet-detail-header {
+    display: flex; align-items: center; gap: 0.6rem;
+    padding: 0.65rem 0 0.75rem;
+    border-bottom: 1px solid #f1f5f9;
+    margin-bottom: 0.5rem;
+  }
+  .sheet-detail-back {
+    width: 34px; height: 34px; flex-shrink: 0;
+    background: #f8fafc;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 50%;
+    color: #475569; font-size: 0.9rem; font-weight: 700;
+    cursor: pointer; font-family: var(--font);
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .sheet-detail-back:active {
+    background: #fef2f2; border-color: var(--red); color: var(--red);
+  }
+  .sheet-detail-name {
+    font-size: 0.88rem; font-weight: 800;
+    color: #0f172a; line-height: 1.3; flex: 1;
+    overflow: hidden; text-overflow: ellipsis;
+    display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .sheet-detail-sub { font-size: 0.64rem; color: #94a3b8; margin-top: 1px; }
+
+  /* Route card inside detail */
+  .sheet-route-card {
+    background: linear-gradient(135deg, #fffdf0, #fefce8);
+    border: 1.5px solid rgba(244,208,63,0.38);
+    border-radius: 12px;
+    padding: 0.7rem 0.8rem;
+    margin-bottom: 0.65rem;
+    display: none;
+    animation: fadeSlideIn 0.25s ease;
+  }
+  .sheet-route-card.show { display: block; }
+
+  /* ===================================================
+     BOTTOM NAV — clean icon nav like Parzellary
+     =================================================== */
+  .mobile-bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: var(--bottom-nav-h);
+    background: rgba(255,255,255,0.98);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid #e8edf2;
+    display: flex; align-items: stretch;
+    z-index: 600;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .bottom-nav-btn {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 3px; padding: 0.32rem 0.2rem;
+    border: none; background: none;
+    cursor: pointer; font-family: var(--font);
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.15s;
+    position: relative;
+  }
+  .bottom-nav-btn:active { opacity: 0.6; }
+
+  /* SVG icon */
+  .bn-svg {
+    width: 22px; height: 22px;
+    stroke: #94a3b8;
+    transition: stroke 0.15s;
+    flex-shrink: 0;
+  }
+  .bottom-nav-btn.active .bn-svg { stroke: #1a2e2e; }
+  .bottom-nav-btn.evac-btn.active .bn-svg { stroke: var(--evac); }
+
+  .bn-label {
+    font-size: 0.55rem; font-weight: 700;
+    color: #94a3b8; white-space: nowrap;
+    letter-spacing: 0.15px;
+    transition: color 0.15s;
+  }
+  .bottom-nav-btn.active .bn-label { color: #1a2e2e; }
+  .bottom-nav-btn.evac-btn.active .bn-label { color: var(--evac); }
+
+  /* Active indicator dot above icon — subtle like Parzellary */
+  .bottom-nav-btn::before {
+    content: '';
+    position: absolute; top: 0; left: 50%;
+    transform: translateX(-50%);
+    width: 20px; height: 3px;
+    border-radius: 0 0 4px 4px;
+    background: #1a2e2e;
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .bottom-nav-btn.active::before { opacity: 1; }
+  .bottom-nav-btn.evac-btn.active::before { background: var(--evac); }
 }
 
 /* =====================================================
