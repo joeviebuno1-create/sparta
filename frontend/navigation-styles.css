@@ -1800,17 +1800,19 @@ input, textarea,
   /* -- 10. Sheet loc list - no forced min height -- */
   .sheet-loc-list {
     min-height: 0;
+    padding-bottom: max(1.5rem, calc(env(safe-area-inset-bottom) + 0.5rem));
   }
 
   /* -- 11. Fav list reuses sheet-loc-list styles -- */
   #sheetFavList {
-    padding: 0 0.85rem 1rem;
+    padding: 0 0.85rem max(1.5rem, calc(env(safe-area-inset-bottom) + 0.5rem));
+  }
+  #sheetExitsList {
+    padding-bottom: max(1.5rem, calc(env(safe-area-inset-bottom) + 0.5rem));
   }
 
   /* -- 12. Ensure map container not obscured by bottom-sheet when card-open -- */
-  .mobile-bottom-sheet.card-open {
-    transform: translateY(calc(100% - var(--sheet-peek))) !important;
-  }
+  /* -- 12b. card-open handled by line 1548 (translateY 100%) -- */
 
   /* -- 13. Remove old sheet tab bar (bottom nav only on mobile) -- */
   .sheet-tab-bar { display: none !important; }

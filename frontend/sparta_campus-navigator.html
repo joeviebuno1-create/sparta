@@ -685,17 +685,13 @@
         // Reset to full view
         card.classList.remove('minimized');
         card.classList.add('show');
-        // Hide sheet completely — set inline transform immediately (no transition delay)
+        // Hide sheet completely
         var sheet = document.getElementById('mobileBottomSheet');
         if (sheet) {
             sheet.style.transition = 'none';
-            sheet.style.transform  = 'translateY(100%)';
+            sheet.classList.remove('expanded', 'mid');
             sheet.classList.add('card-open');
-            // Re-enable transition after forced position
-            requestAnimationFrame(function() {
-                sheet.style.transition = '';
-                sheet.style.transform  = '';
-            });
+            setTimeout(function() { sheet.style.transition = ''; }, 50);
         }
     }
 
@@ -729,9 +725,13 @@
         if (card) { card.classList.remove('show', 'minimized'); }
         var sheet = document.getElementById('mobileBottomSheet');
         if (sheet) {
+            sheet.style.transition = 'none';
             sheet.classList.remove('card-open');
-            // Restore to mid snap after card closes
-            if (typeof expandSheet === 'function') expandSheet('mid');
+            // Re-enable transition then snap to mid
+            setTimeout(function() {
+                sheet.style.transition = '';
+                if (typeof expandSheet === 'function') expandSheet('mid');
+            }, 20);
         }
         if (typeof closeInfo === 'function') closeInfo();
         document.querySelectorAll('.loc-item.active, .sheet-loc-item.active, .evac-loc-item.active')

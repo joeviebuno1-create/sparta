@@ -451,9 +451,29 @@ function toggleFav(id, event) {
     if (idx > -1) favorites.splice(idx, 1);
     else favorites.push(id);
     localStorage.setItem('spartha_favs', JSON.stringify(favorites));
+    const isFav = favorites.includes(id);
+    // Update all row hearts matching this id in the sheet
+    document.querySelectorAll(`.sheet-loc-item[data-id="${id}"] .row-heart`).forEach(btn => {
+        btn.textContent = isFav ? '❤️' : '🤍';
+        btn.classList.toggle('row-heart-active', isFav);
+    });
     renderLocationsList();
     renderFavorites();
     renderSheetLocList(getFilteredLocations()); // sync sheet
+    // If favorites tab is active, re-render it
+    const favPanel = document.getElementById('sheet-panel-favorites');
+    if (favPanel && favPanel.classList.contains('active')) {
+        const favLocs = locations.filter(l => favorites.includes(l.id));
+        const favContainer = document.getElementById('sheetFavList');
+        if (favContainer) {
+            if (!favLocs.length) {
+                favContainer.innerHTML = '<div class="empty-state"><div class="es-icon">🤍</div><p>No saved locations yet</p><p class="es-sub">Tap the heart on any location to save it</p></div>';
+            } else {
+                renderSheetLocList(favLocs, 'sheetFavList');
+            }
+        }
+        if (typeof window._buildFavPills === 'function') window._buildFavPills();
+    }
 }
 
 function renderFavorites() {
@@ -743,13 +763,14 @@ function switchSheetTab(tabName, btn) {
         renderSheetLocList(getFilteredLocations());
     }
     if (tabName === 'favorites') {
-        // Render directly into sheetFavList
         const favLocs = locations.filter(l => favorites.includes(l.id));
         const favContainer = document.getElementById('sheetFavList');
         if (favContainer) {
             if (!favLocs.length) {
-                favContainer.innerHTML = '<div class="empty-state"><div class="es-icon">🤍</div><p>No saved locations yet</p><p class="es-sub">Tap 🤍 on any location to save it here</p></div>';
+                favContainer.innerHTML = '<div class="empty-state"><div class="es-icon">🤍</div><p>No saved locations yet</p><p class="es-sub">Tap the heart on any location to save it</p></div>';
             } else {
+                // Render all saved locations — reset any active filters first
+                if (typeof window.resetFavFilters === 'function') window.resetFavFilters();
                 renderSheetLocList(favLocs, 'sheetFavList');
             }
         }
@@ -867,7 +888,7 @@ function renderSheetLocList(locs, containerId) {
         const sub = [loc.building, loc.floor != null ? `Floor ${loc.floor}` : '', typeLabel(loc.type)]
             .filter(Boolean).join(' · ');
         const isFav = favorites.includes(loc.id);
-        return `<div class="sheet-loc-item" onclick="selectLocation(${loc.id}, this)">
+        return `<div class="sheet-loc-item" data-id="${loc.id}" data-type="${(loc.type||'').toLowerCase()}" data-floor="${loc.floor}" onclick="selectLocation(${loc.id}, this)">
             <span class="loc-icon">${getTypeIcon(loc.type) || loc.icon || '📍'}</span>
             <div style="flex:1;min-width:0;">
                 <div class="loc-name">${loc.name}</div>
