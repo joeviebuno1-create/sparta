@@ -391,7 +391,7 @@ function renderLocationsList() {
                     <div class="loc-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:.2rem;">${loc.name}${a11y}</div>
                     <div class="loc-sub">Floor ${loc.floor} · ${typeLabel(loc.type)}</div>
                 </div>
-                <span class="loc-fav ${isFav?'active':''}" onclick="event.stopPropagation();toggleFav(${loc.id})">${isFav?'⭐':'☆'}</span>
+                <button class="row-heart ${isFav?'row-heart-active':''}" onclick="event.stopPropagation();toggleFav(${loc.id})" title="${isFav?'Remove from saved':'Save location'}">${isFav?'❤️':'🤍'}</button>
             </div>`;
         });
         html += '</div>';
@@ -460,7 +460,7 @@ function renderFavorites() {
     const container = document.getElementById('favoritesContent');
     const favLocs = locations.filter(l => favorites.includes(l.id));
     if (!favLocs.length) {
-        container.innerHTML = '<div class="empty-state"><div class="es-icon">⭐</div><p>No favorites yet</p><p class="es-sub">Tap ☆ on any location to save it here</p></div>';
+        container.innerHTML = '<div class="empty-state"><div class="es-icon">🤍</div><p>No favorites yet</p><p class="es-sub">Tap ☆ on any location to save it here</p></div>';
         return;
     }
     let html = '';
@@ -472,7 +472,7 @@ function renderFavorites() {
                 <div class="loc-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:.2rem;">${loc.name}${a11y}</div>
                 <div class="loc-sub">Floor ${loc.floor} · ${loc.type}</div>
             </div>
-            <span class="loc-fav active" onclick="event.stopPropagation();toggleFav(${loc.id})">⭐</span>
+            <span class="loc-fav active" onclick="event.stopPropagation();toggleFav(${loc.id})">❤️</span>
         </div>`;
     });
     container.innerHTML = html;
@@ -743,11 +743,17 @@ function switchSheetTab(tabName, btn) {
         renderSheetLocList(getFilteredLocations());
     }
     if (tabName === 'favorites') {
-        renderFavorites();
+        // Render directly into sheetFavList
         const favLocs = locations.filter(l => favorites.includes(l.id));
-        renderSheetLocList(favLocs, 'sheetFavList');
-        // Rebuild fav filter/floor pills
-        if (typeof _buildFavPills === 'function') _buildFavPills();
+        const favContainer = document.getElementById('sheetFavList');
+        if (favContainer) {
+            if (!favLocs.length) {
+                favContainer.innerHTML = '<div class="empty-state"><div class="es-icon">🤍</div><p>No saved locations yet</p><p class="es-sub">Tap 🤍 on any location to save it here</p></div>';
+            } else {
+                renderSheetLocList(favLocs, 'sheetFavList');
+            }
+        }
+        if (typeof window._buildFavPills === 'function') window._buildFavPills();
     }
     if (tabName === 'evacuation') {
         renderEvacExits();
@@ -867,7 +873,7 @@ function renderSheetLocList(locs, containerId) {
                 <div class="loc-name">${loc.name}</div>
                 <div class="loc-sub">${sub}</div>
             </div>
-            <span class="loc-fav ${isFav?'active':''}" onclick="event.stopPropagation();toggleFav(${loc.id})">${isFav?'⭐':'☆'}</span>
+            <button class="row-heart ${isFav?'row-heart-active':''}" onclick="event.stopPropagation();toggleFav(${loc.id})" title="${isFav?'Remove from saved':'Save location'}">${isFav?'❤️':'🤍'}</button>
         </div>`;
     }).join('');
 }

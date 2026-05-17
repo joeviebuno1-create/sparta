@@ -51,7 +51,7 @@
       <span>📍</span> Get Directions
     </button>
     <button class="mlc-save-btn" id="mlcSaveBtn" onclick="toggleMobileCardFav()">
-      <span id="mlcSaveIcon">☆</span>
+      <span id="mlcSaveIcon">🤍</span>
     </button>
     <button class="mlc-clear-btn" onclick="closeMobileCard()">✕ Clear</button>
   </div>
@@ -97,7 +97,7 @@
       <span class="t-icon">🚨</span>Evac
     </button>
     <button class="tab-btn" onclick="switchTab('favorites',this)">
-      <span class="t-icon">⭐</span>Favs
+      <span class="t-icon">❤️</span>Favs
     </button>
     <button class="tab-btn" onclick="switchTab('legend',this)">
       <span class="t-icon">🗺️</span>Legend
@@ -135,7 +135,7 @@
   <div class="tab-panel" id="tab-favorites">
     <div id="favoritesContent" style="padding:.6rem .85rem .85rem;">
       <div class="empty-state">
-        <div class="es-icon">⭐</div>
+        <div class="es-icon">❤️</div>
         <p>No favorites yet</p>
         <p class="es-sub">Tap ☆ on any location to save it here</p>
       </div>
@@ -490,7 +490,7 @@
         </div>
       </div>
       <div class="sheet-loc-list" id="sheetFavList">
-        <div class="empty-state"><div class="es-icon">⭐</div><p>No favorites yet</p><p class="es-sub">Tap ☆ on any location</p></div>
+        <div class="empty-state"><div class="es-icon">❤️</div><p>No favorites yet</p><p class="es-sub">Tap ☆ on any location</p></div>
       </div>
     </div>
 
@@ -667,7 +667,7 @@
         var _btn  = document.getElementById('mlcSaveBtn');
         if (_icon && _btn) {
             var _isFav = (typeof favorites !== 'undefined') && favorites.includes(loc.id);
-            _icon.textContent = _isFav ? '⭐' : '☆';
+            _icon.textContent = _isFav ? '❤️' : '🤍';
             _btn.classList.toggle('mlc-save-active', _isFav);
         }
         var parts = [loc.building, loc.floor != null ? 'Floor ' + loc.floor : '', loc.type]
@@ -685,10 +685,17 @@
         // Reset to full view
         card.classList.remove('minimized');
         card.classList.add('show');
-        // Hide sheet completely so card has full map visibility
+        // Hide sheet completely — set inline transform immediately (no transition delay)
         var sheet = document.getElementById('mobileBottomSheet');
         if (sheet) {
+            sheet.style.transition = 'none';
+            sheet.style.transform  = 'translateY(100%)';
             sheet.classList.add('card-open');
+            // Re-enable transition after forced position
+            requestAnimationFrame(function() {
+                sheet.style.transition = '';
+                sheet.style.transform  = '';
+            });
         }
     }
 
@@ -713,7 +720,7 @@
         var btn  = document.getElementById('mlcSaveBtn');
         if (!icon || !btn) return;
         var isFav = (typeof favorites !== 'undefined') && favorites.includes(_currentCardLocId);
-        icon.textContent = isFav ? '⭐' : '☆';
+        icon.textContent = isFav ? '❤️' : '🤍';
         btn.classList.toggle('mlc-save-active', isFav);
     };
 

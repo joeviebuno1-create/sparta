@@ -1,5 +1,5 @@
 /* =====================================================
-   SPARTA Campus Navigator — navigation-styles.css
+   SPARTA Campus Navigator - navigation-styles.css
    Clean, modern navigation UI. No overlap.
    ===================================================== */
 
@@ -407,7 +407,7 @@ input, textarea,
 .evac-warning-icon { font-size: 0.95rem; flex-shrink: 0; }
 .evac-warning-text { font-size: 0.66rem; color: #9a3412; line-height: 1.45; }
 
-/* ── New evac tab branding — matches Locations layout, orange accent ── */
+/* -- New evac tab branding - matches Locations layout, orange accent -- */
 .evac-compact-banner {
   display: flex; align-items: center; gap: 0.6rem;
   background: linear-gradient(135deg, var(--evac), var(--evac-dark));
@@ -443,7 +443,7 @@ input, textarea,
   padding: 0 0.05rem;
 }
 
-/* Evac exit items — loc-item style with orange accents */
+/* Evac exit items - loc-item style with orange accents */
 .evac-loc-item { cursor: pointer; }
 .evac-loc-item:hover { border-color: rgba(230,126,34,0.35); background: var(--evac-bg); }
 .evac-loc-item:active { opacity: 0.75; }
@@ -622,7 +622,7 @@ input, textarea,
 }
 
 /* =====================================================
-   MAP CONTROLS — bottom right, stacked
+   MAP CONTROLS - bottom right, stacked
    ===================================================== */
 
 .map-controls {
@@ -645,7 +645,7 @@ input, textarea,
 .ctrl-btn:hover { background: var(--red); color: #fff; border-color: transparent; transform: scale(1.06); }
 
 /* =====================================================
-   IDLE HINT — bottom center, above controls
+   IDLE HINT - bottom center, above controls
    ===================================================== */
 
 .map-idle-hint {
@@ -674,7 +674,7 @@ input, textarea,
 }
 
 /* =====================================================
-   INFO PANEL — left side, below topnav
+   INFO PANEL - left side, below topnav
    No overlap with controls (they're on right)
    ===================================================== */
 
@@ -849,7 +849,7 @@ input, textarea,
 
 
 /* =====================================================
-   BOTTOM SHEET — hidden on desktop, shown by JS on mobile
+   BOTTOM SHEET - hidden on desktop, shown by JS on mobile
    ===================================================== */
 .mobile-bottom-sheet { display: none; flex-direction: column; }
 .mobile-bottom-nav   { display: none; }
@@ -864,7 +864,7 @@ input, textarea,
 }
 
 /* =====================================================
-   NEARBY — sticky bottom card inside locations tab
+   NEARBY - sticky bottom card inside locations tab
    ===================================================== */
 
 .nearby-bottom-card {
@@ -955,7 +955,7 @@ input, textarea,
 .nearby-scroll .loc-sub { font-size: 0.62rem; color: var(--text-3); }
 .nearby-scroll .loc-item.active .loc-sub { color: rgba(255,255,255,0.75); }
 
-/* Mobile — touch-friendly */
+/* Mobile - touch-friendly */
 @media (max-width: 768px) {
   .nearby-scroll .loc-item { width: 120px; padding: 0.52rem 0.58rem; }
   .nearby-scroll .loc-name { font-size: 0.68rem; }
@@ -963,7 +963,7 @@ input, textarea,
 }
 
 /* =====================================================
-   RESPONSIVE — TABLET (≤1024px)
+   RESPONSIVE - TABLET (<=1024px)
    ===================================================== */
 
 @media (max-width: 1024px) {
@@ -971,30 +971,30 @@ input, textarea,
 }
 
 /* =====================================================
-   RESPONSIVE — MOBILE (≤768px)
+   RESPONSIVE - MOBILE (<=768px)
    Bottom-sheet layout: map fills screen, panel slides up from bottom
    ===================================================== */
 
 @media (max-width: 768px) {
 
   /* ===================================================
-     BASE LAYOUT — sidebar gone, map fills screen
+     BASE LAYOUT - sidebar gone, map fills screen
      =================================================== */
   .sidebar, .sidebar-edge-tab, .toggle-sb { display: none !important; }
   .map-container { left: 0 !important; }
 
-  /* Top nav — completely hidden on mobile; floating search replaces it */
+  /* Top nav - completely hidden on mobile; floating search replaces it */
   .top-nav { display: none !important; }
 
-  /* Idle hint — hide on mobile (search float handles this) */
+  /* Idle hint - hide on mobile (search float handles this) */
   .map-idle-hint { display: none !important; }
 
-  /* Desktop info panel — hidden; replaced by sheet detail */
+  /* Desktop info panel - hidden; replaced by sheet detail */
   .info-panel { display: none !important; }
 
   /* ===================================================
-     FLOATING SEARCH BAR — top left, on the map
-     Like Parzellary's "Search location on map…" pill
+     FLOATING SEARCH BAR - top left, on the map
+     Like Parzellary's "Search location on map..." pill
      =================================================== */
   .m-float-search {
     position: fixed;
@@ -1040,7 +1040,7 @@ input, textarea,
   }
 
   /* ===================================================
-     MAP CONTROLS — right side stacked, like Parzellary
+     MAP CONTROLS - right side stacked, like Parzellary
      =================================================== */
   .map-controls {
     position: fixed;
@@ -1067,7 +1067,7 @@ input, textarea,
   }
 
   /* ===================================================
-     FLOATING FAB — "Reset View" like "Hide Parcels"
+     FLOATING FAB - "Reset View" like "Hide Parcels"
      Centered at bottom of map, above sheet peek
      =================================================== */
   .m-map-fab {
@@ -1114,7 +1114,7 @@ input, textarea,
   .mobile-bottom-sheet.expanded { transform: translateY(0); }
   .mobile-bottom-sheet.mid      { transform: translateY(calc(100% - var(--sheet-mid))); }
 
-  /* Drag handle — centered pill */
+  /* Drag handle - centered pill */
   .sheet-handle-bar {
     flex-shrink: 0;
     display: flex; justify-content: center; align-items: center;
@@ -1127,7 +1127,7 @@ input, textarea,
     background: #cbd5e1; border-radius: 99px;
   }
 
-  /* Tab bar — FILLED PILL style like Parzellary
+  /* Tab bar - FILLED PILL style like Parzellary
      Active = dark filled pill; Inactive = plain text */
   .sheet-tab-bar {
     flex-shrink: 0;
@@ -1135,7 +1135,7 @@ input, textarea,
     gap: 0.35rem;
     padding: 0 0.85rem 0.65rem;
     overflow-x: auto; scrollbar-width: none;
-    border-bottom: none; /* no underline — pills instead */
+    border-bottom: none; /* no underline - pills instead */
   }
   .sheet-tab-bar::-webkit-scrollbar { display: none; }
   .sheet-tab-btn {
@@ -1151,7 +1151,7 @@ input, textarea,
   }
   .sheet-tab-btn:hover { background: #f1f5f9; color: var(--text-1); }
   .sheet-tab-btn.active {
-    background: #1a2e2e; /* dark teal — matches Parzellary active pill */
+    background: #1a2e2e; /* dark teal - matches Parzellary active pill */
     color: #fff;
     border-color: transparent;
     box-shadow: 0 2px 8px rgba(26,46,46,0.22);
@@ -1161,7 +1161,7 @@ input, textarea,
     box-shadow: 0 2px 8px rgba(230,126,34,0.28);
   }
 
-  /* Sheet scrollable content — scroll freely, no drag interference */
+  /* Sheet scrollable content - scroll freely, no drag interference */
   .sheet-content {
     flex: 1; overflow-y: auto;
     -webkit-overflow-scrolling: touch;
@@ -1169,7 +1169,7 @@ input, textarea,
     touch-action: pan-y;
   }
 
-  /* Filter chips row — like Parzellary's status chips
+  /* Filter chips row - like Parzellary's status chips
      "All  Available  Sold  Reserved  Encumbered  Pending" */
   .sheet-pills-row {
     display: flex; gap: 0.32rem;
@@ -1199,7 +1199,7 @@ input, textarea,
     background: #1a2e2e; color: #fff; border-color: #1a2e2e;
   }
 
-  /* Location list — Parzellary card rows */
+  /* Location list - Parzellary card rows */
   .sheet-loc-list {
     padding: 0 0.85rem 1rem;
   }
@@ -1214,7 +1214,7 @@ input, textarea,
   .sheet-loc-item:last-child { border-bottom: none; }
   .sheet-loc-item:active { opacity: 0.7; }
 
-  /* Icon square — like Parzellary's property icon */
+  /* Icon square - like Parzellary's property icon */
   .sheet-loc-item .loc-icon {
     width: 44px; height: 44px; flex-shrink: 0;
     background: #f0faf6;
@@ -1284,7 +1284,7 @@ input, textarea,
   .sheet-route-card.show { display: block; }
 
   /* ===================================================
-     BOTTOM NAV — clean icon nav like Parzellary
+     BOTTOM NAV - clean icon nav like Parzellary
      =================================================== */
   .mobile-bottom-nav {
     position: fixed; bottom: 0; left: 0; right: 0;
@@ -1328,7 +1328,7 @@ input, textarea,
   .bottom-nav-btn.active .bn-label { color: #1a2e2e; }
   .bottom-nav-btn.evac-btn.active .bn-label { color: var(--evac); }
 
-  /* Active indicator dot above icon — subtle like Parzellary */
+  /* Active indicator dot above icon - subtle like Parzellary */
   .bottom-nav-btn::before {
     content: '';
     position: absolute; top: 0; left: 50%;
@@ -1343,7 +1343,7 @@ input, textarea,
 }
 
 /* =====================================================
-   RESPONSIVE — SMALL (≤480px)
+   RESPONSIVE - SMALL (<=480px)
    ===================================================== */
 
 @media (max-width: 480px) {
@@ -1381,7 +1381,7 @@ input, textarea,
 }
 
 /* =====================================================
-   VERY SMALL (≤360px)
+   VERY SMALL (<=360px)
    ===================================================== */
 
 @media (max-width: 360px) {
@@ -1409,11 +1409,11 @@ input, textarea,
 }
 
 /* =====================================================
-   MOBILE UI REVAMP — all rules scoped to ≤768px
+   MOBILE UI REVAMP - all rules scoped to <=768px
    Desktop layout is completely unaffected.
    ===================================================== */
 
-/* ── 1. Mobile top bar ── */
+/* -- 1. Mobile top bar -- */
 .mobile-top-bar { display: none; }
 
 @media (max-width: 768px) {
@@ -1477,26 +1477,26 @@ input, textarea,
     top: var(--mobile-header-h) !important;
   }
 
-  /* ── 2. Hide injected floating bell ── */
+  /* -- 2. Hide injected floating bell -- */
   #spNotifBell { display: none !important; }
 
-  /* ── 3. Hide floating search pill on mobile ── */
+  /* -- 3. Hide floating search pill on mobile -- */
   .m-float-search { display: none !important; }
 
-  /* ── 4. Hide Reset View FAB ── */
+  /* -- 4. Hide Reset View FAB -- */
   .m-map-fab { display: none !important; }
 
-  /* ── 5. Hide sheet tab bar (bottom nav handles switching) ── */
+  /* -- 5. Hide sheet tab bar (bottom nav handles switching) -- */
   .sheet-tab-bar { display: none !important; }
 
-  /* ── 6. Map controls — lower right, above sheet peek ── */
+  /* -- 6. Map controls - lower right, above sheet peek -- */
   .map-controls {
     top: auto !important;
     bottom: calc(var(--bottom-nav-h) + var(--sheet-peek) + 0.65rem) !important;
     right: 0.65rem !important;
   }
 
-  /* ── 7. Mobile sheet search ── */
+  /* -- 7. Mobile sheet search -- */
   .sheet-search-row {
     display: flex;
     align-items: center;
@@ -1519,7 +1519,7 @@ input, textarea,
     flex-shrink: 0;
   }
 
-  /* ── 8. Reset filters row ── */
+  /* -- 8. Reset filters row -- */
   .sheet-reset-row {
     display: none;
     padding: 0.3rem 0.85rem 0.2rem;
@@ -1536,7 +1536,7 @@ input, textarea,
   }
   .sheet-reset-btn:active { background: rgba(230,57,47,0.14); }
 
-  /* ── 9. Sheet content auto-sizing ── */
+  /* -- 9. Sheet content auto-sizing -- */
   .sheet-loc-list {
     min-height: 60px; /* allow small content without forced height */
   }
@@ -1544,14 +1544,14 @@ input, textarea,
     padding: 2rem 1rem; /* consistent empty state padding */
   }
 
-  /* ── 10. Sheet hidden when card is open ── */
+  /* -- 10. Sheet hidden when card is open -- */
   .mobile-bottom-sheet.card-open {
     transform: translateY(100%) !important;
     transition: transform 0.26s cubic-bezier(0.4,0,0.2,1) !important;
     pointer-events: none !important;
   }
 
-  /* ── 11. Floating location card (Parzellary style) ── */
+  /* -- 11. Floating location card (Parzellary style) -- */
   .mobile-loc-card {
     display: none;
     position: fixed;
@@ -1662,29 +1662,29 @@ input, textarea,
 }
 
 /* =====================================================
-   MOBILE UI REVAMP v2 — all scoped to ≤768px
+   MOBILE UI REVAMP v2 - all scoped to <=768px
    Fixes: container centering, drag, sticky filters,
    z-index, legend overflow, card minimize, peek height
    ===================================================== */
 
 @media (max-width: 768px) {
 
-  /* ── 1. Map container — bottom stops at sheet peek so campus centres ── */
+  /* -- 1. Map container - bottom stops at sheet peek so campus centres -- */
   .map-container {
     bottom: calc(var(--bottom-nav-h) + var(--sheet-peek)) !important;
   }
 
-  /* ── 2. Sheet peek height — 300px shows ~2.5 rows on load ── */
+  /* -- 2. Sheet peek height - 300px shows ~2.5 rows on load -- */
   :root { --sheet-peek: 300px !important; }
 
-  /* ── 3. Map controls — above sheet and floating card ── */
+  /* -- 3. Map controls - above sheet and floating card -- */
   .map-controls {
     z-index: 580 !important;
     /* Position in lower-right, above sheet peek level */
     bottom: calc(var(--bottom-nav-h) + var(--sheet-peek) + 0.6rem) !important;
   }
 
-  /* ── 4. Sheet search row — sticky at top of scroll area ── */
+  /* -- 4. Sheet search row - sticky at top of scroll area -- */
   .sheet-search-row {
     position: sticky;
     top: 0;
@@ -1709,7 +1709,7 @@ input, textarea,
     flex-shrink: 0;
   }
 
-  /* ── 5. Filter pills — sticky below search row ── */
+  /* -- 5. Filter pills - sticky below search row -- */
   .sheet-pills-row {
     position: sticky;
     top: 47px;  /* search height */
@@ -1725,7 +1725,7 @@ input, textarea,
     z-index: 18;
   }
 
-  /* ── 6. Reset filters button — sticky below pills ── */
+  /* -- 6. Reset filters button - sticky below pills -- */
   .sheet-reset-row {
     position: sticky;
     top: 127px;
@@ -1744,7 +1744,7 @@ input, textarea,
     cursor: pointer;
   }
 
-  /* ── 7. Legend panel — must scroll ── */
+  /* -- 7. Legend panel - must scroll -- */
   .sheet-panel#sheet-panel-legend {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
@@ -1753,7 +1753,7 @@ input, textarea,
     padding: 0.6rem 0.75rem 1.5rem;
   }
 
-  /* ── 8. Floating card minimized state — strip only ── */
+  /* -- 8. Floating card minimized state - strip only -- */
   .mobile-loc-card.minimized .mlc-body { display: none !important; }
   .mobile-loc-card.minimized .mlc-header {
     border-bottom: none;
@@ -1773,7 +1773,7 @@ input, textarea,
     margin-bottom: 1px;
   }
 
-  /* ── 9. Evac collapsible info ── */
+  /* -- 9. Evac collapsible info -- */
   .evac-collapsible {
     display: flex; align-items: center; gap: 0.5rem;
     padding: 0.55rem 0.85rem;
@@ -1797,25 +1797,25 @@ input, textarea,
     letter-spacing: 0.5px; padding: 0.5rem 0.85rem 0.25rem;
   }
 
-  /* ── 10. Sheet loc list — no forced min height ── */
+  /* -- 10. Sheet loc list - no forced min height -- */
   .sheet-loc-list {
     min-height: 0;
   }
 
-  /* ── 11. Fav list reuses sheet-loc-list styles ── */
+  /* -- 11. Fav list reuses sheet-loc-list styles -- */
   #sheetFavList {
     padding: 0 0.85rem 1rem;
   }
 
-  /* ── 12. Ensure map container not obscured by bottom-sheet when card-open ── */
+  /* -- 12. Ensure map container not obscured by bottom-sheet when card-open -- */
   .mobile-bottom-sheet.card-open {
     transform: translateY(calc(100% - var(--sheet-peek))) !important;
   }
 
-  /* ── 13. Remove old sheet tab bar (bottom nav only on mobile) ── */
+  /* -- 13. Remove old sheet tab bar (bottom nav only on mobile) -- */
   .sheet-tab-bar { display: none !important; }
 
-  /* ── 14. Floating card — no route stats section (removed from HTML) ── */
+  /* -- 14. Floating card - no route stats section (removed from HTML) -- */
   .mlc-route { display: none !important; }
 
 }
@@ -1823,12 +1823,12 @@ input, textarea,
 /* =====================================================
    PARZELLARY-PATTERN DRAG FIX
    touch-action:none on every drag zone tells the browser
-   those elements do NOT scroll — events fire cleanly.
+   those elements do NOT scroll - events fire cleanly.
    ===================================================== */
 
 @media (max-width: 768px) {
 
-  /* ── Handle pill ── */
+  /* -- Handle pill -- */
   .sheet-handle-bar,
   .sheet-handle {
     touch-action: none;
@@ -1838,8 +1838,8 @@ input, textarea,
   .sheet-handle-bar:active,
   .sheet-handle:active { cursor: grabbing; }
 
-  /* ── Drag-top zone (search row + pills) ── */
-  /* Same as Parzellary's .sbar-top — touch-action:none makes it a drag zone */
+  /* -- Drag-top zone (search row + pills) -- */
+  /* Same as Parzellary's .sbar-top - touch-action:none makes it a drag zone */
   .sheet-drag-top {
     touch-action: none;
     flex-shrink: 0;
@@ -1849,7 +1849,7 @@ input, textarea,
     z-index: 20;
   }
 
-  /* Search row sits inside drag-top — input still tappable (pointer events fine) */
+  /* Search row sits inside drag-top - input still tappable (pointer events fine) */
   .sheet-drag-top .sheet-search-row {
     position: static; /* drag-top handles sticky */
   }
@@ -1865,7 +1865,7 @@ input, textarea,
     position: static;
   }
 
-  /* ── Scroll content — normal touch, no drag-top override ── */
+  /* -- Scroll content - normal touch, no drag-top override -- */
   .sheet-content {
     flex: 1;
     overflow-y: auto;
@@ -1875,20 +1875,20 @@ input, textarea,
     touch-action: auto;
   }
 
-  /* ── Sheet itself — overscroll-behavior stops page from bouncing ── */
+  /* -- Sheet itself - overscroll-behavior stops page from bouncing -- */
   .mobile-bottom-sheet {
     overscroll-behavior: none;
     /* Remove touch-action:none from sheet so content inside can scroll */
     touch-action: auto;
   }
 
-  /* ── Sheet snaps — exact Parzellary naming and values ── */
+  /* -- Sheet snaps - exact Parzellary naming and values -- */
   /* peek = no class (default transform in base CSS) */
   /* mid  = .mid */
   /* full = .expanded */
 }
 
-/* ── Mobile card save button ── */
+/* -- Mobile card save button -- */
 @media (max-width: 768px) {
   .mlc-save-btn {
     width: 46px; height: 46px;
@@ -1908,7 +1908,7 @@ input, textarea,
   }
 }
 
-/* ── Minimized card: hide actions, show nav strip ── */
+/* -- Minimized card: hide actions, show nav strip -- */
 @media (max-width: 768px) {
 
   .mlc-nav-strip {
@@ -1950,7 +1950,7 @@ input, textarea,
   }
   .mlc-nav-clear:active { background: #e2e8f0; }
 
-  /* Minimized state — hide body + normal actions, show nav strip */
+  /* Minimized state - hide body + normal actions, show nav strip */
   .mobile-loc-card.minimized .mlc-body    { display: none !important; }
   .mobile-loc-card.minimized #mlcActions  { display: none !important; }
   .mobile-loc-card.minimized .mlc-nav-strip { display: flex !important; }
@@ -1959,11 +1959,11 @@ input, textarea,
     padding-bottom: 0.65rem;
   }
 
-  /* Remove the old ::before "Navigating to:" label — strip handles it */
+  /* Remove the old ::before "Navigating to:" label - strip handles it */
   .mobile-loc-card.minimized .mlc-name::before { display: none !important; }
 }
 
-/* ── Evac panel info sections ── */
+/* -- Evac panel info sections -- */
 @media (max-width: 768px) {
   .evac-info-section { margin-bottom: 0.6rem; }
   .evac-info-section-title {
@@ -1973,7 +1973,7 @@ input, textarea,
     padding: 0.4rem 0.75rem 0.2rem;
   }
 
-  /* Evac filter pills — orange accent */
+  /* Evac filter pills - orange accent */
   #evacFilterBar .filter-pill.evac-pill { border-color: rgba(230,126,34,0.3); }
   #evacFilterBar .filter-pill.evac-pill.active {
     background: var(--evac);
@@ -1982,6 +1982,25 @@ input, textarea,
   }
   .evac-reset-btn { color: var(--evac) !important; border-color: rgba(230,126,34,0.3) !important; background: rgba(230,126,34,0.07) !important; }
 
-  /* Fav filter/floor pills — same as locations (inherits existing styles) */
-  #favFilterBar, #favFloorBar { /* inherits .sheet-pills-row */ }
+  /* Fav filter/floor pills inherit .sheet-pills-row styles */
+}
+
+/* -- Row heart button on each list item -- */
+@media (max-width: 768px) {
+  .row-heart {
+    background: none;
+    border: none;
+    font-size: 1.1rem;
+    padding: 0.35rem 0.2rem 0.35rem 0.6rem;
+    cursor: pointer;
+    flex-shrink: 0;
+    min-width: 40px; min-height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.15s;
+    border-radius: 50%;
+  }
+  .row-heart:active { transform: scale(0.82); }
+
+  /* loc-fav spans (desktop sidebar) remain unchanged */
 }
