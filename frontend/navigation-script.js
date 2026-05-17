@@ -737,10 +737,23 @@ function switchSheetTab(tabName, btn) {
         closeMobileCard();
     }
 
-    // Tab-specific renders
-    if (tabName === 'favorites')  { renderFavorites(); renderSheetLocList(locations.filter(l => favorites.includes(l.id))); }
-    if (tabName === 'evacuation') { renderEvacExits(); renderSheetExitsList(); }
-    if (tabName === 'legend')     { /* static content */ }
+    // Tab-specific renders — always re-render on switch so data is never stale
+    if (tabName === 'locations') {
+        syncSheetPills();
+        renderSheetLocList(getFilteredLocations());
+    }
+    if (tabName === 'favorites') {
+        renderFavorites();
+        const favLocs = locations.filter(l => favorites.includes(l.id));
+        renderSheetLocList(favLocs, 'sheetFavList');
+        // Rebuild fav filter/floor pills
+        if (typeof _buildFavPills === 'function') _buildFavPills();
+    }
+    if (tabName === 'evacuation') {
+        renderEvacExits();
+        renderSheetExitsList();
+    }
+    if (tabName === 'legend') { /* static content */ }
 
     // Expand sheet to show content
     if (typeof isMobile === 'function' && isMobile()) expandSheet('mid');
@@ -837,8 +850,8 @@ function syncSheetPills() {
 }
 
 // ── Render location list into sheet ──────────────────────────
-function renderSheetLocList(locs) {
-    const list = document.getElementById('sheetLocList');
+function renderSheetLocList(locs, containerId) {
+    const list = document.getElementById(containerId || 'sheetLocList');
     if (!list) return;
     if (!locs || !locs.length) {
         list.innerHTML = '<div class="empty-state"><div class="es-icon">🔍</div><p>No results found</p></div>';

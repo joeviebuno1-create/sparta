@@ -45,11 +45,23 @@
   </div>
   <div class="mlc-body" id="mlcBody"></div>
 
-  <div class="mlc-actions">
+  <!-- Normal actions — hidden when minimized -->
+  <div class="mlc-actions" id="mlcActions">
     <button class="mlc-dir-btn" id="mlcDirBtn" onclick="getDirections()">
       <span>📍</span> Get Directions
     </button>
+    <button class="mlc-save-btn" id="mlcSaveBtn" onclick="toggleMobileCardFav()">
+      <span id="mlcSaveIcon">☆</span>
+    </button>
     <button class="mlc-clear-btn" onclick="closeMobileCard()">✕ Clear</button>
+  </div>
+  <!-- Navigating strip — shown only when minimized -->
+  <div class="mlc-nav-strip" id="mlcNavStrip">
+    <div class="mlc-nav-strip-left">
+      <span class="mlc-nav-dot"></span>
+      <span class="mlc-nav-label">Now Navigating</span>
+    </div>
+    <button class="mlc-nav-clear" onclick="closeMobileCard()">✕ Clear</button>
   </div>
 </div>
 
@@ -400,24 +412,27 @@
 
     <!-- Locations panel -->
     <div class="sheet-panel active" id="sheet-panel-locations">
-      <!-- Mobile search bar (inside sheet, replaces floating search) -->
-      <div class="sheet-search-row">
-        <span class="sheet-search-icon">🔍</span>
-        <input type="text" class="sheet-search-input" id="mobileSheetSearch"
-               placeholder="Search location on map…" autocomplete="off">
-        <button class="sheet-search-clear" id="mobileSearchClear" style="display:none;">✕</button>
-      </div>
-      <!-- Filter pills -->
-      <div class="sheet-pills-row" id="sheetFilterBar">
-        <button class="filter-pill active" data-filter="all" onclick="applyFilter('all',this)">All</button>
-      </div>
-      <!-- Floor pills -->
-      <div class="sheet-pills-row" id="sheetFloorBar">
-        <button class="floor-pill active" data-floor="all" onclick="applyFloor('all',this)">All Floors</button>
-      </div>
-      <!-- Reset filters button — shown only when non-default filter active -->
-      <div class="sheet-reset-row" id="sheetResetRow" style="display:none;">
-        <button class="sheet-reset-btn" onclick="resetFilters()">✕ Reset Filters</button>
+      <!-- sheet-drag-top: touch-action:none makes this a drag handle zone -->
+      <div class="sheet-drag-top">
+        <!-- Mobile search bar -->
+        <div class="sheet-search-row">
+          <span class="sheet-search-icon">🔍</span>
+          <input type="text" class="sheet-search-input" id="mobileSheetSearch"
+                 placeholder="Search location on map…" autocomplete="off">
+          <button class="sheet-search-clear" id="mobileSearchClear" style="display:none;">✕</button>
+        </div>
+        <!-- Filter pills -->
+        <div class="sheet-pills-row" id="sheetFilterBar">
+          <button class="filter-pill active" data-filter="all" onclick="applyFilter('all',this)">All</button>
+        </div>
+        <!-- Floor pills -->
+        <div class="sheet-pills-row" id="sheetFloorBar">
+          <button class="floor-pill active" data-floor="all" onclick="applyFloor('all',this)">All Floors</button>
+        </div>
+        <!-- Reset filters -->
+        <div class="sheet-reset-row" id="sheetResetRow" style="display:none;">
+          <button class="sheet-reset-btn" onclick="resetFilters()">✕ Reset Filters</button>
+        </div>
       </div>
       <!-- Location list -->
       <div class="sheet-loc-list" id="sheetLocList">
@@ -457,11 +472,22 @@
 
     <!-- Favorites panel -->
     <div class="sheet-panel" id="sheet-panel-favorites">
-      <div class="sheet-search-row">
-        <span class="sheet-search-icon">🔍</span>
-        <input type="text" class="sheet-search-input" id="favSearch"
-               placeholder="Search saved locations…" autocomplete="off">
-        <button class="sheet-search-clear" id="favSearchClear" style="display:none;">✕</button>
+      <div class="sheet-drag-top">
+        <div class="sheet-search-row">
+          <span class="sheet-search-icon">🔍</span>
+          <input type="text" class="sheet-search-input" id="favSearch"
+                 placeholder="Search saved locations…" autocomplete="off">
+          <button class="sheet-search-clear" id="favSearchClear" style="display:none;">✕</button>
+        </div>
+        <div class="sheet-pills-row" id="favFilterBar">
+          <button class="filter-pill active" data-filter="all" onclick="applyFavFilter('all',this)">All</button>
+        </div>
+        <div class="sheet-pills-row" id="favFloorBar">
+          <button class="floor-pill active" data-floor="all" onclick="applyFavFloor('all',this)">All Floors</button>
+        </div>
+        <div class="sheet-reset-row" id="favResetRow" style="display:none;">
+          <button class="sheet-reset-btn" onclick="resetFavFilters()">✕ Reset Filters</button>
+        </div>
       </div>
       <div class="sheet-loc-list" id="sheetFavList">
         <div class="empty-state"><div class="es-icon">⭐</div><p>No favorites yet</p><p class="es-sub">Tap ☆ on any location</p></div>
@@ -470,26 +496,51 @@
 
     <!-- Evacuation panel -->
     <div class="sheet-panel" id="sheet-panel-evacuation">
-      <div class="sheet-search-row">
-        <span class="sheet-search-icon">🚨</span>
-        <input type="text" class="sheet-search-input" id="evacSearch"
-               placeholder="Search emergency exits…" autocomplete="off">
-        <button class="sheet-search-clear" id="evacSearchClear" style="display:none;">✕</button>
+      <div class="sheet-drag-top">
+        <div class="sheet-search-row">
+          <span class="sheet-search-icon">🚨</span>
+          <input type="text" class="sheet-search-input" id="evacSearch"
+                 placeholder="Search emergency exits…" autocomplete="off">
+          <button class="sheet-search-clear" id="evacSearchClear" style="display:none;">✕</button>
+        </div>
+        <div class="sheet-pills-row" id="evacFilterBar">
+          <button class="filter-pill evac-pill active" data-filter="all" onclick="applyEvacFilter('all',this)">All</button>
+          <button class="filter-pill evac-pill" data-filter="primary" onclick="applyEvacFilter('primary',this)">Primary</button>
+          <button class="filter-pill evac-pill" data-filter="secondary" onclick="applyEvacFilter('secondary',this)">Secondary</button>
+        </div>
+        <div class="sheet-reset-row" id="evacResetRow" style="display:none;">
+          <button class="sheet-reset-btn evac-reset-btn" onclick="resetEvacFilters()">✕ Reset Filters</button>
+        </div>
       </div>
-      <!-- Collapsible info — tap to expand -->
-      <div class="evac-collapsible" id="evacInfoToggle" onclick="this.classList.toggle('open')">
+
+      <!-- Emergency info — collapsible, full content -->
+      <div class="evac-collapsible" id="evacInfoToggle">
         <span class="evac-coll-icon">🚨</span>
         <span class="evac-coll-label">Emergency Info &amp; Contacts</span>
         <span class="evac-coll-arrow">›</span>
       </div>
       <div class="evac-collapsible-body" id="evacInfoBody">
-        <div class="evac-info-box" style="margin:.4rem .75rem;">
-          <p><strong>1. Stay Calm.</strong> Follow faculty/emergency instructions.</p>
-          <p><strong>2. Nearest Exit.</strong> Do not use elevators.</p>
-          <p><strong>3. Assembly.</strong> Open field near Main Gate.</p>
-          <p><strong>Security:</strong> (043) 756-5555 loc 101 &nbsp;|&nbsp; <strong>Emergency:</strong> 911</p>
+        <div class="evac-info-section">
+          <div class="evac-info-section-title">📋 Evacuation Procedures</div>
+          <div class="evac-info-box">
+            <p><strong>1. Stay Calm.</strong> Follow instructions from faculty or emergency personnel.</p>
+            <p><strong>2. Use Nearest Exit.</strong> Proceed to the closest safe exit. Do not use elevators.</p>
+            <p><strong>3. Assembly Point.</strong> Gather at the open field near the Main Gate.</p>
+            <p><strong>4. Account for Everyone.</strong> Faculty will conduct a headcount.</p>
+            <p><strong>5. Wait for Instructions.</strong> Do not re-enter until authorized.</p>
+          </div>
+        </div>
+        <div class="evac-info-section">
+          <div class="evac-info-section-title">📞 Emergency Contacts</div>
+          <div class="evac-info-box">
+            <p><strong>Campus Security:</strong> (043) 756-5555 local 101</p>
+            <p><strong>Medical Clinic:</strong> (043) 756-5555 local 201</p>
+            <p><strong>Lipa City Emergency:</strong> 911</p>
+            <p><strong>Fire Department:</strong> (043) 756-1234</p>
+          </div>
         </div>
       </div>
+
       <div class="evac-list-label">🚪 Emergency Exits</div>
       <div id="sheetExitsList"><div class="empty-state"><div class="es-icon">🚪</div><p>Loading…</p></div></div>
     </div>
@@ -609,6 +660,16 @@
         document.getElementById('mlcIcon').textContent =
             (typeof getTypeIcon === 'function' ? getTypeIcon(loc.type) : null) || loc.icon || '📍';
         document.getElementById('mlcName').textContent = loc.name || '—';
+        // Track loc id for save button
+        window._setCardLocId(loc.id);
+        // Update save button state
+        var _icon = document.getElementById('mlcSaveIcon');
+        var _btn  = document.getElementById('mlcSaveBtn');
+        if (_icon && _btn) {
+            var _isFav = (typeof favorites !== 'undefined') && favorites.includes(loc.id);
+            _icon.textContent = _isFav ? '⭐' : '☆';
+            _btn.classList.toggle('mlc-save-active', _isFav);
+        }
         var parts = [loc.building, loc.floor != null ? 'Floor ' + loc.floor : '', loc.type]
             .filter(Boolean);
         document.getElementById('mlcSub').textContent = parts.join(' · ');
@@ -624,8 +685,11 @@
         // Reset to full view
         card.classList.remove('minimized');
         card.classList.add('show');
-        // Collapse sheet to peek so card is visible
-        if (typeof expandSheet === 'function') expandSheet('peek');
+        // Hide sheet completely so card has full map visibility
+        var sheet = document.getElementById('mobileBottomSheet');
+        if (sheet) {
+            sheet.classList.add('card-open');
+        }
     }
 
     function _row(icon, label, val) {
@@ -635,14 +699,35 @@
     }
 
     // ── 2. Close mobile card ────────────────────────────────────
+    // Track which location is currently shown in the card
+    var _currentCardLocId = null;
+
+    // Expose so _showMobileCard can set it
+    window._setCardLocId = function(id) { _currentCardLocId = id; };
+
+    window.toggleMobileCardFav = function() {
+        if (_currentCardLocId === null) return;
+        if (typeof toggleFav === 'function') toggleFav(_currentCardLocId);
+        // Update button icon
+        var icon = document.getElementById('mlcSaveIcon');
+        var btn  = document.getElementById('mlcSaveBtn');
+        if (!icon || !btn) return;
+        var isFav = (typeof favorites !== 'undefined') && favorites.includes(_currentCardLocId);
+        icon.textContent = isFav ? '⭐' : '☆';
+        btn.classList.toggle('mlc-save-active', isFav);
+    };
+
     window.closeMobileCard = function() {
         var card = document.getElementById('mobileLocCard');
         if (card) { card.classList.remove('show', 'minimized'); }
         var sheet = document.getElementById('mobileBottomSheet');
-        if (sheet) sheet.classList.remove('card-open');
-        if (typeof expandSheet === 'function') expandSheet('mid');
+        if (sheet) {
+            sheet.classList.remove('card-open');
+            // Restore to mid snap after card closes
+            if (typeof expandSheet === 'function') expandSheet('mid');
+        }
         if (typeof closeInfo === 'function') closeInfo();
-        document.querySelectorAll('.loc-item.active, .sheet-loc-item.active')
+        document.querySelectorAll('.loc-item.active, .sheet-loc-item.active, .evac-loc-item.active')
             .forEach(function(el){ el.classList.remove('active'); });
     };
 
@@ -700,42 +785,162 @@
             this.style.display = 'none';
         });
     }
-    function _filterEvacList(q) {
+    var _evacTypeFilter = 'all';
+
+    window.applyEvacFilter = function(val, btn) {
+        _evacTypeFilter = val;
+        document.querySelectorAll('#evacFilterBar .filter-pill')
+            .forEach(function(p){ p.classList.remove('active'); });
+        if (btn) btn.classList.add('active');
+        _renderEvacFiltered();
+        var row = document.getElementById('evacResetRow');
+        if (row) row.style.display = val !== 'all' ? 'flex' : 'none';
+    };
+
+    window.resetEvacFilters = function() {
+        _evacTypeFilter = 'all';
+        var allBtn = document.querySelector('#evacFilterBar [data-filter="all"]');
+        if (allBtn) { allBtn.classList.add('active'); }
+        document.querySelectorAll('#evacFilterBar .filter-pill:not([data-filter="all"])')
+            .forEach(function(p){ p.classList.remove('active'); });
+        var row = document.getElementById('evacResetRow');
+        if (row) row.style.display = 'none';
+        _renderEvacFiltered();
+    };
+
+    function _filterEvacList(q) { _renderEvacFiltered(q); }
+
+    function _renderEvacFiltered(q) {
+        var searchQ = q !== undefined ? q :
+            (document.getElementById('evacSearch') ? document.getElementById('evacSearch').value : '');
         var list = document.getElementById('sheetExitsList');
         if (!list) return;
-        if (!q) { if (typeof renderSheetExitsList === 'function') renderSheetExitsList(); return; }
         var items = list.querySelectorAll('.loc-item, .evac-loc-item');
-        items.forEach(function(item) {
-            var name = (item.querySelector('.loc-name') || {}).textContent || '';
-            var sub  = (item.querySelector('.loc-sub')  || {}).textContent || '';
-            item.style.display = (name + sub).toLowerCase().includes(q.toLowerCase()) ? '' : 'none';
+        items.forEach(function(item, idx) {
+            var name   = (item.querySelector('.loc-name') || {}).textContent || '';
+            var sub    = (item.querySelector('.loc-sub')  || {}).textContent || '';
+            var matchQ = !searchQ || (name + sub).toLowerCase().includes(searchQ.toLowerCase());
+            var matchT = true;
+            if (_evacTypeFilter === 'primary')   matchT = idx === 0 || name.toLowerCase().includes('main');
+            if (_evacTypeFilter === 'secondary')  matchT = !(idx === 0 || name.toLowerCase().includes('main'));
+            item.style.display = (matchQ && matchT) ? '' : 'none';
         });
     }
 
-    // ── 6. Saved/Favorites search ───────────────────────────────
+    // ── 6. Saved/Favorites search + filters ────────────────────
+    var _favTypeFilter  = 'all';
+    var _favFloorFilter = 'all';
+
     var favSrch = document.getElementById('favSearch');
     var favClr  = document.getElementById('favSearchClear');
     if (favSrch) {
         favSrch.addEventListener('input', function() {
-            _filterFavList(this.value);
+            _renderFavFiltered();
             if (favClr) favClr.style.display = this.value ? 'block' : 'none';
         });
     }
     if (favClr) {
         favClr.addEventListener('click', function() {
-            if (favSrch) { favSrch.value = ''; _filterFavList(''); }
+            if (favSrch) { favSrch.value = ''; _renderFavFiltered(); }
             this.style.display = 'none';
         });
     }
-    function _filterFavList(q) {
+
+    window.applyFavFilter = function(val, btn) {
+        _favTypeFilter = val;
+        document.querySelectorAll('#favFilterBar .filter-pill')
+            .forEach(function(p){ p.classList.remove('active'); });
+        if (btn) btn.classList.add('active');
+        _renderFavFiltered();
+        var row = document.getElementById('favResetRow');
+        if (row) row.style.display = (val !== 'all' || _favFloorFilter !== 'all') ? 'flex' : 'none';
+    };
+
+    window.applyFavFloor = function(val, btn) {
+        _favFloorFilter = val;
+        document.querySelectorAll('#favFloorBar .floor-pill')
+            .forEach(function(p){ p.classList.remove('active'); });
+        if (btn) btn.classList.add('active');
+        _renderFavFiltered();
+        var row = document.getElementById('favResetRow');
+        if (row) row.style.display = (_favTypeFilter !== 'all' || val !== 'all') ? 'flex' : 'none';
+    };
+
+    window.resetFavFilters = function() {
+        _favTypeFilter = 'all'; _favFloorFilter = 'all';
+        document.querySelector('#favFilterBar [data-filter="all"]') &&
+            document.querySelector('#favFilterBar [data-filter="all"]').classList.add('active');
+        document.querySelectorAll('#favFilterBar .filter-pill:not([data-filter="all"])')
+            .forEach(function(p){ p.classList.remove('active'); });
+        document.querySelector('#favFloorBar [data-floor="all"]') &&
+            document.querySelector('#favFloorBar [data-floor="all"]').classList.add('active');
+        document.querySelectorAll('#favFloorBar .floor-pill:not([data-floor="all"])')
+            .forEach(function(p){ p.classList.remove('active'); });
+        var row = document.getElementById('favResetRow');
+        if (row) row.style.display = 'none';
+        _renderFavFiltered();
+    };
+
+    function _renderFavFiltered() {
+        var q    = (favSrch ? favSrch.value : '').toLowerCase();
         var list = document.getElementById('sheetFavList');
         if (!list) return;
-        var items = list.querySelectorAll('.sheet-loc-item, .loc-item');
+        var items = list.querySelectorAll('.loc-item, .sheet-loc-item');
         items.forEach(function(item) {
-            var txt = item.textContent || '';
-            item.style.display = !q || txt.toLowerCase().includes(q.toLowerCase()) ? '' : 'none';
+            var txt   = (item.textContent || '').toLowerCase();
+            var type  = (item.dataset.type  || '').toLowerCase();
+            var floor = (item.dataset.floor || '');
+            var matchQ     = !q || txt.includes(q);
+            var matchType  = _favTypeFilter  === 'all' || type  === _favTypeFilter;
+            var matchFloor = _favFloorFilter === 'all' || floor === String(_favFloorFilter);
+            item.style.display = (matchQ && matchType && matchFloor) ? '' : 'none';
         });
     }
+
+    // Populate fav filter/floor pills from locations data
+    window._buildFavPills = function _buildFavPills() {
+        if (typeof locations === 'undefined' || !locations.length) return;
+        var favLocs = locations.filter(function(l){
+            return (typeof favorites !== 'undefined') && favorites.includes(l.id);
+        });
+        // Type pills
+        var fb = document.getElementById('favFilterBar');
+        if (fb) {
+            var types = {};
+            favLocs.forEach(function(l){ if (l.type) types[l.type] = true; });
+            Object.keys(types).forEach(function(t) {
+                if (fb.querySelector('[data-filter="'+t+'"]')) return;
+                var b = document.createElement('button');
+                b.className = 'filter-pill';
+                b.dataset.filter = t;
+                b.textContent = t.charAt(0).toUpperCase() + t.slice(1);
+                b.onclick = function(){ applyFavFilter(t, this); };
+                fb.appendChild(b);
+            });
+        }
+        // Floor pills
+        var flb = document.getElementById('favFloorBar');
+        if (flb) {
+            var floors = {};
+            favLocs.forEach(function(l){ if (l.floor != null) floors[l.floor] = true; });
+            Object.keys(floors).sort().forEach(function(f) {
+                if (flb.querySelector('[data-floor="'+f+'"]')) return;
+                var b = document.createElement('button');
+                b.className = 'floor-pill';
+                b.dataset.floor = f;
+                b.textContent = f == 0 ? 'Ground' : 'Floor ' + f;
+                b.onclick = function(){ applyFavFloor(f, this); };
+                flb.appendChild(b);
+            });
+        }
+    };
+
+    // Rebuild fav pills when favorites change
+    var _origToggleFav = window.toggleFav;
+    window.toggleFav = function(id, e) {
+        if (_origToggleFav) _origToggleFav(id, e);
+        setTimeout(_buildFavPills, 100);
+    };
 
     // ── 7. Locations sheet search ───────────────────────────────
     var mSrch = document.getElementById('mobileSheetSearch');
@@ -798,14 +1003,15 @@
     }, 4000);
 
     // ── 11. Evac collapsible info ──────────────────────────────
-    var evacBody = document.getElementById('evacInfoBody');
-    if (evacBody) evacBody.style.display = 'none';
+    var evacBody   = document.getElementById('evacInfoBody');
     var evacToggle = document.getElementById('evacInfoToggle');
+    if (evacBody)   evacBody.style.display = 'none';
     if (evacToggle) {
         evacToggle.addEventListener('click', function() {
-            if (!evacBody) return;
-            var open = this.classList.contains('open');
-            evacBody.style.display = open ? 'block' : 'none';
+            this.classList.toggle('open');
+            if (evacBody) {
+                evacBody.style.display = this.classList.contains('open') ? 'block' : 'none';
+            }
         });
     }
 

@@ -1546,8 +1546,9 @@ input, textarea,
 
   /* ── 10. Sheet hidden when card is open ── */
   .mobile-bottom-sheet.card-open {
-    transform: translateY(110%) !important;
-    transition: transform 0.28s cubic-bezier(0.4,0,0.2,1) !important;
+    transform: translateY(100%) !important;
+    transition: transform 0.26s cubic-bezier(0.4,0,0.2,1) !important;
+    pointer-events: none !important;
   }
 
   /* ── 11. Floating location card (Parzellary style) ── */
@@ -1885,4 +1886,102 @@ input, textarea,
   /* peek = no class (default transform in base CSS) */
   /* mid  = .mid */
   /* full = .expanded */
+}
+
+/* ── Mobile card save button ── */
+@media (max-width: 768px) {
+  .mlc-save-btn {
+    width: 46px; height: 46px;
+    background: #f8fafc;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 1.2rem;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0;
+    transition: background 0.15s, border-color 0.15s, transform 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mlc-save-btn:active { transform: scale(0.92); }
+  .mlc-save-btn.mlc-save-active {
+    background: rgba(247,194,27,0.12);
+    border-color: rgba(247,194,27,0.5);
+  }
+}
+
+/* ── Minimized card: hide actions, show nav strip ── */
+@media (max-width: 768px) {
+
+  .mlc-nav-strip {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 1rem max(0.6rem, env(safe-area-inset-bottom));
+    border-top: 1px solid #f1f5f9;
+    gap: 0.5rem;
+  }
+
+  .mlc-nav-strip-left {
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+
+  .mlc-nav-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--red);
+    animation: navPulse 1.4s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+  @keyframes navPulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.5; transform: scale(0.75); }
+  }
+
+  .mlc-nav-label {
+    font-size: 0.78rem; font-weight: 700;
+    color: var(--red); font-family: var(--font);
+  }
+
+  .mlc-nav-clear {
+    background: #f1f5f9; border: none;
+    border-radius: 8px; padding: 0.38rem 0.75rem;
+    font-size: 0.72rem; font-weight: 700;
+    font-family: var(--font); color: #64748b;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mlc-nav-clear:active { background: #e2e8f0; }
+
+  /* Minimized state — hide body + normal actions, show nav strip */
+  .mobile-loc-card.minimized .mlc-body    { display: none !important; }
+  .mobile-loc-card.minimized #mlcActions  { display: none !important; }
+  .mobile-loc-card.minimized .mlc-nav-strip { display: flex !important; }
+  .mobile-loc-card.minimized .mlc-header {
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 0.65rem;
+  }
+
+  /* Remove the old ::before "Navigating to:" label — strip handles it */
+  .mobile-loc-card.minimized .mlc-name::before { display: none !important; }
+}
+
+/* ── Evac panel info sections ── */
+@media (max-width: 768px) {
+  .evac-info-section { margin-bottom: 0.6rem; }
+  .evac-info-section-title {
+    font-size: 0.65rem; font-weight: 800;
+    color: var(--evac); text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0.4rem 0.75rem 0.2rem;
+  }
+
+  /* Evac filter pills — orange accent */
+  #evacFilterBar .filter-pill.evac-pill { border-color: rgba(230,126,34,0.3); }
+  #evacFilterBar .filter-pill.evac-pill.active {
+    background: var(--evac);
+    border-color: var(--evac);
+    color: #fff;
+  }
+  .evac-reset-btn { color: var(--evac) !important; border-color: rgba(230,126,34,0.3) !important; background: rgba(230,126,34,0.07) !important; }
+
+  /* Fav filter/floor pills — same as locations (inherits existing styles) */
+  #favFilterBar, #favFloorBar { /* inherits .sheet-pills-row */ }
 }
