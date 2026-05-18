@@ -39,6 +39,57 @@ const chatMessages = document.getElementById('chatMessages');
         quickQuestionsContainer.style.webkitOverflowScrolling = 'touch';
     }
 
+    // ── Desktop: mouse-wheel + click-drag scroll for quick questions ────────
+    // Desktop hides the scrollbar so we need JS to make it navigable.
+
+    // 1. Mouse wheel → horizontal scroll
+    quickQuestionsContainer.addEventListener('wheel', (e) => {
+        if (e.deltaY !== 0) {
+            e.preventDefault();
+            quickQuestionsContainer.scrollLeft += e.deltaY * 1.5;
+        }
+    }, { passive: false });
+
+    // 2. Click-drag to scroll (desktop)
+    let _qqDragging = false;
+    let _qqStartX = 0;
+    let _qqScrollStart = 0;
+    let _qqDragMoved = false;
+
+    quickQuestionsContainer.addEventListener('mousedown', (e) => {
+        _qqDragging = true;
+        _qqDragMoved = false;
+        _qqStartX = e.pageX - quickQuestionsContainer.offsetLeft;
+        _qqScrollStart = quickQuestionsContainer.scrollLeft;
+        quickQuestionsContainer.style.cursor = 'grabbing';
+        quickQuestionsContainer.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!_qqDragging) return;
+        const x = e.pageX - quickQuestionsContainer.offsetLeft;
+        const walk = (x - _qqStartX) * 1.2;
+        if (Math.abs(walk) > 4) _qqDragMoved = true;
+        quickQuestionsContainer.scrollLeft = _qqScrollStart - walk;
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (!_qqDragging) return;
+        _qqDragging = false;
+        quickQuestionsContainer.style.cursor = 'grab';
+        quickQuestionsContainer.style.userSelect = '';
+    });
+
+    // Prevent click firing on buttons after a drag
+    quickQuestionsContainer.addEventListener('click', (e) => {
+        if (_qqDragMoved) {
+            e.stopPropagation();
+            e.preventDefault();
+            _qqDragMoved = false;
+        }
+    }, true);
+    // ────────────────────────────────────────────────────────────────────────
+
     // ── Two hardcoded sets that never change ──────────────────────────────────
 
     // 1) Startup — always shown on first load
@@ -660,7 +711,18 @@ const chatMessages = document.getElementById('chatMessages');
         
         // Italic: *text*
         text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
-        
+
+        // FIX: Markdown links [label](url) → clickable anchor
+        text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,
+            '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:#c41e3a;font-weight:600;text-decoration:underline;word-break:break-all;">$1</a>'
+        );
+
+        // FIX: Plain URLs (http/https not already inside an href) → clickable anchor
+        // Uses a negative lookbehind so already-linked URLs aren't double-wrapped
+        text = text.replace(/(?<!href=")(https?:\/\/[^\s<"]+)/g,
+            '<a href="$1" target="_blank" rel="noopener noreferrer" style="color:#c41e3a;font-weight:600;text-decoration:underline;word-break:break-all;">$1</a>'
+        );
+
         // Line breaks
         text = text.replace(/\n/g, '<br>');
         

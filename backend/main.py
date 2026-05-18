@@ -887,13 +887,17 @@ async def get_quick_questions(intent: str = "general_info", db: Session = Depend
             """Build quick question buttons from custom intents in DB."""
             qs = []
             for ci in sample(custom_intents, n):
-                # Use first keyword as the query trigger
-                first_keyword = ci.keywords.split(',')[0].strip() if ci.keywords else ci.intent_type
-                # Label: use intent_type formatted nicely
-                label = ci.intent_type.replace('_', ' ').title() if ci.intent_type else first_keyword
+                # FIX: Label AND query both derived from intent_type so they always match.
+                # Old code: label = intent_type ("Second Diploma")
+                #            query = first keyword ("lost diploma") ← MISMATCH
+                # New code: both use intent_type, query wrapped as natural sentence.
+                label = ci.intent_type.replace('_', ' ').title() if ci.intent_type else (
+                    ci.keywords.split(',')[0].strip() if ci.keywords else 'Info'
+                )
+                query = f"Tell me about {label}"
                 qs.append({
                     "text": f"💬 {truncate(label, 28)}",
-                    "query": first_keyword,
+                    "query": query,
                     "category": "custom"
                 })
             return qs

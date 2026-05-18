@@ -2247,11 +2247,106 @@ class EnhancedDatabaseRAG:
         try:
             original_query = query.strip()
 
+            # ════════════════════════════════════════════════════════════════
+            # SPARTA FIX v2 — deployment marker (check Railway logs for this)
+            # ════════════════════════════════════════════════════════════════
+            print(f"[SPARTA_v2] process_query called: '{original_query[:60]}'")
+
             # Step 0: Language — UI selector ALWAYS wins.
             # If forced_lang is set (from the frontend selector), use it unconditionally.
             # Only auto-detect when no selector choice was made.
             lang = forced_lang if forced_lang else detect_language(original_query)
             print(f"[process_query] forced_lang='{forced_lang}' → lang='{lang}' | query='{original_query[:60]}'")
+
+            # ── ABSOLUTE HARD GUARD — runs before every other step ──────────
+            # Certain query patterns have caused persistent mis-routing (e.g.
+            # "Tell me about Major Milestone" → authority_query).
+            # These guards are the FINAL authority and bypass ALL intent scoring.
+            _q_abs = original_query.lower().strip()
+            # Remove common filler prefixes for matching
+            _q_abs_stripped = re.sub(
+                r'^(tell me about|what is|what was|about|give me info about|'
+                r'ano ang|kwentuhan mo ako|ibigay mo ang)\s+',
+                '', _q_abs
+            ).strip()
+
+            # Guard 1: History/milestone terms → ALWAYS history_query
+            _ABS_HISTORY = {
+                'milestone', 'milestones', 'major milestone', 'major milestones',
+                'achievement', 'achievements', 'kasaysayan', 'naitatag', 'itinatag',
+                'nagsimula', 'founded', 'established', 'republic act', 'historical',
+                'bsu lipa history', 'bsu history', 'history of bsu',
+            }
+            if any(t in _q_abs for t in _ABS_HISTORY) or any(t in _q_abs_stripped for t in _ABS_HISTORY):
+                print(f"[HARD_GUARD] history forced for: '{original_query}'")
+                # Fetch history records and respond properly
+                _all_hist = db.query(models.History).order_by(models.History.year).all()
+                if _all_hist:
+                    # Try to find a specific matching record first
+                    _match = None
+                    for _h in _all_hist:
+                        _ht = (_h.title or '').lower()
+                        if _q_abs_stripped and (_q_abs_stripped in _ht or _ht in _q_abs_stripped):
+                            _match = _h
+                            break
+                        for _word in _q_abs_stripped.split():
+                            if len(_word) > 3 and _word in _ht:
+                                _match = _h
+                                break
+                        if _match:
+                            break
+
+                    if _match:
+                        _resp_en = (
+                            f"Here's a piece of BSU Lipa's history! 🏛️\n\n"
+                            f"**{_match.year} — {_match.title}**\n\n"
+                            f"{_match.description or ''}\n\n"
+                            f"Would you like to know more about the university's history or milestones?"
+                        )
+                        _resp_tl = (
+                            f"Narito ang isang bahagi ng kasaysayan ng BSU Lipa! 🏛️\n\n"
+                            f"**{_match.year} — {_match.title}**\n\n"
+                            f"{_match.description or ''}\n\n"
+                            f"Gusto mo bang malaman pa ang higit pa tungkol sa kasaysayan ng unibersidad?"
+                        )
+                        return {
+                            'response': _resp_tl if lang == 'tl' else _resp_en,
+                            'confidence': 0.95,
+                            'intent': 'history_query',
+                            'suggestions': [h.title for h in _all_hist[:3] if h != _match],
+                            'context_used': 1,
+                            'entities_found': {}
+                        }
+                    else:
+                        # No specific match — show all milestones
+                        _resp_en = "Here are BSU Lipa's key historical milestones! 🏛️\n\n"
+                        for _h in _all_hist[:5]:
+                            _resp_en += f"**{_h.year} — {_h.title}**\n{_h.description or ''}\n\n"
+                        _resp_en += "Would you like to know more about any specific milestone?"
+                        _resp_tl = "Narito ang mga pangunahing makasaysayang tagumpay ng BSU Lipa! 🏛️\n\n"
+                        for _h in _all_hist[:5]:
+                            _resp_tl += f"**{_h.year} — {_h.title}**\n{_h.description or ''}\n\n"
+                        _resp_tl += "Gusto mo bang malaman pa ang tungkol sa isang partikular na milestone?"
+                        return {
+                            'response': _resp_tl if lang == 'tl' else _resp_en,
+                            'confidence': 0.90,
+                            'intent': 'history_query',
+                            'suggestions': [h.title for h in _all_hist[:4]],
+                            'context_used': len(_all_hist),
+                            'entities_found': {}
+                        }
+                else:
+                    _no_hist = ("I don't have any historical records in my database yet. "
+                                "Please ask the admin to add history records. 😊")
+                    return {
+                        'response': _no_hist,
+                        'confidence': 0.5,
+                        'intent': 'history_query',
+                        'suggestions': [],
+                        'context_used': 0,
+                        'entities_found': {}
+                    }
+            # ── END ABSOLUTE HARD GUARD ─────────────────────────────────────
 
             # Step 0.4: Direct person lookup — "Who is [Honorific] [FULLNAME]?"
             # Bypasses all intent/scoring logic for exact name queries.

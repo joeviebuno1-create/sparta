@@ -440,6 +440,8 @@ body::after {
     flex-shrink: 0;
     /* FIX: Allow horizontal panning on touch devices */
     touch-action: pan-x;
+    /* Desktop: show grab cursor so user knows it's draggable */
+    cursor: grab;
     /* Scroll fade masks for affordance */
     -webkit-mask-image: linear-gradient(to right, transparent 0%, black 20px, black calc(100% - 20px), transparent 100%);
     mask-image: linear-gradient(to right, transparent 0%, black 20px, black calc(100% - 20px), transparent 100%);
