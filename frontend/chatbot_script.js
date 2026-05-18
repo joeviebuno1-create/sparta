@@ -626,8 +626,8 @@ const chatMessages = document.getElementById('chatMessages');
         content.innerHTML = formattedText;
 
         // Step 2 — Intent query type badge only
-        // Step 3 — Timestamp
-        const time = document.createElement('span');
+        // Step 3 — Timestamp (on its own line below the message)
+        const time = document.createElement('div');
         time.className = 'message-time';
         time.textContent = new Date().toLocaleTimeString('en-US', {
             hour: '2-digit',

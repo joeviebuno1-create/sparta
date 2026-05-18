@@ -660,8 +660,9 @@ async def chat(message: ChatMessage, request: Request, db: Session = Depends(get
         _ip = request.client.host if request.client else None
         try:
             db.execute(
-                text("INSERT INTO user_sessions (session_id, language, device, ip_address, status) "
-                     "VALUES (:sid, :lang, :dev, :ip, 'active') ON CONFLICT (session_id) DO NOTHING"),
+                # FIX: Include started_at explicitly so it's never NULL
+                text("INSERT INTO user_sessions (session_id, language, device, ip_address, status, started_at, last_active) "
+                     "VALUES (:sid, :lang, :dev, :ip, 'active', NOW(), NOW()) ON CONFLICT (session_id) DO NOTHING"),
                 {"sid": _sid, "lang": getattr(message, "language", "en") or "en",
                  "dev": _ua, "ip": _ip}
             )
@@ -2757,24 +2758,36 @@ async def get_sessions(db: Session = Depends(get_db)):
         """)).fetchall()
 
         sessions = []
-        from datetime import datetime as _dt
-        now = _dt.utcnow()
+        from datetime import datetime as _dt, timezone as _tz
+        now = _dt.now(_tz.utc)
+
+        def _to_utc(dt):
+            """Normalize a datetime to UTC-aware, handling both naive and aware."""
+            if dt is None:
+                return None
+            if dt.tzinfo is None:
+                return dt.replace(tzinfo=_tz.utc)
+            return dt.astimezone(_tz.utc)
+
         for r in rows:
-            started   = r[1]
-            last_act  = r[2]
-            ended     = r[3]
+            started   = _to_utc(r[1])
+            last_act  = _to_utc(r[2])
+            ended     = _to_utc(r[3])
             q_count   = r[4] or 0
             lang      = r[5] or "en"
             device    = r[6] or "—"
             status    = r[7] or "active"
             ip_addr   = r[8] or "—"
 
-            end_time = ended or (last_act or now)
-            if started:
-                secs = int((end_time - started).total_seconds())
-                if secs < 60:   dur = f"{secs}s"
+            # FIX: Use last_active as fallback for started if started is NULL (old rows)
+            effective_start = started or last_act
+            end_time = ended or last_act or now
+            if effective_start:
+                secs = int((end_time - effective_start).total_seconds())
+                secs = max(secs, 0)
+                if secs < 60:     dur = f"{secs}s"
                 elif secs < 3600: dur = f"{secs//60}m {secs%60}s"
-                else:           dur = f"{secs//3600}h {(secs%3600)//60}m"
+                else:             dur = f"{secs//3600}h {(secs%3600)//60}m"
             else:
                 dur = "—"
 
@@ -2787,7 +2800,8 @@ async def get_sessions(db: Session = Depends(get_db)):
 
             sessions.append({
                 "session_id":  r[0],
-                "started_at":  started.isoformat() if started else None,
+                # FIX: fall back to last_active if started_at is NULL (old rows)
+                "started_at":  (effective_start).isoformat() if effective_start else None,
                 "last_active": last_act.isoformat() if last_act else None,
                 "duration":    dur,
                 "query_count": q_count,
@@ -2806,12 +2820,15 @@ async def get_sessions(db: Session = Depends(get_db)):
         else:
             avg_q = 0
 
-        # Compute avg duration for active sessions
+        # Compute avg duration
         dur_secs = []
         for r in rows:
-            started, last_act = r[1], r[2]
-            if started and last_act:
-                dur_secs.append(int((last_act - started).total_seconds()))
+            s = _to_utc(r[1]) or _to_utc(r[2])
+            la = _to_utc(r[2])
+            if s and la:
+                diff = int((la - s).total_seconds())
+                if diff > 0:
+                    dur_secs.append(diff)
         avg_dur_s = round(sum(dur_secs) / len(dur_secs)) if dur_secs else 0
         if avg_dur_s < 60:   avg_dur_str = f"{avg_dur_s}s"
         elif avg_dur_s < 3600: avg_dur_str = f"{avg_dur_s//60}m {avg_dur_s%60}s"

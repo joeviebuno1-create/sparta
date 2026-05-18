@@ -370,7 +370,7 @@ body::after {
 }
 
 .message-content img { max-width: 100%; border-radius: 8px; margin-top: 8px; }
-.message-time { font-size: 10px; opacity: 0.55; margin-top: 4px; text-align: right; }
+.message-time { display: block; font-size: 10px; opacity: 0.55; margin-top: 6px; text-align: right; }
 .message.bot .message-time { text-align: left; }
 
 .confidence-container { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
