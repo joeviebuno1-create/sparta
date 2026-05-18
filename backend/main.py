@@ -2357,16 +2357,22 @@ def get_statistics(db: Session = Depends(get_db)):
         sess_row = db.execute(_text("""
             SELECT
                 COUNT(*)                                            AS total,
-                COALESCE(AVG(query_count), 0)                       AS avg_q,
+                COALESCE(AVG(NULLIF(query_count, 0)), 0)            AS avg_q,
                 COUNT(*) FILTER (
                     WHERE last_active >= NOW() - INTERVAL '30 minutes'
                 )                                                   AS active_now
             FROM user_sessions
         """)).fetchone()
-        total_sessions   = int(sess_row[0]) if sess_row else 0
-        avg_queries_sess = round(float(sess_row[1] or 0), 1) if sess_row else 0
-        # FIX: active_now = sessions with last_active within 30 min, not stored status
-        active_sessions  = int(sess_row[2]) if sess_row else 0
+        total_sessions  = int(sess_row[0]) if sess_row else 0
+        active_sessions = int(sess_row[2]) if sess_row else 0
+
+        # FIX: query_count is unreliable (NULL/0 for old sessions).
+        # Compute queries_per_session from actual search logs ÷ total sessions.
+        # Falls back to AVG(query_count) only if no sessions exist yet.
+        if total_sessions > 0:
+            avg_queries_sess = round(total / total_sessions, 1)
+        else:
+            avg_queries_sess = round(float(sess_row[1] or 0), 1) if sess_row else 0
     except Exception:
         total_sessions   = 0
         avg_queries_sess = 0
@@ -2428,10 +2434,10 @@ def get_statistics(db: Session = Depends(get_db)):
 
     # ── Nav success rate ─────────────────────────────────────────────────────
     nav_total   = db.query(models.SearchLog).filter(
-        models.SearchLog.intent == 'navigation'
+        models.SearchLog.intent.in_(['location_query', 'navigation_query', 'navigation'])
     ).count()
     nav_success = db.query(models.SearchLog).filter(
-        models.SearchLog.intent == 'navigation',
+        models.SearchLog.intent.in_(['location_query', 'navigation_query', 'navigation']),
         models.SearchLog.confidence >= 0.60
     ).count()
     _nav_success_rate = round(nav_success / nav_total, 3) if nav_total > 0 else 0.0
@@ -2489,8 +2495,10 @@ def get_nav_statistics(db: Session = Depends(get_db)):
     from collections import Counter
 
     today = _dt.date.today()
+    # FIX: RAG saves intent as "location_query" not "navigation".
+    # Previous filter == "navigation" returned 0 rows every time.
     nav_logs = db.query(models.SearchLog).filter(
-        models.SearchLog.intent == "navigation"
+        models.SearchLog.intent.in_(["location_query", "navigation_query", "navigation"])
     ).all()
 
     total_searches   = len(nav_logs)

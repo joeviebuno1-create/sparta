@@ -1671,7 +1671,7 @@ input, textarea,
 
   /* -- 1. Map container - bottom stops at sheet peek so campus centres -- */
   .map-container {
-    bottom: calc(var(--bottom-nav-h) + var(--sheet-peek)) !important;
+    bottom: var(--bottom-nav-h) !important;
   }
 
   /* -- 2. Sheet peek height - 300px shows ~2.5 rows on load -- */
