@@ -2354,16 +2354,41 @@ def get_statistics(db: Session = Depends(get_db)):
     # ── Sessions (from user_sessions table if it exists) ─────────────
     try:
         from sqlalchemy import text as _text
-        sess_row = db.execute(_text(
-            "SELECT COUNT(*) as total, "
-            "COALESCE(AVG(query_count),0) as avg_q "
-            "FROM user_sessions"
-        )).fetchone()
-        total_sessions    = sess_row[0] if sess_row else 0
-        avg_queries_sess  = round(float(sess_row[1] or 0), 1) if sess_row else 0
+        sess_row = db.execute(_text("""
+            SELECT
+                COUNT(*)                                            AS total,
+                COALESCE(AVG(query_count), 0)                       AS avg_q,
+                COUNT(*) FILTER (
+                    WHERE last_active >= NOW() - INTERVAL '30 minutes'
+                )                                                   AS active_now
+            FROM user_sessions
+        """)).fetchone()
+        total_sessions   = int(sess_row[0]) if sess_row else 0
+        avg_queries_sess = round(float(sess_row[1] or 0), 1) if sess_row else 0
+        # FIX: active_now = sessions with last_active within 30 min, not stored status
+        active_sessions  = int(sess_row[2]) if sess_row else 0
     except Exception:
         total_sessions   = 0
-        avg_queries_sess = round(total / max(total_sessions, 1), 1) if total else 0
+        avg_queries_sess = 0
+        active_sessions  = 0
+
+    # ── Nav statistics summary for dashboard ─────────────────────────
+    try:
+        nav_row = db.execute(_text("""
+            SELECT
+                COUNT(*)                                       AS total,
+                COUNT(DISTINCT entity_name)                    AS unique_locs,
+                COUNT(*) FILTER (WHERE searched_at::date = CURRENT_DATE) AS today
+            FROM search_logs
+            WHERE intent = 'navigation_query' OR intent = 'location_query'
+        """)).fetchone()
+        nav_total_qs   = int(nav_row[0]) if nav_row else 0
+        nav_unique_loc = int(nav_row[1]) if nav_row else 0
+        nav_today      = int(nav_row[2]) if nav_row else 0
+    except Exception:
+        nav_total_qs   = 0
+        nav_unique_loc = 0
+        nav_today      = 0
 
     # ── Trend % vs yesterday ─────────────────────────────────────────
     if yesterday_count and yesterday_count > 0:
@@ -2420,7 +2445,13 @@ def get_statistics(db: Session = Depends(get_db)):
         "fallback_count":         fallback_count,
         "daily_active_users":     dau,
         "avg_queries_per_session": avg_queries_sess,
-        "total_sessions":         total_sessions,
+        "total_sessions":          total_sessions,
+        "active_sessions":         active_sessions,
+        "nav_stats": {
+            "total_queries":    nav_total_qs,
+            "unique_locations": nav_unique_loc,
+            "today_queries":    nav_today,
+        },
         "avg_confidence":         float(db.query(func.avg(models.SearchLog.confidence)).scalar() or 0),
         "confidence_distribution": {
             "low":  conf_low,
@@ -2694,11 +2725,26 @@ async def upload_authority_photo(
 async def get_sessions(db: Session = Depends(get_db)):
     """Real user session data from user_sessions table."""
     try:
+        # FIX: Mark stale sessions as inactive inline before querying.
+        # Old code never set status=inactive so ALL sessions showed as active forever.
+        # A session is considered inactive if last_active was > 30 minutes ago.
+        try:
+            db.execute(text("""
+                UPDATE user_sessions
+                SET status = 'inactive'
+                WHERE status = 'active'
+                  AND last_active < NOW() - INTERVAL '30 minutes'
+            """))
+            db.commit()
+        except Exception as _ue:
+            db.rollback()
+            print(f"[sessions] stale-update skipped: {_ue}")
+
         rows = db.execute(text("""
             SELECT session_id, started_at, last_active, ended_at,
                    query_count, language, device, status, ip_address
             FROM user_sessions
-            ORDER BY started_at DESC
+            ORDER BY last_active DESC NULLS LAST
             LIMIT 200
         """)).fetchall()
 
@@ -2724,18 +2770,27 @@ async def get_sessions(db: Session = Depends(get_db)):
             else:
                 dur = "—"
 
+            # FIX: compute active_now from last_active timestamp, not stored status
+            # Sessions active within the last 30 minutes are truly "active"
+            is_truly_active = (
+                last_act is not None and
+                (now - last_act).total_seconds() < 1800
+            )
+
             sessions.append({
-                "session_id": r[0],
-                "started_at": started.isoformat() if started else None,
-                "duration":   dur,
+                "session_id":  r[0],
+                "started_at":  started.isoformat() if started else None,
+                "last_active": last_act.isoformat() if last_act else None,
+                "duration":    dur,
                 "query_count": q_count,
-                "language":   lang,
-                "device":     device[:60] if device else "—",
-                "status":     status,
-                "ip_address": ip_addr,
+                "language":    lang,
+                "device":      device[:60] if device else "—",
+                "status":      "active" if is_truly_active else "inactive",
+                "ip_address":  ip_addr,
             })
 
-        total = len(sessions)
+        total  = len(sessions)
+        # FIX: active_now = sessions with activity in last 30 min (not stored status)
         active = sum(1 for s in sessions if s["status"] == "active")
         if sessions:
             all_q = [s["query_count"] for s in sessions if s["query_count"]]
@@ -2743,12 +2798,23 @@ async def get_sessions(db: Session = Depends(get_db)):
         else:
             avg_q = 0
 
+        # Compute avg duration for active sessions
+        dur_secs = []
+        for r in rows:
+            started, last_act = r[1], r[2]
+            if started and last_act:
+                dur_secs.append(int((last_act - started).total_seconds()))
+        avg_dur_s = round(sum(dur_secs) / len(dur_secs)) if dur_secs else 0
+        if avg_dur_s < 60:   avg_dur_str = f"{avg_dur_s}s"
+        elif avg_dur_s < 3600: avg_dur_str = f"{avg_dur_s//60}m {avg_dur_s%60}s"
+        else:                avg_dur_str = f"{avg_dur_s//3600}h {(avg_dur_s%3600)//60}m"
+
         return {
-            "total_sessions": total,
-            "active_now": active,
-            "avg_duration": "—",
-            "queries_per_session": avg_q,
-            "sessions": sessions
+            "total_sessions":       total,
+            "active_now":           active,
+            "avg_duration":         avg_dur_str,
+            "queries_per_session":  avg_q,
+            "sessions":             sessions
         }
     except Exception as e:
         print(f"[sessions] Error: {e}")
