@@ -1,0 +1,15 @@
+# Enforce LF for all text files (prevents Windows CRLF issues on Railway/Linux)
+* text=auto eol=lf
+
+# Windows-only scripts — must stay CRLF
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# Binary files — never touch line endings
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+*.zip   binary

@@ -2585,6 +2585,73 @@ console.log('  → debugLocation(id)   - Check exact DB data for a specific loca
 console.log('  → Press F12 to see detailed loading logs');
 
 // ============ INIT ============
+// ── Load campus settings and populate evacuation/emergency info ───────────────
+async function loadCampusSettings() {
+    try {
+        // Uses the public /campus-info endpoint — no auth required
+        const res = await fetch(`${API_HOST}/campus-info`);
+        if (!res || !res.ok) return;
+        const s = await res.json();
+
+        // ── Emergency Contacts panel ──────────────────────────────────────
+        const contactsEl = document.getElementById('navEmergencyContacts');
+        if (contactsEl) {
+            const rows = [
+                ['📞 Emergency Hotline', s.emergency_hotline || '(043) 757-3000'],
+                ['🔒 Campus Security',   s.security_office   || '+63 917 123 4567'],
+                ['🏥 Medical Clinic',    s.clinic             || '+63 917 234 5678'],
+                ['🔥 Fire Department',   s.fire_dept          || '(043) 757-3001'],
+                ['📋 Evac Coordinator',  s.evacuation_coord   || '+63 917 345 6789'],
+                ['🏢 Admin Office',      s.admin_office       || '+63 43 757-3002'],
+            ];
+            contactsEl.innerHTML = rows.map(([label, val]) =>
+                `<p><strong>${label}:</strong> ${val}</p>`
+            ).join('');
+        }
+
+        // ── Assembly Area ─────────────────────────────────────────────────
+        const assembly = s.assembly_area || 'Open Grounds / Sports Court (East Wing)';
+
+        // ── Evacuation Procedures panel ───────────────────────────────────
+        const procEl = document.getElementById('navEvacProcedures');
+        if (procEl && s.evacuation_steps) {
+            const lines = s.evacuation_steps.split('\n').filter(l => l.trim());
+            procEl.innerHTML = lines.map(l => `<p>${l}</p>`).join('');
+        } else if (procEl) {
+            procEl.innerHTML = `
+                <p><strong>1. Stay Calm:</strong> Follow instructions from faculty or emergency personnel.</p>
+                <p><strong>2. Use Nearest Exit:</strong> Proceed to the closest safe exit. Do not use elevators.</p>
+                <p><strong>3. Assembly Point:</strong> ${assembly}</p>
+                <p><strong>4. Account for Everyone:</strong> Faculty will conduct headcount.</p>
+                <p><strong>5. Wait for Instructions:</strong> Do not re-enter until authorized.</p>`;
+        }
+
+        // ── Evacuation Modal steps ────────────────────────────────────────
+        const modalSteps = document.getElementById('navEvacModalSteps');
+        if (modalSteps && s.evacuation_steps) {
+            const lines = s.evacuation_steps.split('\n').filter(l => l.trim());
+            modalSteps.innerHTML = lines.map((line, i) => {
+                // Strip leading "1. " numbering if present
+                const text = line.replace(/^\d+\.\s*/, '');
+                // Split at first colon for title/desc
+                const colonIdx = text.indexOf(':');
+                const title = colonIdx > -1 ? text.slice(0, colonIdx).trim() : `Step ${i+1}`;
+                const desc  = colonIdx > -1 ? text.slice(colonIdx + 1).trim() : text;
+                return `<div class="evac-step">
+                    <div class="evac-step-num">${i+1}</div>
+                    <div class="evac-step-content">
+                        <div class="evac-step-title">${title}</div>
+                        <div class="evac-step-desc">${desc}</div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+    } catch (e) {
+        console.warn('[campus-settings] Could not load:', e.message);
+    }
+}
+
 window.onload = function() {
     // ── Set initial sidebar state ────────────────────────────────────────────
     const sb  = document.getElementById('sidebar');
@@ -2605,6 +2672,7 @@ window.onload = function() {
     loadLocationsFromAPI();
     loadRoutesFromAPI();
     init3DScene();
+    loadCampusSettings();
 
     // Enable drag-to-scroll on horizontal pill bars
     enableDragScroll(document.getElementById('filterBar'));

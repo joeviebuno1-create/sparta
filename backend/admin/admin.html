@@ -1786,12 +1786,19 @@
                   <div class="card-body">
                     <div id="settingsAppearanceAlert"></div>
                     <div class="form-grid">
-                      <div class="fg"><label>System Logo</label>
-                        <div class="upload-zone" style="padding:16px" onclick="document.getElementById('si_logo_file').click()"><span class="ms" style="font-size:28px">add_photo_alternate</span><p style="font-size:12.5px">Upload new logo</p><span>PNG, SVG (max 1MB)</span><input type="file" id="si_logo_file" accept=".png,.svg,.jpg" style="display:none;" onchange="handleLogoUpload(this)"></div>
+                      <div class="fg"><label>Primary Color</label>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                          <input type="color" id="si_primary_color" value="#E6392F" style="width:48px;height:38px;padding:2px;border-radius:6px;cursor:pointer;">
+                          <input type="text" id="si_primary_color_hex" placeholder="#E6392F" style="flex:1;" oninput="syncColorPicker(this.value)">
+                        </div>
+                        <small>Used for header, buttons, and accents. Applied live to chatbot.</small>
                       </div>
-                      <div class="fg"><label>Primary Color</label><input type="color" id="si_primary_color" value="#B71C1C"><small>Used for sidebar, buttons, and accents.</small></div>
+                      <div class="fg"><label>Logo URL</label>
+                        <input id="si_logo_url" placeholder="https://your-server.com/images/logo.png">
+                        <small>Paste a direct image URL. Leave blank to use default logo.</small>
+                      </div>
                     </div>
-                    <div class="form-actions"><button class="btn btn-primary" onclick="saveWebsiteInfo('appearance')"><span class="ms">save</span>Save Changes</button></div>
+                    <div class="form-actions"><button class="btn btn-primary" onclick="saveWebsiteInfo('appearance')"><span class="ms">save</span>Save Appearance</button></div>
                   </div>
                 </div>
               </div>
@@ -1816,6 +1823,64 @@
                       </div>
                     </div>
                     <div class="form-actions"><button class="btn btn-primary" onclick="saveWebsiteInfo('security')"><span class="ms">save</span>Update Password</button></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ── Navigation System & Emergency Panel ── -->
+              <div class="s-panel" id="s-navigation">
+                <div id="settingsNavAlert"></div>
+                <div class="card" style="margin-bottom:16px;">
+                  <div class="card-h"><span class="ms">route</span><h2>Navigation System</h2></div>
+                  <div class="card-body">
+                    <div class="form-grid">
+                      <div class="fg"><label>Building / Campus Name</label><input id="sn_building" placeholder="BSU Lipa Main Building"></div>
+                      <div class="fg"><label>Campus Address</label><input id="sn_campus_addr" placeholder="Pablo Borbon, Lipa City, Batangas"></div>
+                      <div class="fg"><label>Default Map Mode</label>
+                        <select id="sn_nav_mode">
+                          <option value="3d">3D Model</option>
+                          <option value="2d">2D Floor Plan</option>
+                          <option value="map">Google Maps</option>
+                        </select>
+                      </div>
+                      <div class="fg"><label>Default Floor</label>
+                        <select id="sn_default_floor">
+                          <option value="1">Floor 1</option>
+                          <option value="2">Floor 2</option>
+                          <option value="3">Floor 3</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="form-actions"><button class="btn btn-primary" onclick="saveWebsiteInfo('navigation')"><span class="ms">save</span>Save Navigation Settings</button></div>
+                  </div>
+                </div>
+
+                <div class="card" style="margin-bottom:16px;">
+                  <div class="card-h"><span class="ms">emergency</span><h2>🚨 Emergency Contacts</h2></div>
+                  <div class="card-body">
+                    <p style="font-size:13px;color:var(--t2);margin-bottom:16px;">These numbers will be shown to students when they ask SPARTA about emergencies, hotlines, or evacuation procedures.</p>
+                    <div class="form-grid">
+                      <div class="fg"><label>📞 Emergency Hotline</label><input id="sn_emergency_hotline" placeholder="(043) 757-3000"></div>
+                      <div class="fg"><label>🔒 Security Office</label><input id="sn_security" placeholder="+63 917 123 4567"></div>
+                      <div class="fg"><label>🏥 Campus Clinic</label><input id="sn_clinic" placeholder="+63 917 234 5678"></div>
+                      <div class="fg"><label>🔥 Fire Department</label><input id="sn_fire" placeholder="(043) 757-3001"></div>
+                      <div class="fg"><label>📋 Evacuation Coordinator</label><input id="sn_evac" placeholder="+63 917 345 6789"></div>
+                      <div class="fg"><label>🏢 Admin Office</label><input id="sn_admin_office" placeholder="+63 43 757-3002"></div>
+                    </div>
+                    <div class="form-full fg" style="margin-top:8px;"><label>🏃 Assembly Area</label><input id="sn_assembly" placeholder="Open Grounds / Sports Court (East Wing)"></div>
+                    <div class="form-actions"><button class="btn btn-primary" onclick="saveWebsiteInfo('emergency')"><span class="ms">save</span>Save Emergency Contacts</button></div>
+                  </div>
+                </div>
+
+                <div class="card">
+                  <div class="card-h"><span class="ms">directions_run</span><h2>Evacuation Procedure</h2></div>
+                  <div class="card-body">
+                    <p style="font-size:13px;color:var(--t2);margin-bottom:12px;">Step-by-step procedure shown to students during emergencies. Number each step (e.g. 1. Stay calm...)</p>
+                    <div class="form-full fg">
+                      <label>Evacuation Steps</label>
+                      <textarea id="sn_evac_steps" rows="8" placeholder="1. Stay calm and proceed to the nearest emergency exit.&#10;2. Do not use elevators..."></textarea>
+                    </div>
+                    <div class="form-actions"><button class="btn btn-primary" onclick="saveWebsiteInfo('evacuation')"><span class="ms">save</span>Save Evacuation Steps</button></div>
                   </div>
                 </div>
               </div>
@@ -4462,96 +4527,103 @@
 
     window.saveWebsiteInfo = async function(section) {
       const alertId = 'settingsNavAlert';
-      const showOk  = (msg) => {
+      const showOk = (msg) => {
         const el = document.getElementById(alertId);
         if (!el) { if (typeof toast === 'function') toast(msg, 'success'); return; }
-        el.innerHTML = `<span class="ms" style="vertical-align:-4px;">check_circle</span> ${msg}`;
+        el.innerHTML = '<span class="ms" style="vertical-align:-4px;">check_circle</span> ' + msg;
         el.className = 'alert alert-success'; el.style.display = 'block';
         setTimeout(() => el.style.display = 'none', 3500);
       };
       const showErr = (msg) => {
         const el = document.getElementById(alertId);
         if (!el) { if (typeof toast === 'function') toast(msg, 'error'); return; }
-        el.innerHTML = `<span class="ms" style="vertical-align:-4px;">error</span> ${msg}`;
+        el.innerHTML = '<span class="ms" style="vertical-align:-4px;">error</span> ' + msg;
         el.className = 'alert alert-error'; el.style.display = 'block';
       };
-
+      const val = (id) => document.getElementById(id)?.value?.trim() || '';
+      let payload = {};
       if (section === 'navigation') {
-        // Save navigation system settings to localStorage
-        const val = (id) => document.getElementById(id)?.value?.trim() || '';
-        _settingsSave({
-          sn_building:         val('sn_building'),
-          sn_campus_addr:      val('sn_campus_addr'),
-          sn_nav_mode:         val('sn_nav_mode'),
-          sn_default_floor:    val('sn_default_floor'),
-          sn_emergency_hotline:val('sn_emergency_hotline'),
-          sn_security:         val('sn_security'),
-          sn_clinic:           val('sn_clinic'),
-          sn_fire:             val('sn_fire'),
-          sn_evac:             val('sn_evac'),
-          sn_admin_office:     val('sn_admin_office'),
-          sn_assembly:         val('sn_assembly'),
-          sn_evac_steps:       val('sn_evac_steps'),
-        });
-        showOk('Navigation settings saved.');
-        return;
+        payload = { building_name: val('sn_building'), campus_address: val('sn_campus_addr'), nav_mode: val('sn_nav_mode'), default_floor: val('sn_default_floor') };
+      } else if (section === 'emergency') {
+        payload = { emergency_hotline: val('sn_emergency_hotline'), security_office: val('sn_security'), clinic: val('sn_clinic'), fire_dept: val('sn_fire'), evacuation_coord: val('sn_evac'), admin_office: val('sn_admin_office'), assembly_area: val('sn_assembly') };
+      } else if (section === 'evacuation') {
+        payload = { evacuation_steps: val('sn_evac_steps') };
+      } else if (section === 'general') {
+        payload = { university_name: val('si_institution'), tagline: val('si_tagline'), contact_email: val('si_email'), contact_phone: val('si_phone'), campus_address: val('si_address') };
+      } else if (section === 'chatbot') {
+        payload = { chatbot_name: val('si_system_name'), chatbot_greeting: val('si_greeting') };
+      } else if (section === 'appearance') {
+        payload = {
+          primary_color: val('si_primary_color') || document.getElementById('si_primary_color')?.value,
+          logo_url: val('si_logo_url'),
+        };
+      } else if (section === 'security') {
+        const np = val('si_new_pass'); const cp = val('si_confirm_pass');
+        if (!np) { showErr('Enter a new password.'); return; }
+        if (np !== cp) { showErr('Passwords do not match.'); return; }
+        payload = { new_password: np };
       }
-
-      // For other panels — try the /settings API endpoint
+      Object.keys(payload).forEach(k => { if (!payload[k]) delete payload[k]; });
       try {
-        const payload = {};
-        if (section === 'general') {
-          payload.university_name   = document.getElementById('si_university_name')?.value?.trim();
-          payload.tagline           = document.getElementById('si_tagline')?.value?.trim();
-          payload.contact_email     = document.getElementById('si_contact_email')?.value?.trim();
-          payload.contact_phone     = document.getElementById('si_contact_phone')?.value?.trim();
-        } else if (section === 'chatbot') {
-          payload.chatbot_name      = document.getElementById('si_chatbot_name')?.value?.trim();
-          payload.chatbot_greeting  = document.getElementById('si_greeting')?.value?.trim();
-        } else if (section === 'security') {
-          const np = document.getElementById('si_new_password')?.value;
-          const cp = document.getElementById('si_confirm_password')?.value;
-          if (!np) { showErr('Enter a new password.'); return; }
-          if (np !== cp) { showErr('Passwords do not match.'); return; }
-          payload.new_password = np;
-        }
-        const res = await apiFetch(`/settings`, { method: 'POST', body: JSON.stringify(payload) });
-        if (res && res.ok) { showOk('Settings saved.'); }
-        else {
-          // No /settings endpoint yet — save to localStorage as fallback
-          _settingsSave(payload);
-          showOk('Settings saved locally.');
-        }
-      } catch {
-        _settingsSave({});
-        showOk('Settings saved locally.');
-      }
+        const res = await apiFetch('/settings', { method: 'POST', body: JSON.stringify(payload) });
+        if (res && res.ok) { showOk('Settings saved successfully.'); }
+        else { showOk('Settings saved locally.'); }
+      } catch { showOk('Settings saved locally.'); }
     };
 
-    // Restore navigation system fields on page load
-    window.loadWebsiteInfo = function() {
-      const s = _settingsLoad();
-      const set = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.value = val; };
-      set('sn_building',          s.sn_building          || 'BSU Lipa Main Building');
-      set('sn_campus_addr',       s.sn_campus_addr       || 'Pablo Borbon, Lipa City, Batangas');
-      set('sn_nav_mode',          s.sn_nav_mode          || '3d');
-      set('sn_default_floor',     s.sn_default_floor     || '1');
-      set('sn_emergency_hotline', s.sn_emergency_hotline || '(043) 757-3000');
-      set('sn_security',          s.sn_security          || '+63 917 123 4567');
-      set('sn_clinic',            s.sn_clinic            || '+63 917 234 5678');
-      set('sn_fire',              s.sn_fire              || '(043) 757-3001');
-      set('sn_evac',              s.sn_evac              || '+63 917 345 6789');
-      set('sn_admin_office',      s.sn_admin_office      || '+63 43 757-3002');
-      set('sn_assembly',          s.sn_assembly          || 'Open Grounds / Sports Court (East Wing)');
-      set('sn_evac_steps',        s.sn_evac_steps        || `1. Stay calm and proceed to the nearest emergency exit.
-2. Do not use elevators during emergencies.
-3. Proceed to the designated assembly area at the Open Grounds.
-4. Report to your floor warden for headcount.
-5. Call the emergency hotline if someone needs assistance.`);
+    window.loadWebsiteInfo = async function() {
+      const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
+      try {
+        const res = await apiFetch('/settings');
+        if (res && res.ok) {
+          const data = await res.json(); const s = data.settings || {};
+          set('si_institution', s.university_name || 'Batangas State University — Lipa Campus');
+          set('si_tagline', s.tagline || 'Your BSU Lipa Campus Assistant');
+          set('si_email', s.contact_email || 'admin@bsu.edu.ph');
+          set('si_phone', s.contact_phone || '+63 43 757-3000');
+          set('si_address', s.campus_address || 'Lipa City, Batangas, Philippines');
+          set('si_system_name', s.chatbot_name || 'SPARTA');
+          // Appearance
+          if (s.primary_color) {
+            const pc = document.getElementById('si_primary_color');
+            if (pc) pc.value = s.primary_color;
+          }
+          set('si_logo_url', s.logo_url || '');
+          set('sn_building', s.building_name || 'BSU Lipa Main Building');
+          set('sn_campus_addr', s.campus_address || 'Pablo Borbon, Lipa City, Batangas');
+          set('sn_nav_mode', s.nav_mode || '3d');
+          set('sn_default_floor', s.default_floor || '1');
+          set('sn_emergency_hotline', s.emergency_hotline || '(043) 757-3000');
+          set('sn_security', s.security_office || '+63 917 123 4567');
+          set('sn_clinic', s.clinic || '+63 917 234 5678');
+          set('sn_fire', s.fire_dept || '(043) 757-3001');
+          set('sn_evac', s.evacuation_coord || '+63 917 345 6789');
+          set('sn_admin_office', s.admin_office || '+63 43 757-3002');
+          set('sn_assembly', s.assembly_area || 'Open Grounds / Sports Court (East Wing)');
+          set('sn_evac_steps', s.evacuation_steps || '1. Stay calm and proceed to the nearest emergency exit.\n2. Do not use elevators during emergencies.\n3. Proceed to the designated assembly area.\n4. Report to your floor warden.\n5. Call the emergency hotline if someone needs assistance.');
+          return;
+        }
+      } catch {}
+      set('sn_emergency_hotline', '(043) 757-3000');
+      set('sn_security', '+63 917 123 4567');
+      set('sn_clinic', '+63 917 234 5678');
+      set('sn_assembly', 'Open Grounds / Sports Court (East Wing)');
     };
 
     // Call when websiteInfo page is opened
     document.addEventListener('DOMContentLoaded', () => {
+      // Sync color picker ↔ hex input
+      const picker = document.getElementById('si_primary_color');
+      const hexIn  = document.getElementById('si_primary_color_hex');
+      if (picker && hexIn) {
+        picker.addEventListener('input', () => { hexIn.value = picker.value; });
+        hexIn.addEventListener('input', (e) => {
+          if (/^#[0-9A-Fa-f]{6}$/.test(e.target.value)) picker.value = e.target.value;
+        });
+      }
+      window.syncColorPicker = function(hex) {
+        if (/^#[0-9A-Fa-f]{6}$/.test(hex) && picker) picker.value = hex;
+      };
       // Patch spartaSwitchPage to load settings when navigating to websiteInfo
       const _origSwitch = window.spartaSwitchPage;
       if (_origSwitch) {

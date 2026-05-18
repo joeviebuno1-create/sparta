@@ -543,7 +543,9 @@ async function editIntent(id) {
 // ========== NAVIGATION STATISTICS ==========
 async function loadNavigationStatistics() {
     try {
-        // Try the dedicated nav-statistics endpoint first, fall back to locations data
+        // FIX: Try /nav-statistics for the full breakdown (top locations chart,
+        // recent searches table, type breakdown) — but use /statistics nav_stats
+        // for the summary cards if they're already populated, avoiding double-fetch.
         let navData = null;
         const navStatResp = await apiFetch('/nav-statistics');
         if (navStatResp && navStatResp.ok) {
@@ -553,7 +555,6 @@ async function loadNavigationStatistics() {
             const locResp = await apiFetch('/locations');
             if (locResp && locResp.ok) {
                 const locs = await locResp.json();
-                // Build a synthetic stats object from location data
                 navData = buildNavStatsFromLocations(locs);
             }
         }
@@ -564,11 +565,15 @@ async function loadNavigationStatistics() {
             return;
         }
 
-        // Summary cards
-        document.getElementById('navStatTotalSearches').textContent = navData.total_searches ?? locs?.length ?? '—';
-        document.getElementById('navStatUniqueLocations').textContent = navData.unique_locations ?? '—';
-        document.getElementById('navStatTopLocation').textContent = navData.top_location ?? '—';
-        document.getElementById('navStatTodaySearches').textContent = navData.today_searches ?? '—';
+        // Summary cards — always use freshest data from nav-statistics
+        const _setText = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val ?? '—';
+        };
+        _setText('navStatTotalSearches',   (navData.total_searches  ?? 0).toLocaleString());
+        _setText('navStatTodaySearches',   (navData.today_searches  ?? 0).toString());
+        _setText('navStatUniqueLocations', (navData.unique_locations ?? 0).toLocaleString());
+        _setText('navStatTopLocation',     navData.top_location || '—');
 
         // Most searched locations bar chart
         const locDiv = document.getElementById('navLocationChart');
@@ -3222,6 +3227,41 @@ async function loadStatistics() {
         document.getElementById('statAvgConf').textContent = avgConf;
         document.getElementById('statTopIntent').textContent =
             data.top_intent ? data.top_intent.replace('_query', '').replace('_', ' ') : '—';
+
+        // ── FIX: Sync nav stat cards from /statistics response ────────────
+        // Previously these were only populated by loadNavigationStatistics()
+        // which made a separate /nav-statistics call — two sources of truth.
+        // Now both the statistics tab and the navigation tab read from one place.
+        const ns = data.nav_stats;
+        if (ns) {
+            const _set = (id, val) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = val ?? '—';
+            };
+            _set('navStatTotalSearches',   (ns.total_queries   ?? 0).toLocaleString());
+            _set('navStatTodaySearches',   (ns.today_queries   ?? 0).toString());
+            _set('navStatUniqueLocations', (ns.unique_locations ?? 0).toLocaleString());
+            // top_location comes from /nav-statistics; keep existing value if already set
+            const topEl = document.getElementById('navStatTopLocation');
+            if (topEl && topEl.textContent === '—' && ns.top_location) {
+                topEl.textContent = ns.top_location;
+            }
+        }
+
+        // ── FIX: Sync active sessions from /statistics response ───────────
+        // Sessions page was calling /sessions separately; now stats tab also
+        // shows the real active count (30-min window) without an extra API call.
+        if (data.active_sessions != null) {
+            const activeEl = document.getElementById('statActiveSessions') ||
+                             document.querySelector('[data-stat="active_sessions"]');
+            if (activeEl) activeEl.textContent = data.active_sessions;
+        }
+        if (data.total_sessions != null) {
+            const totalSessEl = document.getElementById('statTotalSessions') ||
+                                document.querySelector('[data-stat="total_sessions"]');
+            if (totalSessEl) totalSessEl.textContent = data.total_sessions;
+        }
+        // ─────────────────────────────────────────────────────────────────
 
         // Intent chart (horizontal bars)
         const intentDiv = document.getElementById('intentChart');

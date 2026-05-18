@@ -354,6 +354,11 @@ const chatMessages = document.getElementById('chatMessages');
         'anunsyo', 'kasaysayan', 'organisasyon', 'samahan',
         // Navigation
         'navigate', 'direction', 'map', 'find', 'go to', 'paano pumunta',
+        // Emergency & safety
+        'emergency', 'evacuation', 'evacuate', 'hotline', 'fire', 'clinic',
+        'security', 'assembly', 'exit', 'accident', 'help', 'rescue',
+        'emerhensya', 'ligtas', 'sunog', 'lumikas', 'saklolo',
+        'contact', 'number', 'call', 'phone',
     ];
 
     // Greetings that are always OK

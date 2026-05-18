@@ -2346,6 +2346,76 @@ class EnhancedDatabaseRAG:
                         'context_used': 0,
                         'entities_found': {}
                     }
+            # Guard 2: Emergency/evacuation → read from campus_settings DB
+            _ABS_EMERGENCY = {
+                'emergency', 'hotline', 'evacuation', 'evacuate', 'fire',
+                'assembly area', 'assembly point', 'exit', 'rescue',
+                'emerhensya', 'lumikas', 'sunog', 'saklolo', 'ligtas',
+                'emergency contact', 'emergency number', 'contact in emergency',
+                'clinic number', 'security number', 'security office contact',
+            }
+            _q_has_emergency = any(t in _q_abs for t in _ABS_EMERGENCY)
+            # Only fire if clearly asking about emergency/safety (not just "where is the exit")
+            _q_clearly_emergency = _q_has_emergency and any(
+                t in _q_abs for t in ['contact', 'number', 'call', 'hotline', 'phone',
+                                      'how', 'what', 'procedure', 'step', 'do i',
+                                      'evacuation', 'evacuate', 'emerhensya', 'lumikas',
+                                      'assembly', 'sunog', 'fire', 'emergency']
+            )
+            if _q_clearly_emergency:
+                print(f"[HARD_GUARD] emergency forced for: '{original_query}'")
+                try:
+                    _settings = {r[0]: r[1] for r in db.execute(
+                        __import__('sqlalchemy').text(
+                            "SELECT key, value FROM campus_settings WHERE grp IN ('emergency','general')"
+                        )
+                    ).fetchall()}
+                except Exception:
+                    _settings = {}
+
+                _hotline  = _settings.get('emergency_hotline', '(043) 757-3000')
+                _security = _settings.get('security_office',   '+63 917 123 4567')
+                _clinic   = _settings.get('clinic',            '+63 917 234 5678')
+                _fire     = _settings.get('fire_dept',         '(043) 757-3001')
+                _evac_c   = _settings.get('evacuation_coord',  '+63 917 345 6789')
+                _admin    = _settings.get('admin_office',      '+63 43 757-3002')
+                _assembly = _settings.get('assembly_area',     'Open Grounds / Sports Court')
+                _steps    = _settings.get('evacuation_steps',  '')
+
+                _resp_en = (
+                    "🚨 **BSU Lipa Emergency Contacts**\n\n"
+                    f"📞 **Emergency Hotline:** {_hotline}\n"
+                    f"🔒 **Security Office:** {_security}\n"
+                    f"🏥 **Campus Clinic:** {_clinic}\n"
+                    f"🔥 **Fire Department:** {_fire}\n"
+                    f"📋 **Evacuation Coordinator:** {_evac_c}\n"
+                    f"🏢 **Admin Office:** {_admin}\n\n"
+                    f"🏃 **Assembly Area:** {_assembly}\n\n"
+                )
+                if _steps:
+                    _resp_en += f"**Evacuation Procedure:**\n{_steps}"
+
+                _resp_tl = (
+                    "🚨 **Mga Emergency Contact ng BSU Lipa**\n\n"
+                    f"📞 **Emergency Hotline:** {_hotline}\n"
+                    f"🔒 **Security Office:** {_security}\n"
+                    f"🏥 **Campus Clinic:** {_clinic}\n"
+                    f"🔥 **Fire Department:** {_fire}\n"
+                    f"📋 **Evacuation Coordinator:** {_evac_c}\n"
+                    f"🏢 **Admin Office:** {_admin}\n\n"
+                    f"🏃 **Assembly Area:** {_assembly}\n\n"
+                )
+                if _steps:
+                    _resp_tl += f"**Proseso ng Evacuation:**\n{_steps}"
+
+                return {
+                    'response': _resp_tl if lang == 'tl' else _resp_en,
+                    'confidence': 1.0,
+                    'intent': 'emergency_query',
+                    'suggestions': ['What is the assembly area?', 'Where is the clinic?', 'Who is the security officer?'],
+                    'context_used': 1,
+                    'entities_found': {}
+                }
             # ── END ABSOLUTE HARD GUARD ─────────────────────────────────────
 
             # Step 0.4: Direct person lookup — "Who is [Honorific] [FULLNAME]?"

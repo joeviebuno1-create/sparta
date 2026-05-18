@@ -318,3 +318,21 @@ class UserSession(Base):
         if secs < 3600:
             return f"{secs//60}m {secs%60}s"
         return f"{secs//3600}h {(secs%3600)//60}m"
+
+
+class CampusSetting(Base):
+    """
+    Key-value store for all campus/chatbot settings.
+    Each row is one setting: key (string) → value (text).
+    Groups: general | chatbot | appearance | navigation | emergency
+    """
+    __tablename__ = "campus_settings"
+
+    id         = Column(Integer, primary_key=True, index=True)
+    key        = Column(String(100), unique=True, nullable=False, index=True)
+    value      = Column(Text, nullable=True)
+    group      = Column(String(50), nullable=True)   # general|chatbot|navigation|emergency
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<CampusSetting {self.key}={self.value[:30] if self.value else None}>"

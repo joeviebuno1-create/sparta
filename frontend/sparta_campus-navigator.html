@@ -192,22 +192,15 @@
       <!-- Procedures -->
       <div class="evac-section">
         <div class="evac-section-title"><span>📋</span> Evacuation Procedures</div>
-        <div class="evac-info-box">
-          <p><strong>1. Stay Calm:</strong> Follow instructions from faculty or emergency personnel.</p>
-          <p><strong>2. Use Nearest Exit:</strong> Proceed to the closest safe exit. Do not use elevators.</p>
-          <p><strong>3. Assembly Point:</strong> Gather at the open field near Main Gate.</p>
-          <p><strong>4. Account for Everyone:</strong> Faculty will conduct headcount.</p>
-          <p><strong>5. Wait for Instructions:</strong> Do not re-enter until authorized.</p>
+        <div class="evac-info-box" id="navEvacProcedures">
+          <p>Loading procedures…</p>
         </div>
       </div>
       <!-- Emergency contacts -->
       <div class="evac-section">
         <div class="evac-section-title"><span>📞</span> Emergency Contacts</div>
-        <div class="evac-info-box">
-          <p><strong>Campus Security:</strong> (043) 756-5555 local 101</p>
-          <p><strong>Medical Clinic:</strong> (043) 756-5555 local 201</p>
-          <p><strong>Lipa City Emergency:</strong> 911</p>
-          <p><strong>Fire Department:</strong> (043) 756-1234</p>
+        <div class="evac-info-box" id="navEmergencyContacts">
+          <p>Loading contacts…</p>
         </div>
       </div>
       <!-- Exit list — populated by renderEvacExits() -->
@@ -235,10 +228,9 @@
       <span class="evac-modal-close" onclick="closeEvacModal()">✕</span>
     </div>
     <div class="evac-modal-body">
-      <div class="evac-step"><div class="evac-step-num">1</div><div class="evac-step-content"><div class="evac-step-title">Stay Calm</div><div class="evac-step-desc">Do not panic. Listen for announcements from campus security.</div></div></div>
-      <div class="evac-step"><div class="evac-step-num">2</div><div class="evac-step-content"><div class="evac-step-title">Follow the Orange Path</div><div class="evac-step-desc">Follow the <strong style="color:var(--evac);">orange evacuation path</strong> on the 3D map to the nearest exit.</div></div></div>
-      <div class="evac-step"><div class="evac-step-num">3</div><div class="evac-step-content"><div class="evac-step-title">Reach Assembly Area</div><div class="evac-step-desc">Proceed to the open field near the Main Gate. Assist others if needed.</div></div></div>
-      <div class="evac-step"><div class="evac-step-num">4</div><div class="evac-step-content"><div class="evac-step-title">Report &amp; Await Instructions</div><div class="evac-step-desc">Check in with your department head. Do not re-enter until cleared.</div></div></div>
+      <div id="navEvacModalSteps">
+        <div class="evac-step"><div class="evac-step-num">1</div><div class="evac-step-content"><div class="evac-step-title">Stay Calm</div><div class="evac-step-desc">Loading procedures…</div></div></div>
+      </div>
       <div class="evac-exits-title">🚪 Emergency Exits</div>
       <div id="evacExitsList"></div>
       <div class="evac-warning">

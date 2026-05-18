@@ -243,6 +243,44 @@ def _run_migrations():
             """))
             print("[migration] Created user_sessions table")
 
+        # ── campus_settings table ──────────────────────────────────────
+        if 'campus_settings' not in inspector.get_table_names():
+            conn.execute(text("""
+                CREATE TABLE campus_settings (
+                    id         SERIAL PRIMARY KEY,
+                    key        VARCHAR(100) UNIQUE NOT NULL,
+                    value      TEXT,
+                    grp        VARCHAR(50),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            defaults = [
+                ('university_name',   'Batangas State University — Lipa Campus', 'general'),
+                ('tagline',           'Your BSU Lipa Campus Assistant',           'general'),
+                ('contact_email',     'admin@bsu.edu.ph',                         'general'),
+                ('contact_phone',     '+63 43 757-3000',                          'general'),
+                ('chatbot_name',      'SPARTA',                                   'chatbot'),
+                ('chatbot_greeting',  'Welcome to SPARTA!',                       'chatbot'),
+                ('primary_color',     '#E6392F',                                  'appearance'),
+                ('logo_url',          '',                                          'appearance'),
+                ('emergency_hotline', '(043) 757-3000',                           'emergency'),
+                ('security_office',   '+63 917 123 4567',                         'emergency'),
+                ('clinic',            '+63 917 234 5678',                         'emergency'),
+                ('fire_dept',         '(043) 757-3001',                           'emergency'),
+                ('evacuation_coord',  '+63 917 345 6789',                         'emergency'),
+                ('admin_office',      '+63 43 757-3002',                          'emergency'),
+                ('assembly_area',     'Open Grounds / Sports Court (East Wing)',  'emergency'),
+                ('campus_address',    'Pablo Borbon, Lipa City, Batangas',        'navigation'),
+                ('evacuation_steps',  '1. Stay calm and proceed to the nearest emergency exit.\n2. Do not use elevators during emergencies.\n3. Proceed to the designated assembly area at the Open Grounds.\n4. Report to your floor warden for headcount.\n5. Call the emergency hotline if someone needs assistance.', 'emergency'),
+            ]
+            for key, val, grp in defaults:
+                conn.execute(text(
+                    "INSERT INTO campus_settings (key, value, grp) VALUES (:k, :v, :g) "
+                    "ON CONFLICT (key) DO NOTHING"
+                ), {"k": key, "v": val, "g": grp})
+            conn.commit()
+            print("[migration] Created campus_settings table with defaults")
+
         # AnnouncementPopup: scheduling + archiving columns
         # Safe for Neon/PostgreSQL — won't error if columns already exist
         for col, definition in [
@@ -2848,6 +2886,86 @@ async def get_sessions(db: Session = Depends(get_db)):
             "avg_duration": "—", "queries_per_session": 0,
             "sessions": []
         }
+
+@app.get("/campus-info")
+async def get_campus_info(db: Session = Depends(get_db)):
+    """
+    Public endpoint — returns only safe campus info (emergency contacts,
+    evacuation steps, assembly area). No auth required.
+    Used by the navigation frontend to populate the evacuation panel.
+    """
+    try:
+        rows = db.execute(text(
+            "SELECT key, value FROM campus_settings "
+            "WHERE grp IN ('emergency', 'navigation', 'general', 'chatbot', 'appearance') "
+            "AND key NOT IN ('new_password')"
+        )).fetchall()
+        return {r[0]: r[1] for r in rows}
+    except Exception:
+        return {}
+
+
+# ── Campus Settings endpoints ────────────────────────────────────────────────
+
+@admin_router.get("/settings")
+def get_settings(db: Session = Depends(get_db)):
+    """Return all campus settings as a flat key→value dict."""
+    try:
+        rows = db.execute(text("SELECT key, value, grp FROM campus_settings")).fetchall()
+        result = {r[0]: r[1] for r in rows}
+        # Also group by category for convenience
+        grouped = {}
+        for r in rows:
+            grouped.setdefault(r[2] or 'general', {})[r[0]] = r[1]
+        return {"settings": result, "grouped": grouped}
+    except Exception as e:
+        print(f"[settings] GET error: {e}")
+        return {"settings": {}, "grouped": {}}
+
+
+@admin_router.post("/settings")
+async def save_settings(request: Request, db: Session = Depends(get_db)):
+    """Upsert campus settings. Body: { key: value, ... }"""
+    try:
+        payload = await request.json()
+        for key, value in payload.items():
+            if not isinstance(key, str) or len(key) > 100:
+                continue
+            # Determine group from key prefix
+            grp = 'general'
+            if key in ('emergency_hotline','security_office','clinic','fire_dept',
+                       'evacuation_coord','admin_office','assembly_area','evacuation_steps'):
+                grp = 'emergency'
+            elif key in ('chatbot_name','chatbot_greeting','fallback_en','fallback_fil',
+                         'confidence_threshold','max_response_length','default_language'):
+                grp = 'chatbot'
+            elif key in ('campus_address','nav_mode','default_floor','building_name'):
+                grp = 'navigation'
+
+            db.execute(text("""
+                INSERT INTO campus_settings (key, value, grp, updated_at)
+                VALUES (:k, :v, :g, NOW())
+                ON CONFLICT (key) DO UPDATE
+                SET value = EXCLUDED.value, grp = EXCLUDED.grp, updated_at = NOW()
+            """), {"k": key, "v": str(value) if value is not None else None, "g": grp})
+        db.commit()
+        return {"status": "ok", "saved": len(payload)}
+    except Exception as e:
+        db.rollback()
+        print(f"[settings] POST error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def get_campus_setting(db: Session, key: str, default: str = "") -> str:
+    """Helper — read one setting from campus_settings."""
+    try:
+        row = db.execute(
+            text("SELECT value FROM campus_settings WHERE key = :k"), {"k": key}
+        ).fetchone()
+        return row[0] if row and row[0] is not None else default
+    except Exception:
+        return default
+
 
 # ============================================
 # REGISTER ADMIN ROUTER

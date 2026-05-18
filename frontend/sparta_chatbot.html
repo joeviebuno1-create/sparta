@@ -7,9 +7,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#E6392F">
-    <title>SPARTA - University Information Chatbot</title>
-    <link rel="icon" type="image/png" href="https://sparta-production-0acb.up.railway.app/images/logo.png">
-    <link rel="apple-touch-icon" href="https://sparta-production-0acb.up.railway.app/images/logo.png">
+    <title id="pageTitle">SPARTA - University Information Chatbot</title>
+    <link rel="icon" type="image/png" href="https://sparta-production-0acb.up.railway.app/images/logo.png" id="pageFavicon">
+    <link rel="apple-touch-icon" href="https://sparta-production-0acb.up.railway.app/images/logo.png" id="pageAppleTouchIcon">
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="chatbot_styles.css">
 </head>
@@ -23,11 +23,11 @@
             <div class="header-content">
                 <div class="header-left">
                     <div class="logo-container">
-                        <img src="https://sparta-production-0acb.up.railway.app/images/logo.png" alt="BSU Logo">
+                        <img id="chatbotLogo" src="https://sparta-production-0acb.up.railway.app/images/logo.png" alt="BSU Logo">
                     </div>
                     <div class="header-text">
-                        <h1>SPARTA</h1>
-                        <p>Your BSU Lipa Campus Assistant</p>
+                        <h1 id="chatbotName">SPARTA</h1>
+                        <p id="chatbotTagline">Your BSU Lipa Campus Assistant</p>
                     </div>
                 </div>
                 <div class="header-controls">
@@ -84,9 +84,9 @@
         <div class="chat-messages" id="chatMessages">
             <div class="message bot">
                 <div class="message-content">
-                    <strong>👋 Welcome to SPARTA!</strong>
+                    <strong id="welcomeTitle">👋 Welcome to SPARTA!</strong>
                     <br><br>
-                    I'm your intelligent assistant for BSU Lipa Campus. I can help you with:
+                    <span id="welcomeSubtitle">I'm your intelligent assistant for BSU Lipa Campus. I can help you with:</span>
                     <br><br>
                     📍 <strong>Campus Navigation</strong> — Find buildings, rooms, offices<br>
                     👥 <strong>Faculty & Staff</strong> — Contact info and office hours<br>
@@ -94,7 +94,7 @@
                     🏛️ <strong>University Info</strong> — History, programs, policies<br>
                     🏆 <strong>Organizations</strong> — Student clubs and groups
                     <br><br>
-                    What would you like to know about BSU Lipa?
+                    <span id="welcomeQuestion">What would you like to know about BSU Lipa?</span>
                 </div>
             </div>
 
@@ -170,6 +170,65 @@
     </script>
 
 <script src="chatbot_script.js"></script>
+<script>
+// ── Load campus settings and apply to chatbot UI ─────────────────────────────
+(async function applyCampusSettings() {
+    const API = (typeof API_BASE !== 'undefined' ? API_BASE : '') ||
+                'https://sparta-production-0acb.up.railway.app';
+    try {
+        const res = await fetch(`${API}/campus-info`);
+        if (!res || !res.ok) return;
+        const s = await res.json();
+
+        // ── General: page title & tagline ─────────────────────────────────
+        const name    = s.chatbot_name    || s.university_name || 'SPARTA';
+        const tagline = s.tagline         || 'Your BSU Lipa Campus Assistant';
+
+        const el = (id) => document.getElementById(id);
+        if (el('chatbotName'))    el('chatbotName').textContent    = name;
+        if (el('chatbotTagline')) el('chatbotTagline').textContent = tagline;
+        if (el('pageTitle'))      el('pageTitle').textContent      = `${name} - Campus Assistant`;
+
+        // ── Chatbot: welcome message ───────────────────────────────────────
+        if (s.chatbot_greeting && el('welcomeTitle')) {
+            el('welcomeTitle').textContent = `👋 ${s.chatbot_greeting}`;
+        }
+        const uniName = s.university_name || 'BSU Lipa Campus';
+        if (el('welcomeSubtitle')) {
+            el('welcomeSubtitle').textContent =
+                `I'm your intelligent assistant for ${uniName}. I can help you with:`;
+        }
+        if (el('welcomeQuestion')) {
+            el('welcomeQuestion').textContent =
+                `What would you like to know about ${uniName}?`;
+        }
+
+        // ── Appearance: primary color ──────────────────────────────────────
+        if (s.primary_color && CSS.supports('color', s.primary_color)) {
+            document.documentElement.style.setProperty('--sparta-red', s.primary_color);
+            // Darken for deep-red (multiply by ~0.6)
+            const hex = s.primary_color.replace('#','');
+            const r = Math.round(parseInt(hex.slice(0,2),16)*0.6).toString(16).padStart(2,'0');
+            const g = Math.round(parseInt(hex.slice(2,4),16)*0.6).toString(16).padStart(2,'0');
+            const b = Math.round(parseInt(hex.slice(4,6),16)*0.6).toString(16).padStart(2,'0');
+            document.documentElement.style.setProperty('--sparta-deep-red', `#${r}${g}${b}`);
+            // Also update theme-color meta
+            const tm = document.querySelector('meta[name="theme-color"]');
+            if (tm) tm.setAttribute('content', s.primary_color);
+        }
+
+        // ── Appearance: logo ───────────────────────────────────────────────
+        if (s.logo_url && el('chatbotLogo')) {
+            el('chatbotLogo').src = s.logo_url;
+            if (el('pageFavicon'))         el('pageFavicon').href = s.logo_url;
+            if (el('pageAppleTouchIcon'))  el('pageAppleTouchIcon').href = s.logo_url;
+        }
+
+    } catch (e) {
+        console.warn('[campus-settings] Could not apply:', e.message);
+    }
+})();
+</script>
 <script src="sparta_popup_announcements.js"></script>
 </body>
 </html>
