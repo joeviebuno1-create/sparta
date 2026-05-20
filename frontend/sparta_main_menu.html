@@ -464,7 +464,7 @@
         <div class="hero">
             <div class="mascot-container">
                 <div class="mascot">
-                    <img src="https://sparta-production-0acb.up.railway.app/images/logo.png" alt="BSU Logo">
+                    <img src="https://sparta-production-0acb.up.railway.app/images/logo.png" alt="BSU Logo" id="menuLogo">
                 </div>
             </div>
             <h1>Welcome to <span class="spartha-text">SPARTA</span></h1>
@@ -610,5 +610,42 @@
         _ps.textContent='@keyframes particleFade{to{opacity:0;transform:translateY(-30px) scale(0)}}';
         document.head.appendChild(_ps);
     </script>
+
+<script>
+(async function applyMenuSettings() {
+    const API_BASE = 'https://sparta-production-0acb.up.railway.app';
+    try {
+        const res = await fetch(`${API_BASE}/campus-info`);
+        if (!res || !res.ok) return;
+        const s = await res.json();
+        const el = id => document.getElementById(id);
+
+        // Logo
+        if (s.logo_url) {
+            if (el('menuLogo')) el('menuLogo').src = s.logo_url;
+            const fav = document.querySelector('link[rel="icon"]');
+            if (fav) fav.href = s.logo_url;
+        }
+
+        // Background image
+        if (s.bg_url) {
+            document.documentElement.style.setProperty('--bg-image', `url(${s.bg_url})`);
+            const bgEl = document.querySelector('.main-bg, .menu-bg, body');
+            if (bgEl) bgEl.style.backgroundImage = `url(${s.bg_url})`;
+        }
+
+        // Primary color
+        if (s.primary_color && CSS.supports('color', s.primary_color)) {
+            document.documentElement.style.setProperty('--sparta-red', s.primary_color);
+        }
+
+        // Page title
+        const name = s.chatbot_name || 'SPARTA';
+        const shortName = s.short_name || 'BSU Lipa';
+        document.title = `${name} - ${shortName}`;
+
+    } catch(e) { console.warn('[menu-settings]', e.message); }
+})();
+</script>
 </body>
 </html>

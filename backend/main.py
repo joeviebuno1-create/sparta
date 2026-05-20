@@ -275,7 +275,7 @@ def _run_migrations():
             ]
             for key, val, grp in defaults:
                 conn.execute(text(
-                    "INSERT INTO campus_settings (key, value, grp) VALUES (:k, :v, :g) "
+                    "INSERT INTO campus_settings (key, value) VALUES (:k, :v) "
                     "ON CONFLICT (key) DO NOTHING"
                 ), {"k": key, "v": val, "g": grp})
             conn.commit()
@@ -339,6 +339,23 @@ def _run_migrations():
             conn.commit()
     except Exception as faq_err:
         print(f"[migration] faq_documents patch: {faq_err}")
+
+    # ── search_logs.searched_at backfill ──────────────────────────────
+    # Backfills any rows where searched_at is NULL (old rows before the
+    # column had a server default). Safe to run every startup — only
+    # updates rows that actually need it.
+    try:
+        if inspector.has_table('search_logs'):
+            sl_cols = [c['name'] for c in inspector.get_columns('search_logs')]
+            if 'searched_at' in sl_cols:
+                result = conn.execute(text(
+                    "UPDATE search_logs SET searched_at = NOW() WHERE searched_at IS NULL"
+                ))
+                if result.rowcount:
+                    print(f"[migration] Backfilled {result.rowcount} search_logs.searched_at NULLs")
+                conn.commit()
+    except Exception as sl_err:
+        print(f"[migration] search_logs backfill: {sl_err}")
 
 try:
     _run_migrations()
@@ -457,6 +474,9 @@ async def serve_navigator():       return frontend_file("sparta_campus-navigator
 @app.get("/spartha_main_menu.html",response_class=HTMLResponse)
 @app.get("/sparta_main_menu.html",response_class=HTMLResponse)
 async def serve_main_menu():       return frontend_file("sparta_main_menu.html")
+
+@app.get("/sparta_about.html",      response_class=HTMLResponse)
+async def serve_about():            return frontend_file("sparta_about.html")
 
 @app.get("/how_to_use.html",       response_class=HTMLResponse)
 async def serve_how_to_use():      return frontend_file("how_to_use.html")
@@ -2388,7 +2408,7 @@ def get_statistics(db: Session = Depends(get_db)):
     ).filter(
         cast(models.SearchLog.searched_at, Date) >= seven_days_ago
     ).first()
-    dau = round((dau_rows.cnt or 0) / 7, 1) if dau_rows else 0
+    dau = round((dau_rows.cnt or 0) / 7) if dau_rows else 0
 
     # ── Sessions (from user_sessions table if it exists) ─────────────
     try:
@@ -2524,6 +2544,47 @@ def get_statistics(db: Session = Depends(get_db)):
         ]
     }
 
+
+
+
+# ── Heatmap endpoint ─────────────────────────────────────────────────────────
+
+@admin_router.get("/statistics/heatmap")
+def get_heatmap(
+    from_date: str = None,
+    to_date: str = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Returns a 24x7 heatmap of query counts by hour (0-23) and day of week (0=Mon..6=Sun).
+    Accepts optional from/to date strings (YYYY-MM-DD).
+    """
+    from datetime import date, timedelta, datetime
+    try:
+        today = date.today()
+        dt_from = datetime.strptime(from_date, "%Y-%m-%d") if from_date else datetime(today.year, today.month, 1)
+        dt_to   = datetime.strptime(to_date,   "%Y-%m-%d").replace(hour=23, minute=59, second=59) if to_date else datetime.combine(today, datetime.max.time())
+
+        rows = db.execute(text("""
+            SELECT
+                EXTRACT(HOUR FROM searched_at)::int      AS hr,
+                EXTRACT(DOW  FROM searched_at)::int      AS dow
+            FROM search_logs
+            WHERE searched_at >= :from_dt
+              AND searched_at <= :to_dt
+        """), {"from_dt": dt_from, "to_dt": dt_to}).fetchall()
+
+        # DOW in postgres: 0=Sunday..6=Saturday — convert to 0=Mon..6=Sun
+        grid = [[0]*7 for _ in range(24)]
+        for hr, dow in rows:
+            mon_based = (dow - 1) % 7   # Sun(0)->6, Mon(1)->0 ... Sat(6)->5
+            if 0 <= hr <= 23 and 0 <= mon_based <= 6:
+                grid[hr][mon_based] += 1
+
+        return {"heatmap": grid, "from": str(dt_from.date()), "to": str(dt_to.date()), "total": sum(sum(r) for r in grid)}
+    except Exception as e:
+        # Return empty grid on error so frontend falls back to synthetic
+        return {"heatmap": [[0]*7 for _ in range(24)], "error": str(e)}
 
 
 # ── Navigation statistics endpoint ───────────────────────────────────────────
@@ -2823,7 +2884,8 @@ async def get_sessions(db: Session = Depends(get_db)):
             if effective_start:
                 secs = int((end_time - effective_start).total_seconds())
                 secs = max(secs, 0)
-                if secs < 60:     dur = f"{secs}s"
+                if secs == 0:     dur = "< 1m"
+                elif secs < 60:  dur = f"{secs}s"
                 elif secs < 3600: dur = f"{secs//60}m {secs%60}s"
                 else:             dur = f"{secs//3600}h {(secs%3600)//60}m"
             else:
@@ -2890,15 +2952,14 @@ async def get_sessions(db: Session = Depends(get_db)):
 @app.get("/campus-info")
 async def get_campus_info(db: Session = Depends(get_db)):
     """
-    Public endpoint — returns only safe campus info (emergency contacts,
-    evacuation steps, assembly area). No auth required.
-    Used by the navigation frontend to populate the evacuation panel.
+    Public endpoint — returns all safe campus settings.
+    No auth required. Used by all frontend pages to apply
+    general info, branding, chatbot config, and emergency contacts.
     """
     try:
         rows = db.execute(text(
             "SELECT key, value FROM campus_settings "
-            "WHERE grp IN ('emergency', 'navigation', 'general', 'chatbot', 'appearance') "
-            "AND key NOT IN ('new_password')"
+            "WHERE key NOT IN ('new_password')"
         )).fetchall()
         return {r[0]: r[1] for r in rows}
     except Exception:
@@ -2911,13 +2972,9 @@ async def get_campus_info(db: Session = Depends(get_db)):
 def get_settings(db: Session = Depends(get_db)):
     """Return all campus settings as a flat key→value dict."""
     try:
-        rows = db.execute(text("SELECT key, value, grp FROM campus_settings")).fetchall()
+        rows = db.execute(text("SELECT key, value FROM campus_settings")).fetchall()
         result = {r[0]: r[1] for r in rows}
-        # Also group by category for convenience
-        grouped = {}
-        for r in rows:
-            grouped.setdefault(r[2] or 'general', {})[r[0]] = r[1]
-        return {"settings": result, "grouped": grouped}
+        return {"settings": result, "grouped": {}}
     except Exception as e:
         print(f"[settings] GET error: {e}")
         return {"settings": {}, "grouped": {}}
@@ -2937,23 +2994,54 @@ async def save_settings(request: Request, db: Session = Depends(get_db)):
                        'evacuation_coord','admin_office','assembly_area','evacuation_steps'):
                 grp = 'emergency'
             elif key in ('chatbot_name','chatbot_greeting','fallback_en','fallback_fil',
-                         'confidence_threshold','max_response_length','default_language'):
+                         'confidence_threshold','max_response_length','default_language',
+                         'office_hours_message'):
                 grp = 'chatbot'
-            elif key in ('campus_address','nav_mode','default_floor','building_name'):
+            elif key in ('campus_address','nav_mode','default_floor','building_name',
+                         'glb_model_url','google_maps_url'):
                 grp = 'navigation'
+            elif key in ('primary_color','logo_url','bg_url','avatar_url'):
+                grp = 'appearance'
 
             db.execute(text("""
-                INSERT INTO campus_settings (key, value, grp, updated_at)
-                VALUES (:k, :v, :g, NOW())
+                INSERT INTO campus_settings (key, value, updated_at)
+                VALUES (:k, :v, NOW())
                 ON CONFLICT (key) DO UPDATE
-                SET value = EXCLUDED.value, grp = EXCLUDED.grp, updated_at = NOW()
-            """), {"k": key, "v": str(value) if value is not None else None, "g": grp})
+                SET value = EXCLUDED.value, updated_at = NOW()
+            """), {"k": key, "v": str(value) if value is not None else None})
         db.commit()
         return {"status": "ok", "saved": len(payload)}
     except Exception as e:
         db.rollback()
         print(f"[settings] POST error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@admin_router.post("/upload-logo")
+async def upload_logo(
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """Upload a logo image to Cloudinary and save the URL to campus_settings."""
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image (PNG, JPG, SVG, WEBP).")
+    if file.size and file.size > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File must be under 5 MB.")
+    try:
+        raw_bytes = await file.read()
+        url = upload_to_cloudinary(raw_bytes, file.filename or "logo.png", folder="sparta/logos")
+        # Also persist to settings
+        db.execute(text(
+            "INSERT INTO campus_settings (key, value, updated_at) VALUES (:k, :v, NOW()) "
+            "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()"
+        ), {"k": "logo_url", "v": url})
+        db.commit()
+        return {"url": url, "secure_url": url}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Logo upload failed: {e}")
 
 
 def get_campus_setting(db: Session, key: str, default: str = "") -> str:

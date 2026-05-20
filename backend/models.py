@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey, JSON, LargeBinary, text
+from sqlalchemy import Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey, JSON, LargeBinary, text, func
 from sqlalchemy.orm import relationship
 from database import Base, engine
 from datetime import datetime
@@ -9,6 +9,13 @@ from datetime import datetime
 # To add a new column: 1) update the model class below, 2) add an entry here.
 # ─────────────────────────────────────────────────────────────────────────────
 _MIGRATIONS = {
+    "campus_settings": [
+        ("grp", "VARCHAR(50)"),   # group/category column — added retroactively
+    ],
+    "search_logs": [
+        # Backfill NULL searched_at with NOW() for any old rows, then enforce NOT NULL
+        # This runs as ALTER TABLE only if column exists but has NULLs
+    ],
     "announcement_popups": [
         ("is_archived",  "BOOLEAN DEFAULT FALSE"),
         ("scheduled_at", "TIMESTAMP"),
@@ -223,7 +230,7 @@ class SearchLog(Base):
     entity_name = Column(String, nullable=True)     # top entity (location/person name)
     confidence = Column(Float, nullable=True)
     language = Column(String, default="en")
-    searched_at = Column(DateTime, default=datetime.utcnow)
+    searched_at = Column(DateTime, default=datetime.utcnow, server_default=func.now(), nullable=False)
 
 
 class ActivityLog(Base):
@@ -331,7 +338,7 @@ class CampusSetting(Base):
     id         = Column(Integer, primary_key=True, index=True)
     key        = Column(String(100), unique=True, nullable=False, index=True)
     value      = Column(Text, nullable=True)
-    group      = Column(String(50), nullable=True)   # general|chatbot|navigation|emergency
+    grp        = Column(String(50), nullable=True)   # general|chatbot|appearance|navigation|emergency
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self):

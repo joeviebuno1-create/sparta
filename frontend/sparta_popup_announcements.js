@@ -7,7 +7,7 @@
 (function () {
     'use strict';
 
-    const API_BASE = 'https://sparta-production-0acb.up.railway.app';
+    const API_BASE = 'https://sparta-backend.onrender.com';
 
     const CSS = `
         :root { --primary-red: #c41e3a; }

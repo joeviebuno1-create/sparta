@@ -1,3 +1,212 @@
+/* =================================================================
+   NAVIGATION FORM — Inline field validation helpers
+   ================================================================= */
+function navFieldErr(inputId, msg) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.classList.add('input-invalid');
+  el.style.borderColor = '#EF4444';
+  el.style.background  = '#FFF5F5';
+  el.style.boxShadow   = '0 0 0 2px rgba(239,68,68,0.12)';
+  let err = el.parentElement.querySelector('.nav-field-err');
+  if (!err) {
+    err = document.createElement('span');
+    err.className = 'nav-field-err';
+    err.style.cssText = 'display:block;color:#EF4444;font-size:11px;margin-top:4px;font-weight:500;';
+    el.after(err);
+  }
+  err.textContent = msg;
+  el.focus();
+}
+
+function navSelectErr(selectId, msg) {
+  const el = document.getElementById(selectId);
+  if (!el) return;
+  el.style.borderColor = '#EF4444';
+  el.style.background  = '#FFF5F5';
+  let err = el.parentElement.querySelector('.nav-field-err');
+  if (!err) {
+    err = document.createElement('span');
+    err.className = 'nav-field-err';
+    err.style.cssText = 'display:block;color:#EF4444;font-size:11px;margin-top:4px;font-weight:500;';
+    el.after(err);
+  }
+  err.textContent = msg;
+}
+
+function navFieldOk(inputId) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.classList.remove('input-invalid');
+  el.style.borderColor = '';
+  el.style.background  = '';
+  el.style.boxShadow   = '';
+  const err = el.parentElement.querySelector('.nav-field-err');
+  if (err) err.textContent = '';
+}
+
+function navClearAllErrors() {
+  document.querySelectorAll('#locationForm .nav-field-err').forEach(e => e.textContent = '');
+  document.querySelectorAll('#locationForm .input-invalid').forEach(e => {
+    e.classList.remove('input-invalid');
+    e.style.borderColor = '';
+    e.style.background  = '';
+    e.style.boxShadow   = '';
+  });
+  document.querySelectorAll('#locationForm select').forEach(e => {
+    e.style.borderColor = '';
+    e.style.background  = '';
+  });
+}
+
+function navValidateLocationForm() {
+  navClearAllErrors();
+  let valid = true;
+  const v = id => (document.getElementById(id)?.value || '').trim();
+
+  // Location Name
+  if (!v('loc_name')) {
+    navFieldErr('loc_name', 'Location name is required.'); valid = false;
+  } else if (v('loc_name').length < 2) {
+    navFieldErr('loc_name', 'Name must be at least 2 characters.'); valid = false;
+  } else { navFieldOk('loc_name'); }
+
+  // Building
+  if (!v('loc_building')) {
+    navFieldErr('loc_building', 'Building name is required.'); valid = false;
+  } else { navFieldOk('loc_building'); }
+
+  // Floor
+  const floorEl = document.getElementById('loc_floor');
+  const floorVal = floorEl ? floorEl.value : '';
+  if (floorVal === '' || floorVal === null) {
+    navFieldErr('loc_floor', 'Floor number is required.'); valid = false;
+  } else if (parseInt(floorVal) < 0) {
+    navFieldErr('loc_floor', 'Floor cannot be negative.'); valid = false;
+  } else { navFieldOk('loc_floor'); }
+
+  // Location Type
+  const typeEl = document.getElementById('loc_type');
+  if (!typeEl || !typeEl.value) {
+    navSelectErr('loc_type', 'Please select a location type.'); valid = false;
+  } else { navFieldOk('loc_type'); }
+
+  // Coordinates — must have been set by clicking the 3D map
+  const cx = parseFloat(document.getElementById('loc_coord_x')?.value) || 0;
+  const cy = parseFloat(document.getElementById('loc_coord_y')?.value) || 0;
+  const cz = parseFloat(document.getElementById('loc_coord_z')?.value) || 0;
+  if (cx === 0 && cy === 0 && cz === 0) {
+    const coordDisplay = document.querySelector('.coordinates-display');
+    if (coordDisplay) {
+      let coordErr = coordDisplay.querySelector('.nav-field-err');
+      if (!coordErr) {
+        coordErr = document.createElement('span');
+        coordErr.className = 'nav-field-err';
+        coordErr.style.cssText = 'display:block;color:#EF4444;font-size:11.5px;margin-top:6px;font-weight:500;';
+        coordDisplay.appendChild(coordErr);
+      }
+      coordErr.textContent = 'Please click on the 3D map to set location coordinates before saving.';
+    }
+    valid = false;
+  }
+
+  return valid;
+}
+
+function navValidatePathSection() {
+  const mode = document.querySelector('input[name="pathType"]:checked')?.value;
+  if (!mode || mode === 'none') return true;
+
+  let valid = true;
+  const v = id => (document.getElementById(id)?.value || '').trim();
+
+  // Path Name
+  if (!v('path_name')) {
+    navFieldErr('path_name', 'Path name is required when creating a path.'); valid = false;
+  } else if (v('path_name').length < 3) {
+    navFieldErr('path_name', 'Path name must be at least 3 characters.'); valid = false;
+  } else { navFieldOk('path_name'); }
+
+  // Connected Location
+  const connEl = document.getElementById('path_connected_location');
+  if (!connEl || !connEl.value || isNaN(parseInt(connEl.value))) {
+    navSelectErr('path_connected_location', 'Please select a connected location.'); valid = false;
+  }
+
+  // Waypoints
+  if (typeof pathWaypoints !== 'undefined' && pathWaypoints.length < 2) {
+    showAlert('navAlert', 'Path needs at least 2 waypoints. Click on the 3D map to add them.', 'error');
+    valid = false;
+  }
+
+  return valid;
+}
+
+function wireNavFormLiveValidation() {
+  const wire = (id, fn) => {
+    const el = document.getElementById(id);
+    if (el) { el.addEventListener('input', fn); el.addEventListener('blur', fn); }
+  };
+
+  wire('loc_name', () => {
+    const v = document.getElementById('loc_name')?.value.trim() || '';
+    if (!v) navFieldErr('loc_name', 'Location name is required.');
+    else if (v.length < 2) navFieldErr('loc_name', 'Min 2 characters.');
+    else navFieldOk('loc_name');
+  });
+
+  wire('loc_building', () => {
+    const v = document.getElementById('loc_building')?.value.trim() || '';
+    if (!v) navFieldErr('loc_building', 'Building name is required.');
+    else navFieldOk('loc_building');
+  });
+
+  wire('loc_floor', () => {
+    const v = document.getElementById('loc_floor')?.value;
+    if (v === '' || v === undefined) navFieldErr('loc_floor', 'Floor is required.');
+    else if (parseInt(v) < 0) navFieldErr('loc_floor', 'Cannot be negative.');
+    else navFieldOk('loc_floor');
+  });
+
+  wire('path_name', () => {
+    const mode = document.querySelector('input[name="pathType"]:checked')?.value;
+    if (!mode || mode === 'none') return;
+    const v = document.getElementById('path_name')?.value.trim() || '';
+    if (!v) navFieldErr('path_name', 'Path name is required.');
+    else if (v.length < 3) navFieldErr('path_name', 'Min 3 characters.');
+    else navFieldOk('path_name');
+  });
+
+  const typeEl = document.getElementById('loc_type');
+  if (typeEl) {
+    typeEl.addEventListener('change', () => {
+      if (typeEl.value) {
+        typeEl.style.borderColor = '';
+        typeEl.style.background  = '';
+        const err = typeEl.parentElement.querySelector('.nav-field-err');
+        if (err) err.textContent = '';
+      } else {
+        navSelectErr('loc_type', 'Please select a location type.');
+      }
+    });
+  }
+
+  const connEl = document.getElementById('path_connected_location');
+  if (connEl) {
+    connEl.addEventListener('change', () => {
+      if (connEl.value) {
+        connEl.style.borderColor = '';
+        connEl.style.background  = '';
+        const err = connEl.parentElement.querySelector('.nav-field-err');
+        if (err) err.textContent = '';
+      } else {
+        navSelectErr('path_connected_location', 'Please select a connected location.');
+      }
+    });
+  }
+}
+
+
 /* ===================================
    SPARTHA ADMIN DASHBOARD - ENHANCED VERSION
    Interactive 3D Path Building with Animated Golden Paths
@@ -60,14 +269,8 @@ const ICON_MAP = {
 // JavaScript CANNOT read the cookie — the browser sends it automatically.
 // Only username is stored in localStorage for display purposes.
 
-function showLoginOverlay() {
-    const overlay = document.getElementById('loginOverlay');
-    if (overlay) {
-        overlay.style.display = 'flex';
-        overlay.style.opacity = '1';
-        overlay.style.transform = 'scale(1)';
-    }
-}
+// Session expired → redirect to /login (handled by apiFetch 401 response)
+// showLoginOverlay removed — login is now on a separate /login page
 
 async function apiFetch(endpoint, options = {}) {
     const response = await fetch(`${API_BASE}${endpoint}`, {
@@ -80,8 +283,7 @@ async function apiFetch(endpoint, options = {}) {
     });
     if (response.status === 401) {
         localStorage.removeItem('spartha_user');
-        alert('⏰ Session expired. Please log in again.');
-        showLoginOverlay();
+        window.location.replace('/login?next=/admin');
         return null;
     }
     return response;
@@ -94,8 +296,7 @@ async function apiFetchForm(endpoint, options = {}) {
     });
     if (response.status === 401) {
         localStorage.removeItem('spartha_user');
-        alert('⏰ Session expired. Please log in again.');
-        showLoginOverlay();
+        window.location.replace('/login?next=/admin');
         return null;
     }
     return response;
@@ -1980,18 +2181,10 @@ async function handleLocationFormSubmit(e) {
         }
     };
     
-    // Validate coordinates
-    if (locationData.coordinates.x === 0 && locationData.coordinates.y === 0 && locationData.coordinates.z === 0) {
-        showAlert('navAlert', '⚠️ Please click on the 3D map to set location coordinates', 'error');
-        return;
-    }
-    
-    // Validate path data if path mode is active
-    const pathValidation = validatePathData();
-    if (!pathValidation.valid) {
-        showAlert('navAlert', pathValidation.message, 'error');
-        return;
-    }
+      // Inline field validation
+    if (!navValidateLocationForm()) return;
+    if (!navValidatePathSection())  return;
+
     
     try {
         console.log('=== SAVING LOCATION ===');
@@ -2329,6 +2522,8 @@ document.getElementById('authorityForm')?.addEventListener('submit', async (e) =
     
     // Location Form
     document.getElementById('locationForm')?.addEventListener('submit', handleLocationFormSubmit);
+    wireNavFormLiveValidation();
+    document.getElementById('locationForm')?.addEventListener('reset', navClearAllErrors);
     
     // 3D Model Upload Form
     document.getElementById('model3dForm')?.addEventListener('submit', handleModel3DUpload);
@@ -2810,74 +3005,6 @@ document.getElementById('memberForm')?.addEventListener('submit', async (e) => {
 });
 // ========== ADMIN LOGIN / AUTH ==========
 
-async function submitLogin() {
-    const username = document.getElementById('loginUsername').value.trim();
-    const password = document.getElementById('loginPassword').value;
-    const btn = document.getElementById('loginBtn');
-    const btnText = document.getElementById('loginBtnText');
-
-    if (!username || !password) {
-        showLoginAlert('Please enter both username and password.', 'err');
-        return;
-    }
-
-    btn.disabled = true;
-    btnText.innerHTML = '&#9203;&nbsp; Logging in...';
-
-    try {
-        const response = await fetch(`${API_BASE}/login`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            localStorage.setItem('spartha_user', data.username);
-            btnText.innerHTML = '&#10003;&nbsp; Success!';
-            const overlay = document.getElementById('loginOverlay');
-            overlay.style.transition = 'opacity 0.55s ease, transform 0.55s ease';
-            overlay.style.opacity = '0';
-            overlay.style.transform = 'scale(1.02)';
-            setTimeout(() => { overlay.style.display = 'none'; }, 560);
-        } else {
-            const err = await response.json();
-            showLoginAlert('&#10060; ' + (err.detail || 'Invalid username or password'), 'err');
-            btn.disabled = false;
-            btnText.innerHTML = '&#128640;&nbsp; Login to Dashboard';
-            // Shake animation on error
-            const inputWrap = document.getElementById('loginPassword').closest('.lp-form-wrap');
-            inputWrap.style.animation = 'none';
-            document.getElementById('loginPassword').style.borderColor = '#c93030';
-            setTimeout(() => { document.getElementById('loginPassword').style.borderColor = ''; }, 1200);
-        }
-    } catch (e) {
-        showLoginAlert('&#10060; Could not connect to server. Is the backend running?', 'err');
-        btn.disabled = false;
-        btnText.innerHTML = '&#128640;&nbsp; Login to Dashboard';
-    }
-}
-
-function showLoginAlert(message, type) {
-    const el = document.getElementById('loginAlert');
-    el.style.display = 'block';
-    el.className = 'lp-alert ' + type;
-    el.innerHTML = message;
-}
-
-function toggleLoginPassword() {
-    const input = document.getElementById('loginPassword');
-    const icon = document.getElementById('eyeIcon');
-    if (input.type === 'password') {
-        input.type = 'text';
-        icon.innerHTML = '&#128683;';
-    } else {
-        input.type = 'password';
-        icon.innerHTML = '&#128065;';
-    }
-}
-
 // Session is verified server-side before admin.html is served.
 // If the session expires while the page is open, API calls will 401
 // and the user will be redirected to /login.
@@ -2910,6 +3037,7 @@ window.logout = function() {
 // Change credentials modal
 function openChangeCredModal() {
     const modal = document.getElementById('changeCredModal');
+    modal.style.display = 'flex';
     modal.classList.add('open');
     document.getElementById('changeCredAlert').style.display = 'none';
     document.getElementById('cc_current_username').value = localStorage.getItem('spartha_user') || '';
@@ -2919,7 +3047,9 @@ function openChangeCredModal() {
 }
 
 function closeChangeCredModal() {
-    document.getElementById('changeCredModal').classList.remove('open');
+    const modal = document.getElementById('changeCredModal');
+    modal.classList.remove('open');
+    modal.style.display = 'none';
 }
 
 async function submitChangeCredentials() {
