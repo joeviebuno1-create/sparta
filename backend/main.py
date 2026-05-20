@@ -968,8 +968,9 @@ async def get_quick_questions(intent: str = "general_info", db: Session = Depend
                 explore += custom_intent_qs(1)
 
         elif intent in ("location_query", "navigation_query"):
-            primary = location_qs(4)
-            explore = authority_qs(2) + announcement_qs(1) + org_qs(1) + history_qs(1)
+            primary = location_qs(min(5, len(locations)))
+            # Explore shows a couple more locations first, then other categories
+            explore = location_qs(2) + authority_qs(1) + org_qs(1)
             if custom_intents:
                 explore += custom_intent_qs(1)
 
@@ -1114,8 +1115,8 @@ async def create_authority(
         import re as _re
         if not _re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$", email.strip()):
             raise HTTPException(status_code=422, detail="Invalid email address format.")
-    if phone and len(phone.strip()) < 7:
-        raise HTTPException(status_code=422, detail="Phone number must be at least 7 characters.")
+    if phone and len(re.sub(r'[^\d]', '', phone.strip())) < 4:
+        raise HTTPException(status_code=422, detail="Phone number must contain at least 4 digits.")
 
     db_authority = models.Authority(
         name=name.strip(),
@@ -1164,8 +1165,8 @@ async def update_authority(
         raise HTTPException(status_code=422, detail="Department must be at least 2 characters.")
     if email and not _re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$", email.strip()):
         raise HTTPException(status_code=422, detail="Invalid email address format.")
-    if phone and len(phone.strip()) < 7:
-        raise HTTPException(status_code=422, detail="Phone number too short.")
+    if phone and len(_re.sub(r'[^\d]', '', phone.strip())) < 4:
+        raise HTTPException(status_code=422, detail="Phone number must contain at least 4 digits.")
 
     db_authority = db.query(models.Authority).filter(models.Authority.id == authority_id).first()
     if not db_authority:
@@ -1509,15 +1510,43 @@ async def add_member_to_organization(org_id: int, member_data: dict, db: Session
         org = db.query(models.Organization).filter(models.Organization.id == org_id).first()
         if not org:
             raise HTTPException(status_code=404, detail="Organization not found")
-        max_sort = db.query(func.max(models.OrganizationMember.sort_order))\
-                    .filter(models.OrganizationMember.org_chart_id == org_id)\
-                    .scalar()
-        next_sort = (max_sort or 0) + 1
+
+        requested_sort = member_data.get("sort_order")
+        member_name    = (member_data.get("name") or "").strip()
+        member_pos     = (member_data.get("position") or "").strip()
+
+        if not member_name:
+            raise HTTPException(status_code=422, detail="Member name is required.")
+        if not member_pos:
+            raise HTTPException(status_code=422, detail="Member position is required.")
+
+        existing_members = db.query(models.OrganizationMember)\
+                            .filter(models.OrganizationMember.org_chart_id == org_id).all()
+
+        # Prevent duplicate position title within the same org
+        for em in existing_members:
+            if (em.position or '').strip().lower() == member_pos.lower():
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Position '{member_pos}' already exists in this organization. "
+                           f"Use a unique position title."
+                )
+
+        # Prevent duplicate sort_order — if requested sort clashes, shift to next available
+        existing_sorts = {m.sort_order for m in existing_members if m.sort_order is not None}
+        max_sort = max(existing_sorts, default=0)
+        if requested_sort is not None and int(requested_sort) in existing_sorts:
+            next_sort = max_sort + 1
+        elif requested_sort is not None:
+            next_sort = int(requested_sort)
+        else:
+            next_sort = max_sort + 1
+
         db_member = models.OrganizationMember(
             org_chart_id=org_id,
-            name=member_data.get("name"),
-            position=member_data.get("position"),
-            sort_order=member_data.get("sort_order", next_sort),
+            name=member_name,
+            position=member_pos,
+            sort_order=next_sort,
             created_at=datetime.utcnow()
         )
         db.add(db_member)
@@ -1550,12 +1579,41 @@ async def update_organization_member(org_id: int, member_id: int, member_data: d
         ).first()
         if not db_member:
             raise HTTPException(status_code=404, detail="Member not found")
-        if "name" in member_data:
-            db_member.name = member_data["name"]
-        if "position" in member_data:
-            db_member.position = member_data["position"]
-        if "sort_order" in member_data:
-            db_member.sort_order = member_data["sort_order"]
+
+        new_name = (member_data.get("name") or db_member.name or "").strip()
+        new_pos  = (member_data.get("position") or db_member.position or "").strip()
+        new_sort = member_data.get("sort_order")
+
+        if not new_name:
+            raise HTTPException(status_code=422, detail="Member name is required.")
+        if not new_pos:
+            raise HTTPException(status_code=422, detail="Member position is required.")
+
+        # Check position duplicate (exclude self)
+        other_members = db.query(models.OrganizationMember).filter(
+            models.OrganizationMember.org_chart_id == org_id,
+            models.OrganizationMember.id != member_id
+        ).all()
+
+        if new_pos.lower() != (db_member.position or '').lower():
+            for om in other_members:
+                if (om.position or '').strip().lower() == new_pos.lower():
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Position '{new_pos}' already exists in this organization."
+                    )
+
+        # Fix sort_order duplicate (exclude self)
+        if new_sort is not None:
+            existing_sorts = {m.sort_order for m in other_members if m.sort_order is not None}
+            if int(new_sort) in existing_sorts:
+                max_sort = max(existing_sorts, default=0)
+                new_sort = max_sort + 1
+
+        db_member.name     = new_name
+        db_member.position = new_pos
+        if new_sort is not None:
+            db_member.sort_order = int(new_sort)
         db.commit()
         db.refresh(db_member)
         log_activity(db, "updated", "member", db_member.id, f"Updated member '{db_member.name}' ({db_member.position})")
@@ -2094,6 +2152,24 @@ async def toggle_popup(popup_id: int, db: Session = Depends(get_db)):
         popup.updated_at = datetime.utcnow()
         db.commit()
         return {"message": f"Popup {'activated' if popup.is_active else 'deactivated'}", "is_active": popup.is_active}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@admin_router.patch("/announcement-popups/{popup_id}/archive")
+async def archive_popup(popup_id: int, db: Session = Depends(get_db)):
+    """Archive (or un-archive) a popup announcement without requiring all form fields."""
+    try:
+        popup = db.query(models.AnnouncementPopup).filter(models.AnnouncementPopup.id == popup_id).first()
+        if not popup:
+            raise HTTPException(status_code=404, detail="Popup not found")
+        popup.is_archived = True
+        popup.is_active   = False
+        popup.updated_at  = datetime.utcnow()
+        db.commit()
+        return {"message": "Popup archived successfully", "is_archived": True}
     except HTTPException:
         raise
     except Exception as e:

@@ -257,78 +257,160 @@ const chatMessages = document.getElementById('chatMessages');
 
     // ── Typo / spelling corrector ─────────────────────────────────────────────
     const TYPO_MAP = {
-        // Common misspellings & shorthand
-        'wher': 'where', 'wehre': 'where', 'whre': 'where', 'wher is': 'where is',
-        'waht': 'what', 'whta': 'what', 'wath': 'what',
+        // ── Where ───────────────────────────────────────────────────────────
+        'wher': 'where', 'wehre': 'where', 'whre': 'where',
+        'wher is': 'where is', 'were is': 'where is', 'wer is': 'where is',
+        'whr is': 'where is', 'where iz': 'where is', 'where da': 'where is',
+        // ── Who / what ──────────────────────────────────────────────────────
+        'waht': 'what', 'whta': 'what', 'wath': 'what', 'wat': 'what',
         'hos': 'who is', 'hwo': 'who', 'woh': 'who',
+        'whoa is': 'who is', 'whos is': 'who is', 'hus': 'who is',
+        // ── The / teh ───────────────────────────────────────────────────────
         'teh': 'the', 'hte': 'the', 'tthe': 'the',
-        'is teh': 'is the', 'of teh': 'of the',
-        'dena': 'dean', 'deam': 'dean', 'den': 'dean',
+        'is teh': 'is the', 'of teh': 'of the', 'in teh': 'in the',
+        // ── People roles ────────────────────────────────────────────────────
+        'dena': 'dean', 'deam': 'dean',
         'chanclor': 'chancellor', 'chancelor': 'chancellor', 'chncellor': 'chancellor',
+        'cancellor': 'chancellor', 'chacellor': 'chancellor', 'cahncellor': 'chancellor',
+        'cahncel': 'chancellor', 'cahncel lor': 'chancellor',
         'presiednt': 'president', 'prsident': 'president', 'presedent': 'president',
-        'universtiy': 'university', 'univeristy': 'university', 'univerisity': 'university',
+        'presidnet': 'president', 'presient': 'president',
+        'proffessor': 'professor', 'professer': 'professor', 'proffesor': 'professor',
+        'professr': 'professor',
+        'vicechancellor': 'vice chancellor', 'vice-chancellor': 'vice chancellor',
+        // ── University / campus / BSU ────────────────────────────────────────
+        'universtiy': 'university', 'univeristy': 'university',
+        'univerisity': 'university', 'univesity': 'university',
+        'universiy': 'university', 'uniiversity': 'university',
+        'bsu lipa': 'BSU Lipa', 'bsu': 'BSU',
+        'campous': 'campus', 'camups': 'campus', 'campas': 'campus',
+        'sparta': 'SPARTA',
+        // ── Locations & rooms ───────────────────────────────────────────────
         'buldng': 'building', 'buldging': 'building', 'bilding': 'building',
+        'builidng': 'building', 'biulding': 'building', 'buliding': 'building',
+        'bldg': 'building', 'bldng': 'building',
         'locaton': 'location', 'loction': 'location', 'lcation': 'location',
-        'anouncement': 'announcement', 'announcment': 'announcement', 'announcemnt': 'announcement',
-        'histroy': 'history', 'hisory': 'history', 'hsitory': 'history',
-        'organizaton': 'organization', 'oragnization': 'organization', 'organziation': 'organization',
+        'loacation': 'location', 'loaction': 'location',
+        'ofice': 'office', 'offce': 'office', 'offise': 'office', 'ofis': 'office',
+        'spceh': 'speech', 'sepeach': 'speech', 'speach': 'speech', 'sppech': 'speech',
         'labratory': 'laboratory', 'labrotary': 'laboratory', 'labortory': 'laboratory',
+        'laborartory': 'laboratory', 'loabatory': 'laboratory',
         'libray': 'library', 'libraary': 'library', 'liberry': 'library',
+        'libary': 'library', 'libery': 'library', 'librery': 'library',
         'clasroom': 'classroom', 'classroon': 'classroom', 'claassroom': 'classroom',
-        'ofice': 'office', 'offce': 'office', 'offise': 'office',
-        'teachr': 'teacher', 'teahcer': 'teacher', 'taecher': 'teacher',
-        'studennt': 'student', 'stduent': 'student', 'studnt': 'student',
-        'colege': 'college', 'collge': 'college', 'colleje': 'college',
-        'departmnt': 'department', 'departement': 'department', 'deparment': 'department',
+        'clasrm': 'classroom',
+        'kantine': 'canteen', 'cantene': 'canteen', 'cantien': 'canteen',
+        'cafetria': 'cafeteria', 'cafetaria': 'cafeteria',
+        'auditoruim': 'auditorium', 'auditoriun': 'auditorium',
+        'gymnasim': 'gymnasium', 'gymansium': 'gymnasium',
+        'registar': 'registrar', 'regsitrar': 'registrar',
+        // ── Departments / entities ──────────────────────────────────────────
+        'anouncement': 'announcement', 'announcment': 'announcement',
+        'announcemnt': 'announcement', 'annoucement': 'announcement',
+        'announcement': 'announcement', 'annoncement': 'announcement',
+        'histroy': 'history', 'hisory': 'history', 'hsitory': 'history',
+        'hisotry': 'history', 'hitory': 'history',
+        'organizaton': 'organization', 'oragnization': 'organization',
+        'organziation': 'organization', 'oraganization': 'organization',
+        'organisaton': 'organization', 'orginization': 'organization',
         'faculy': 'faculty', 'facuty': 'faculty', 'faculity': 'faculty',
         'adminstration': 'administration', 'adminitration': 'administration',
+        'adminsitration': 'administration', 'admistration': 'administration',
+        'departmnt': 'department', 'departement': 'department', 'deparment': 'department',
+        'dpartment': 'department',
+        // ── Misc ────────────────────────────────────────────────────────────
+        'infomation': 'information', 'informaton': 'information',
+        'inforamtion': 'information', 'infornation': 'information',
         'evnt': 'event', 'eevnt': 'event',
         'schedul': 'schedule', 'shedule': 'schedule', 'scheudle': 'schedule',
+        'navigaton': 'navigation', 'naviagtion': 'navigation',
+        'studennt': 'student', 'stduent': 'student', 'studnt': 'student',
+        'stuednt': 'student', 'stundet': 'student',
+        'colege': 'college', 'collge': 'college', 'colleje': 'college',
+        'teachr': 'teacher', 'teahcer': 'teacher', 'taecher': 'teacher',
         'abt': 'about', 'abut': 'about',
         'pls': 'please', 'plss': 'please', 'plz': 'please',
-        'wat': 'what', 'wen': 'when', 'hw': 'how', 'cud': 'could', 'wud': 'would',
-        'ur': 'your', 'u': 'you', 'r': 'are', 'n': 'and', 'nd': 'and',
-        'gud': 'good', 'gd': 'good', 'gr8': 'great',
-        'spceh': 'speech', 'sepeach': 'speech',
-        'cancellor': 'chancellor', 'chacellor': 'chancellor',
+        'wat': 'what', 'wen': 'when', 'wen is': 'when is', 'hwen': 'when',
+        'whn': 'when', 'hw': 'how', 'cud': 'could', 'wud': 'would',
+        'ur': 'your', 'nd': 'and',
         'founed': 'founded', 'fouded': 'founded', 'fonded': 'founded',
-        'bsu lipa': 'BSU Lipa', 'bsu': 'BSU',
-        'sparta': 'SPARTA',
-        // Additional common typos
-        'wen is': 'when is', 'hwen': 'when', 'whn': 'when',
-        'annoucement': 'announcement', 'annoncement': 'announcement',
-        'loacation': 'location', 'loaction': 'location',
-        'builidng': 'building', 'biulding': 'building',
-        'stuednt': 'student', 'stundet': 'student',
-        'taecher': 'teacher', 'techer': 'teacher',
-        'proffessor': 'professor', 'professer': 'professor', 'proffesor': 'professor',
-        'oraganization': 'organization', 'organisaton': 'organization',
-        'hisotry': 'history', 'hitory': 'history',
-        'loabatory': 'laboratory', 'laborartory': 'laboratory',
-        'cahncel': 'chancellor', 'cahncellor': 'chancellor',
-        'adminsitration': 'administration', 'admistration': 'administration',
-        'infomation': 'information', 'informaton': 'information', 'inforamtion': 'information',
-        'campous': 'campus', 'camups': 'campus',
-        'universtiy': 'university', 'uniiversity': 'university',
-        'speach': 'speech', 'speecht': 'speech',
-        'navigaton': 'navigation', 'naviagtion': 'navigation',
-        'dpartment': 'department', 'deparment': 'department',
     };
 
     function correctTypos(text) {
         if (!text || text.length < 2) return text;
-        let corrected = text;
+        let corrected = text.trim();
 
-        // Apply word-level replacements (case-insensitive, whole word)
+        // ── Step 1: Collapse 3+ repeated chars → 2, then targeted → 1 ─────────
+        // "speeech" → "speech", "whhhere" → "where"
+        corrected = corrected.replace(/([a-zA-Z])\1{2,}/g, (_, ch) => ch + ch);
+
+        // Targeted doubled→correct for common campus words
+        const DOUBLE_COLLAPSE = {
+            speech:'speech', speack:'speech', speech:'speech', spech:'speech',
+            wheer:'where', whare:'where', heere:'here', theer:'there',
+            laab:'lab', liibrary:'library', libraary:'library',
+            caateen:'canteen', caanteen:'canteen',
+            buuilding:'building', biilding:'building',
+            claaroom:'classroom', offis:'office', offiice:'office',
+            rooom:'room', flooor:'floor', haall:'hall',
+            laboraatory:'laboratory', caaampus:'campus', uniiversity:'university',
+        };
+        const cl = corrected.toLowerCase();
+        for (const [t, f] of Object.entries(DOUBLE_COLLAPSE)) {
+            if (!cl.includes(t)) continue;
+            const re = new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'gi');
+            corrected = corrected.replace(re, m =>
+                m[0] === m[0].toUpperCase() ? f[0].toUpperCase() + f.slice(1) : f
+            );
+        }
+
+        // ── Step 2: TYPO_MAP word-level replacements ──────────────────────────
         for (const [typo, fix] of Object.entries(TYPO_MAP)) {
-            const regex = new RegExp(`(?<![\\w])${typo}(?![\\w])`, 'gi');
-            corrected = corrected.replace(regex, (match) => {
-                // Preserve original casing style
-                if (match === match.toUpperCase()) return fix.toUpperCase();
-                if (match[0] === match[0].toUpperCase()) return fix.charAt(0).toUpperCase() + fix.slice(1);
+            const esc = typo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const re  = new RegExp(`(?<![\\w])${esc}(?![\\w])`, 'gi');
+            corrected = corrected.replace(re, m => {
+                if (m === m.toUpperCase()) return fix.toUpperCase();
+                if (m[0] === m[0].toUpperCase()) return fix[0].toUpperCase() + fix.slice(1);
                 return fix;
             });
         }
+
+        // ── Step 3: Levenshtein word-level correction for campus vocabulary ───
+        // Only fires on 4+ char words not already in the vocab list.
+        const VOCAB = [
+            'speech','laboratory','library','canteen','cafeteria','building',
+            'classroom','office','gymnasium','auditorium','registrar','chancellor',
+            'president','university','campus','history','organization','announcement',
+            'faculty','department','professor','administration','college',
+            'navigation','information','schedule','student','location','foundation',
+        ];
+        const VOCAB_SET = new Set(VOCAB);
+
+        function lev(a, b) {
+            const m = a.length, n = b.length;
+            const dp = Array.from({length:m+1},(_,i)=>[i]);
+            for (let j=1;j<=n;j++) dp[0][j]=j;
+            for (let i=1;i<=m;i++) for (let j=1;j<=n;j++)
+                dp[i][j] = a[i-1]===b[j-1] ? dp[i-1][j-1]
+                    : 1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+            return dp[m][n];
+        }
+
+        corrected = corrected.replace(/\b[a-zA-Z]{4,}\b/g, word => {
+            const wl = word.toLowerCase();
+            if (VOCAB_SET.has(wl)) return word;
+            let bestD = 3, bestW = null;
+            for (const v of VOCAB) {
+                if (Math.abs(v.length - wl.length) > 3) continue;
+                const d = lev(wl, v);
+                if (d < bestD) { bestD = d; bestW = v; }
+            }
+            if (bestW && bestD <= 2)
+                return word[0] === word[0].toUpperCase()
+                    ? bestW[0].toUpperCase() + bestW.slice(1) : bestW;
+            return word;
+        });
+
         return corrected;
     }
 

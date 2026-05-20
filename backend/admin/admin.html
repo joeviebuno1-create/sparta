@@ -525,6 +525,15 @@
                 <thead><tr><th>Intent</th><th>Triggers</th><th>Avg Conf.</th><th>Fallback %</th><th>Status</th></tr></thead>
                 <tbody id="ih-body"></tbody>
               </table>
+              <!-- Intent Health Pagination -->
+              <div id="ih-pagination" style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:8px;">
+                <span id="ih-page-info" style="font-size:0.78rem;color:#6B7280;"></span>
+                <div style="display:flex;gap:6px;">
+                  <button id="ih-prev" onclick="ihPrevPage()" style="padding:4px 12px;font-size:0.78rem;border:1px solid #E5E7EB;border-radius:6px;background:#F9FAFB;color:#374151;cursor:pointer;" disabled>← Prev</button>
+                  <span id="ih-page-btns" style="display:flex;gap:4px;"></span>
+                  <button id="ih-next" onclick="ihNextPage()" style="padding:4px 12px;font-size:0.78rem;border:1px solid #E5E7EB;border-radius:6px;background:#F9FAFB;color:#374151;cursor:pointer;">Next →</button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -585,6 +594,15 @@
                   <tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:2rem;">Loading navigation data…</td></tr>
                 </tbody>
               </table>
+            </div>
+            <!-- Recent Nav Pagination -->
+            <div id="nav-pagination" style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:8px;">
+              <span id="nav-page-info" style="font-size:0.78rem;color:#6B7280;"></span>
+              <div style="display:flex;gap:6px;">
+                <button id="nav-prev" onclick="navPrevPage()" style="padding:4px 12px;font-size:0.78rem;border:1px solid #E5E7EB;border-radius:6px;background:#F9FAFB;color:#374151;cursor:pointer;" disabled>← Prev</button>
+                <span id="nav-page-btns" style="display:flex;gap:4px;"></span>
+                <button id="nav-next" onclick="navNextPage()" style="padding:4px 12px;font-size:0.78rem;border:1px solid #E5E7EB;border-radius:6px;background:#F9FAFB;color:#374151;cursor:pointer;">Next →</button>
+              </div>
             </div>
           </div>
         </div>
@@ -1718,7 +1736,7 @@
         </div>
         <div class="form-full fg"><label>Description (English) *</label><textarea id="m-hist-desc" placeholder="Describe this significant event..."></textarea></div>
         <div class="fi-section">
-          <div class="fi-head"><span class="ms">flag</span>Filipino Translation (Optional)<span class="fi-opt">optional</span></div>
+          <div class="fi-head"><span class="ms">flag</span>Filipino Translation</div>
           <div class="form-grid">
             <div class="fg"><label style="color:#065F46">Title (Filipino)</label><input id="m-hist-title-fi" placeholder="Itinatag ang Unibersidad"></div>
           </div>
@@ -1741,7 +1759,7 @@
         </div>
         <div class="form-full fg"><label>Response Template (English) *</label><textarea id="m-resp-en" placeholder="Hello! Welcome to BSU Lipa. How can I help you today?"></textarea></div>
         <div class="fi-section">
-          <div class="fi-head"><span class="ms">flag</span>Filipino Translation (Optional)<span class="fi-opt">optional</span></div>
+          <div class="fi-head"><span class="ms">flag</span>Filipino Translation</div>
           <div class="form-full fg"><label style="color:#065F46">Response Template (Filipino)</label><textarea id="m-resp-fi" placeholder="Kamusta! Maligayang pagdating sa BSU Lipa..." style="min-height:70px"></textarea></div>
         </div></div>
         <div class="modal-foot">
@@ -2770,14 +2788,19 @@
       if (loader) loader.style.display = 'none';
     }
 
+    // ── Intent Health Pagination State ─────────────────────────────────────────
+    let _ihAllData  = [];
+    let _ihPage     = 1;
+    const _ihPerPage = 8;
+
     function _buildIntentHealth(tbodyId) {
       const tbody = document.getElementById(tbodyId);
       if (!tbody) return;
-      // Attempt to fetch real intent health from API
       apiFetch('/intents/health').then(r => r.json()).then(data => {
         if (!Array.isArray(data) || !data.length) { _buildIntentHealthStatic(tbody); return; }
-        tbody.innerHTML = '';
-        data.forEach(i => { _appendIntentRow(tbody, i); });
+        _ihAllData = data;
+        _ihPage = 1;
+        _renderIhPage();
       }).catch(() => _buildIntentHealthStatic(tbody));
     }
 
@@ -2791,9 +2814,112 @@
         { name:'org_info', triggers:12, conf:55, fallback:61, status:'highfallback' },
         { name:'library_hours', triggers:0, conf:0, fallback:100, status:'dead' },
       ];
-      tbody.innerHTML = '';
-      INTENTS_DEMO.forEach(i => _appendIntentRow(tbody, i));
+      _ihAllData = INTENTS_DEMO;
+      _ihPage = 1;
+      _renderIhPage();
     }
+
+    function _renderIhPage() {
+      const tbody   = document.getElementById('ih-body');
+      if (!tbody) return;
+      const total   = _ihAllData.length;
+      const pages   = Math.max(1, Math.ceil(total / _ihPerPage));
+      _ihPage       = Math.min(_ihPage, pages);
+      const start   = (_ihPage - 1) * _ihPerPage;
+      const slice   = _ihAllData.slice(start, start + _ihPerPage);
+      tbody.innerHTML = '';
+      slice.forEach(i => _appendIntentRow(tbody, i));
+
+      const prevBtn  = document.getElementById('ih-prev');
+      const nextBtn  = document.getElementById('ih-next');
+      const pageInfo = document.getElementById('ih-page-info');
+      const pageBtns = document.getElementById('ih-page-btns');
+      if (prevBtn)  prevBtn.disabled  = _ihPage <= 1;
+      if (nextBtn)  nextBtn.disabled  = _ihPage >= pages;
+      if (pageInfo) pageInfo.textContent = total > 0
+        ? `Showing ${start + 1}\u2013${Math.min(start + _ihPerPage, total)} of ${total} intents`
+        : 'No data';
+      if (pageBtns) {
+        pageBtns.innerHTML = '';
+        const maxB = 5, pg = _ihPage;
+        let s = Math.max(1, pg - 2), e = Math.min(pages, s + maxB - 1);
+        if (e - s < maxB - 1) s = Math.max(1, e - maxB + 1);
+        for (let p = s; p <= e; p++) {
+          const b = document.createElement('button');
+          b.textContent = p;
+          b.style.cssText = `padding:4px 10px;font-size:0.78rem;border:1px solid ${p===pg?'#c93030':'#E5E7EB'};border-radius:6px;background:${p===pg?'#c93030':'#F9FAFB'};color:${p===pg?'#fff':'#374151'};cursor:pointer;font-weight:${p===pg?700:400};`;
+          const pn = p;
+          b.onclick = () => { _ihPage = pn; _renderIhPage(); };
+          pageBtns.appendChild(b);
+        }
+      }
+      const pg = document.getElementById('ih-pagination');
+      if (pg) pg.style.display = total > _ihPerPage ? 'flex' : 'none';
+    }
+    window.ihPrevPage = () => { if (_ihPage > 1) { _ihPage--; _renderIhPage(); } };
+    window.ihNextPage = () => { _ihPage++; _renderIhPage(); };
+
+    // ── Navigation Searches Pagination State ─────────────────────────────────
+    let _navAllRows = [];
+    let _navPage    = 1;
+    const _navPerPage = 10;
+
+    function _setNavRows(rows) {
+      _navAllRows = rows;
+      _navPage    = 1;
+      _renderNavPage();
+    }
+
+    function _renderNavPage() {
+      const tbody  = document.getElementById('recentNavBody');
+      if (!tbody) return;
+      const total  = _navAllRows.length;
+      const pages  = Math.max(1, Math.ceil(total / _navPerPage));
+      _navPage     = Math.min(_navPage, pages);
+      const start  = (_navPage - 1) * _navPerPage;
+      const slice  = _navAllRows.slice(start, start + _navPerPage);
+      if (slice.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:2rem;">No navigation search data yet.</td></tr>';
+      } else {
+        tbody.innerHTML = slice.map(s => {
+          const dt = s.searched_at ? new Date(s.searched_at).toLocaleString('en-PH',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '\u2014';
+          return `<tr>
+            <td><strong>${escapeHtml(s.name || s.location_name || '\u2014')}</strong></td>
+            <td>${ICON_MAP[s.type] || '\u{1F4CC}'} ${s.type || '\u2014'}</td>
+            <td>${s.floor != null ? 'Floor ' + s.floor : '\u2014'}</td>
+            <td>${escapeHtml(s.building || '\u2014')}</td>
+            <td style="color:#64748b;font-size:0.82rem;">${dt}</td>
+          </tr>`;
+        }).join('');
+      }
+      const prevBtn  = document.getElementById('nav-prev');
+      const nextBtn  = document.getElementById('nav-next');
+      const pageInfo = document.getElementById('nav-page-info');
+      const pageBtns = document.getElementById('nav-page-btns');
+      if (prevBtn)  prevBtn.disabled  = _navPage <= 1;
+      if (nextBtn)  nextBtn.disabled  = _navPage >= pages;
+      if (pageInfo) pageInfo.textContent = total > 0
+        ? `Showing ${start + 1}\u2013${Math.min(start + _navPerPage, total)} of ${total} searches`
+        : 'No searches yet';
+      if (pageBtns) {
+        pageBtns.innerHTML = '';
+        const maxB = 5, pg = _navPage;
+        let s2 = Math.max(1, pg - 2), e2 = Math.min(pages, s2 + maxB - 1);
+        if (e2 - s2 < maxB - 1) s2 = Math.max(1, e2 - maxB + 1);
+        for (let p = s2; p <= e2; p++) {
+          const b = document.createElement('button');
+          b.textContent = p;
+          b.style.cssText = `padding:4px 10px;font-size:0.78rem;border:1px solid ${p===pg?'#c93030':'#E5E7EB'};border-radius:6px;background:${p===pg?'#c93030':'#F9FAFB'};color:${p===pg?'#fff':'#374151'};cursor:pointer;font-weight:${p===pg?700:400};`;
+          const pn = p;
+          b.onclick = () => { _navPage = pn; _renderNavPage(); };
+          pageBtns.appendChild(b);
+        }
+      }
+      const pgDiv = document.getElementById('nav-pagination');
+      if (pgDiv) pgDiv.style.display = total > _navPerPage ? 'flex' : 'none';
+    }
+    window.navPrevPage = () => { if (_navPage > 1) { _navPage--; _renderNavPage(); } };
+    window.navNextPage = () => { _navPage++; _renderNavPage(); };
 
     function _appendIntentRow(tbody, i) {
       const STATUS_MAP = {
@@ -2807,9 +2933,9 @@
       const confColor= i.conf >= 80 ? '#10B981' : i.conf >= 60 ? '#F59E0B' : '#EF4444';
       const confBar  = i.conf   || 0;
       const fbBar    = Math.min(i.fallback || 0, 100);
-      const intentLabel = (i.name || '—')
+      const intentLabel = (i.name || '\u2014')
         .replace(/_/g,' ')
-        .replace(/\w/g, c => c.toUpperCase());
+        .replace(/\b\w/g, c => c.toUpperCase());
 
       const row = document.createElement('tr');
       row.innerHTML = `

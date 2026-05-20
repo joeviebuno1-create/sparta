@@ -822,56 +822,66 @@ async function loadNavigationStatistics() {
             typeDiv.innerHTML = '<p style="color:#94a3b8;font-size:0.85rem;">No type data yet.</p>';
         }
 
-        // Recent nav searches table
-        const tbody = document.getElementById('recentNavBody');
+        // Recent nav searches table — feed into paginator
         if (navData.recent_searches && navData.recent_searches.length) {
-            tbody.innerHTML = navData.recent_searches.map(s => {
-                const dt = s.searched_at ? new Date(s.searched_at).toLocaleString('en-PH', {
-                    month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '—';
-                return `<tr>
-                    <td><strong>${escapeHtml(s.name || s.location_name || '—')}</strong></td>
-                    <td>${ICON_MAP[s.type] || '📌'} ${s.type || '—'}</td>
-                    <td>${s.floor != null ? 'Floor ' + s.floor : '—'}</td>
-                    <td>${escapeHtml(s.building || '—')}</td>
-                    <td style="color:#64748b;font-size:0.82rem;">${dt}</td>
-                </tr>`;
-            }).join('');
+            // Real search log data: map to standard shape and hand to paginator
+            const rows = navData.recent_searches.map(s => ({
+                name:        s.name || s.location_name || '',
+                type:        s.type || '',
+                floor:       s.floor,
+                building:    s.building || '',
+                searched_at: s.searched_at || null
+            }));
+            if (typeof _setNavRows === 'function') {
+                _setNavRows(rows);
+            } else {
+                const tbody = document.getElementById('recentNavBody');
+                if (tbody) tbody.innerHTML = rows.map(s => {
+                    const dt = s.searched_at ? new Date(s.searched_at).toLocaleString('en-PH',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '\u2014';
+                    return `<tr><td><strong>${escapeHtml(s.name||'\u2014')}</strong></td><td>${ICON_MAP[s.type]||'\uD83D\uDCCC'} ${s.type||'\u2014'}</td><td>${s.floor!=null?'Floor '+s.floor:'\u2014'}</td><td>${escapeHtml(s.building||'\u2014')}</td><td style="color:#64748b;font-size:0.82rem;">${dt}</td></tr>`;
+                }).join('');
+            }
         } else {
-            // Fallback: show all locations as inventory
+            // Fallback: show all locations as inventory with pagination
             const locResp2 = await apiFetch('/locations');
             if (locResp2 && locResp2.ok) {
                 const locs2 = await locResp2.json();
-                document.getElementById('navStatTotalSearches').textContent = locs2.length;
+                document.getElementById('navStatTotalSearches').textContent  = locs2.length;
                 document.getElementById('navStatUniqueLocations').textContent = [...new Set(locs2.map(l => l.name))].length;
-                document.getElementById('navStatTopLocation').textContent = locs2[0]?.name ?? '—';
-                document.getElementById('navStatTodaySearches').textContent = '—';
-                tbody.innerHTML = locs2.slice(0, 20).map(s => `<tr>
-                    <td><strong>${escapeHtml(s.name)}</strong></td>
-                    <td>${ICON_MAP[s.type] || '📌'} ${s.type || '—'}</td>
-                    <td>${s.floor != null ? 'Floor ' + s.floor : '—'}</td>
-                    <td>${escapeHtml(s.building || '—')}</td>
-                    <td style="color:#64748b;font-size:0.82rem;">—</td>
-                </tr>`).join('');
+                document.getElementById('navStatTopLocation').textContent    = locs2[0]?.name ?? '\u2014';
+                document.getElementById('navStatTodaySearches').textContent  = '\u2014';
+
+                // Feed location inventory into nav paginator with no timestamp
+                const invRows = locs2.map(s => ({
+                    name:        s.name || '',
+                    type:        s.type || '',
+                    floor:       s.floor,
+                    building:    s.building || '',
+                    searched_at: null
+                }));
+                if (typeof _setNavRows === 'function') {
+                    _setNavRows(invRows);
+                }
 
                 // Build type breakdown from locations list
                 const typeCounts = {};
                 locs2.forEach(l => { typeCounts[l.type] = (typeCounts[l.type] || 0) + 1; });
                 const typeArr = Object.entries(typeCounts).map(([type, count]) => ({ type, count }))
                     .sort((a, b) => b.count - a.count);
-                const maxT2 = Math.max(...typeArr.map(t => t.count));
+                const maxT2 = Math.max(...typeArr.map(t => t.count), 1);
                 const typeColors2 = {
-                    classroom: '#3b82f6', laboratory: '#10b981', office: '#f59e0b',
-                    library: '#8b5cf6', cafeteria: '#ef4444', auditorium: '#ec4899',
-                    gym: '#14b8a6', restroom: '#64748b', parking: '#6366f1',
-                    entrance: '#c41e3a', evacuation: '#dc2626', other: '#94a3b8'
+                    classroom:'#3b82f6', laboratory:'#10b981', office:'#f59e0b',
+                    library:'#8b5cf6',  cafeteria:'#ef4444',  auditorium:'#ec4899',
+                    gym:'#14b8a6',      restroom:'#64748b',   parking:'#6366f1',
+                    entrance:'#c41e3a', evacuation:'#dc2626', other:'#94a3b8'
                 };
                 document.getElementById('navTypeChart').innerHTML = typeArr.map(item => {
-                    const pct = maxT2 > 0 ? (item.count / maxT2 * 100).toFixed(0) : 0;
+                    const pct = (item.count / maxT2 * 100).toFixed(0);
                     const color = typeColors2[item.type] || '#94a3b8';
-                    const icon = ICON_MAP[item.type] || '📌';
+                    const icon  = ICON_MAP[item.type] || '\uD83D\uDCCC';
                     return `<div style="margin-bottom:10px;">
                         <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:rgba(255,255,255,0.85);margin-bottom:3px;">
-                            <span>${icon} ${item.type.charAt(0).toUpperCase() + item.type.slice(1)}</span><span><strong style="color:#F4D03F;">${item.count}</strong></span>
+                            <span>${icon} ${item.type.charAt(0).toUpperCase()+item.type.slice(1)}</span><span><strong style="color:#F4D03F;">${item.count}</strong></span>
                         </div>
                         <div style="background:rgba(255,255,255,0.08);border-radius:99px;height:10px;overflow:hidden;">
                             <div style="height:100%;width:${pct}%;background:${color};border-radius:99px;transition:width 0.6s ease;"></div>
@@ -884,12 +894,12 @@ async function loadNavigationStatistics() {
                 locs2.forEach(l => { nameCounts[l.name] = (nameCounts[l.name] || 0) + 1; });
                 const topLocs = Object.entries(nameCounts).map(([name, count]) => ({ name, count }))
                     .sort((a, b) => b.count - a.count).slice(0, 8);
-                const maxL2 = Math.max(...topLocs.map(l => l.count));
+                const maxL2 = Math.max(...topLocs.map(l => l.count), 1);
                 document.getElementById('navLocationChart').innerHTML = topLocs.map(item => {
-                    const pct = maxL2 > 0 ? (item.count / maxL2 * 100).toFixed(0) : 0;
+                    const pct = (item.count / maxL2 * 100).toFixed(0);
                     return `<div style="margin-bottom:10px;">
                         <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:rgba(255,255,255,0.85);margin-bottom:3px;">
-                            <span>📍 ${escapeHtml(item.name)}</span><span><strong style="color:#F4D03F;">${item.count}</strong></span>
+                            <span>\uD83D\uDCCD ${escapeHtml(item.name)}</span><span><strong style="color:#F4D03F;">${item.count}</strong></span>
                         </div>
                         <div style="background:rgba(255,255,255,0.08);border-radius:99px;height:10px;overflow:hidden;">
                             <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#c93030,#F4D03F);border-radius:99px;transition:width 0.6s ease;"></div>
@@ -897,7 +907,7 @@ async function loadNavigationStatistics() {
                     </div>`;
                 }).join('');
             } else {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:2rem;">No navigation search data yet.</td></tr>';
+                if (typeof _setNavRows === 'function') _setNavRows([]);
             }
         }
     } catch (err) {
@@ -3250,12 +3260,12 @@ async function deletePopupAnn(id) {
 
 async function archivePopupAnn(id) {
     try {
-        const response = await apiFetch(`/announcement-popups/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify({ is_archived: true, is_active: false })
+        const response = await apiFetch(`/announcement-popups/${id}/archive`, {
+            method: 'PATCH'
         });
         if (!response || !response.ok) throw new Error('Archive failed');
         loadPopupAnnouncements();
+        showAlert('popupAlert', '✅ Popup archived successfully.', 'success');
     } catch (error) { showAlert('popupAlert', '❌ Error archiving popup', 'error'); }
 }
 

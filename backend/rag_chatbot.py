@@ -372,41 +372,120 @@ class EnhancedDatabaseRAG:
             r'\bplease\b': '',
             r'\bpls\b': '',
             r'\bplez\b': '',
+            r'\bplz\b': '',
             r'\bi want to know\b': 'what is',
             r'\bi would like to know\b': 'what is',
             r'\bdo you know\b': 'what is',
-            # Common typos for where
+            # Where typos
             r'\bwhere iz\b': 'where is',
             r'\bwhere are the\b': 'where is the',
             r'\bwer is\b': 'where is',
             r'\bwhere da\b': 'where is',
-            # Common typos for library
+            r'\bwhr is\b': 'where is',
+            r'\bwere is\b': 'where is',
+            # Who / what typos
+            r'\bwhoa is\b': 'who is',
+            r'\bwhos is\b': 'who is',
+            r'\bwat is\b': 'what is',
+            r'\bwhats is\b': 'what is',
+            # Library
             r'\blibary\b': 'library',
-            r'\blibrary\b': 'library',
             r'\blibrery\b': 'library',
             r'\blibrey\b': 'library',
             r'\blibray\b': 'library',
             r'\blibrry\b': 'library',
-            # Common typos for organization
+            r'\blibery\b': 'library',
+            # Lab / laboratory
+            r'\blabratory\b': 'laboratory',
+            r'\blabrotary\b': 'laboratory',
+            r'\blabortory\b': 'laboratory',
+            r'\blaborotory\b': 'laboratory',
+            # Canteen / cafeteria
+            r'\bkantine\b': 'canteen',
+            r'\bcantene\b': 'canteen',
+            r'\bcantien\b': 'canteen',
+            r'\bcafetria\b': 'cafeteria',
+            r'\bcafetaria\b': 'cafeteria',
+            # Building
+            r'\bbulding\b': 'building',
+            r'\bbldng\b': 'building',
+            r'\bbldg\b': 'building',
+            r'\bbuilidng\b': 'building',
+            r'\bbiulding\b': 'building',
+            r'\bbuliding\b': 'building',
+            # Office
+            r'\bofice\b': 'office',
+            r'\boffce\b': 'office',
+            r'\boffise\b': 'office',
+            r'\bofis\b': 'office',
+            # Speech
+            r'\bspceh\b': 'speech',
+            r'\bsepeach\b': 'speech',
+            r'\bspeach\b': 'speech',
+            r'\bspeecht\b': 'speech',
+            r'\bsppech\b': 'speech',
+            # Organization
             r'\borganizaton\b': 'organization',
             r'\borganisation\b': 'organization',
             r'\borganzation\b': 'organization',
+            r'\borginization\b': 'organization',
             r'\borg\b': 'organization',
-            # Common typos for announcement
+            # Announcement
             r'\banouncement\b': 'announcement',
             r'\bannoucement\b': 'announcement',
-            # Space handling — collapse multiple spaces
+            r'\bannounmcement\b': 'announcement',
+            # Chancellor / dean / president
+            r'\bchanclor\b': 'chancellor',
+            r'\bchancelor\b': 'chancellor',
+            r'\bchncellor\b': 'chancellor',
+            r'\bcancellor\b': 'chancellor',
+            r'\bchacellor\b': 'chancellor',
+            r'\bpresiednt\b': 'president',
+            r'\bprsident\b': 'president',
+            r'\bpresedent\b': 'president',
+            r'\bpresidnet\b': 'president',
+            r'\bdena\b': 'dean',
+            r'\bdeam\b': 'dean',
+            # University / campus
+            r'\buniverstiy\b': 'university',
+            r'\buniveristy\b': 'university',
+            r'\buniversiy\b': 'university',
+            r'\buniersity\b': 'university',
+            r'\bunivesity\b': 'university',
+            r'\bcampous\b': 'campus',
+            r'\bcamups\b': 'campus',
+            # History
+            r'\bhistroy\b': 'history',
+            r'\bhisory\b': 'history',
+            r'\bhsitory\b': 'history',
+            r'\bhisotry\b': 'history',
+            # Professor / faculty
+            r'\bproffessor\b': 'professor',
+            r'\bprofesser\b': 'professor',
+            r'\bproffesor\b': 'professor',
+            r'\bfaculy\b': 'faculty',
+            r'\bfacuty\b': 'faculty',
+            # Classroom / registrar
+            r'\bclasroom\b': 'classroom',
+            r'\bclassroon\b': 'classroom',
+            r'\bclasrm\b': 'classroom',
+            r'\bregistar\b': 'registrar',
+            r'\bregsitrar\b': 'registrar',
+            # Space normalisation
             r'\s+': ' ',
             # Tagalog / Filipino
             r'\bsino ang\b': 'who is',
             r'\bsino na ang\b': 'who is',
             r'\bsino si\b': 'who is',
             r'\bsaan ang\b': 'where is',
+            r'\bsaan yung\b': 'where is',
+            r'\bsaan po\b': 'where is',
+            r'\bsaan nandoon\b': 'where is',
+            r'\bsaan naroon\b': 'where is',
             r'\bano ang\b': 'what is',
             r'\bipaalam\b': 'tell me about',
             r'\bkung sino\b': 'who is',
             r'\bkung saan\b': 'where is',
-            # History-specific Tagalog
             r'\bkasaysayan\b': 'history',
             r'\bnaitatag\b': 'founded',
             r'\bitinatag\b': 'founded',
@@ -418,11 +497,9 @@ class EnhancedDatabaseRAG:
             r'\bmajor milestones\b': 'milestones',
             r'\bkailan\b': 'when',
             r'\bng bsu\b': 'of bsu',
-            # Honorific normalizations
             r"\bma'am\b": 'maam',
             r'\bma am\b': 'maam',
         }
-
     def warm_up_cache(self, db: Session) -> None:
         """
         Lazy embedding — embeddings are computed on first query, not at startup.
@@ -449,6 +526,22 @@ class EnhancedDatabaseRAG:
     def normalize_query(self, query: str) -> str:
         query = query.strip()
         query_lower = query.lower()
+
+        # ── Collapse 3+ repeated characters first ────────────────────────────
+        # "speeech lab" → "speech lab", "whhhere" → "where"
+        query_lower = re.sub(r'([a-z])\1{2,}', lambda m: m.group(1) * 2, query_lower)
+        # Second pass: collapse remaining doubled letters for known problem words
+        _DOUBLE_TO_SINGLE = {
+            'spee': 'spe', 'speeh': 'speech', 'spech': 'speech',
+            'wheer': 'where', 'heere': 'here',
+            'laab': 'lab', 'haall': 'hall', 'rooom': 'room',
+            'flooor': 'floor', 'offis': 'office',
+        }
+        for bad, good in _DOUBLE_TO_SINGLE.items():
+            if bad in query_lower:
+                query_lower = query_lower.replace(bad, good)
+
+        # ── Apply normalization patterns ──────────────────────────────────────
         for pattern, replacement in self.query_normalizations.items():
             query_lower = re.sub(pattern, replacement, query_lower)
         query_lower = ' '.join(query_lower.split())
@@ -1580,7 +1673,34 @@ class EnhancedDatabaseRAG:
         if entities.get('locations'):
             for loc in entities['locations']:
                 if hasattr(doc, 'name'):
-                    max_score = max(max_score, self.fuzzy_match_score(loc, doc.name))
+                    # Full-string fuzzy
+                    full_score = self.fuzzy_match_score(loc, doc.name)
+                    max_score  = max(max_score, full_score)
+
+                    # Word-level fuzzy: each query word vs each doc-name word
+                    # Handles "speeech lab" → normalized to "speech lab" before
+                    # entity extraction, but add a safety net here too.
+                    loc_words  = loc.lower().split()
+                    doc_words  = doc.name.lower().split()
+                    if loc_words and doc_words:
+                        word_scores = []
+                        for lw in loc_words:
+                            best_ww = max(
+                                self.fuzzy_match_score(lw, dw)
+                                for dw in doc_words
+                            )
+                            word_scores.append(best_ww)
+                        avg_word = sum(word_scores) / len(word_scores)
+                        # Weight: all words matched well → high confidence
+                        if avg_word > 0.75:
+                            max_score = max(max_score, avg_word * 0.92)
+
+                    # Substring after collapsing repeated chars in query word
+                    loc_collapsed = re.sub(r'([a-z])\1+', r'\1', loc.lower())
+                    if loc_collapsed != loc.lower():
+                        coll_score = self.fuzzy_match_score(loc_collapsed, doc.name.lower())
+                        max_score  = max(max_score, coll_score * 0.88)
+
                 if hasattr(doc, 'building'):
                     max_score = max(max_score, self.fuzzy_match_score(loc, doc.building))
 
@@ -1825,8 +1945,10 @@ class EnhancedDatabaseRAG:
             # If multiple orgs returned — always show as list
             if len(context) > 1:
                 return self.format_list_response(context, original_query, 'organization_query', lang)
-            # Single org — show detailed response
-            return self.format_organization_response(doc, original_query, score, False, context, lang)
+            # Single org — show detailed response; pass role_filter if set
+            _org_role = entities.get('_org_role_filter') if entities else None
+            return self.format_organization_response(doc, original_query, score, False, context, lang,
+                                                     role_filter=_org_role)
         else:
             return self._format_general_response(doc, original_query, score, lang)
 
@@ -2049,18 +2171,34 @@ class EnhancedDatabaseRAG:
 
     def format_organization_response(self, doc: Any, query: str, score: float,
                                       is_list: bool,
-                                      context: List[Tuple[Any, float]], lang: str = 'en') -> str:
+                                      context: List[Tuple[Any, float]], lang: str = 'en',
+                                      role_filter: str = None) -> str:
         if is_list and len(context) > 1:
             return self.format_list_response(context, query, 'organization_query', lang)
 
         # Single org response
         org_name = doc.name if hasattr(doc, 'name') else 'Organization'
-        members = doc.members if hasattr(doc, 'members') else []
+        members  = sorted(
+            doc.members if hasattr(doc, 'members') and doc.members else [],
+            key=lambda x: x.sort_order if x.sort_order is not None else 99
+        )
         description = doc.description if hasattr(doc, 'description') and doc.description else None
 
         # Generate acronym from org name
-        words = org_name.split()
+        words   = org_name.split()
         acronym = ''.join(w[0].upper() for w in words if w)
+
+        # Role-filter: find the matching officer
+        _role_match = None
+        if role_filter:
+            _rf = role_filter.lower().replace('-', ' ')
+            _matches = [m for m in members if _rf in (m.position or '').lower()]
+            if _matches:
+                _role_match = _matches[0]
+
+        def _member_line(m, highlight=False):
+            star = ' ⭐' if highlight else ''
+            return f"- **{m.name}** — {m.position}{star}\n"
 
         if lang == 'tl':
             r = f"🎓 **{org_name}**"
@@ -2069,13 +2207,20 @@ class EnhancedDatabaseRAG:
             r += "\n\n"
             if description:
                 r += f"{description}\n\n"
-            if members:
-                r += f"**Mga Miyembro ({len(members)}):**\n"
+            if role_filter and _role_match:
+                _rt = role_filter.title()
+                r += f"Ang **{_rt}** ng **{org_name}** ay si **{_role_match.name}**.\n\n"
+                if members:
+                    r += f"**Mga Opisyal ({len(members)}):**\n"
+                    for m in members:
+                        r += _member_line(m, highlight=(m.id == _role_match.id))
+            elif members:
+                r += f"**Mga Opisyal ({len(members)}):**\n"
                 for m in members:
-                    r += f"• **{m.name}** — {m.position}\n"
-                r += "\nGusto mo bang magtanong tungkol sa ibang organisasyon?"
+                    r += _member_line(m)
             else:
                 r += "Wala pang mga miyembro na nakalista para sa organisasyong ito."
+            r += "\n\n💬 Magtanong tungkol sa ibang organisasyon o papel!"
             return r.strip()
 
         # English response
@@ -2087,15 +2232,22 @@ class EnhancedDatabaseRAG:
         if description:
             response += f"{description}\n\n"
 
-        if members:
-            response += f"**Members ({len(members)}):**\n"
-            for member in members:
-                response += f"• **{member.name}** — {member.position}\n"
-            response += "\nWould you like to know about another organization? Just ask!"
+        if role_filter and _role_match:
+            _rt = role_filter.title()
+            response += (f"The **{_rt}** of **{org_name}** is **{_role_match.name}**.\n\n")
+            if members:
+                response += f"**Officers ({len(members)}):**\n"
+                for m in members:
+                    response += _member_line(m, highlight=(m.id == _role_match.id))
+        elif members:
+            response += f"**Officers ({len(members)}):**\n"
+            for m in members:
+                response += _member_line(m)
         else:
-            response += "No members have been listed for this organization yet.\n\n"
+            response += "No officers have been listed for this organization yet.\n\n"
             response += "Try asking *'List all organizations'* to see other groups!"
 
+        response += "\n\n💬 Ask about other organizations or roles!"
         return response.strip()
 
     def _format_general_response(self, doc: Any, query: str, score: float, lang: str = 'en') -> str:
@@ -2108,40 +2260,10 @@ class EnhancedDatabaseRAG:
         return "I found some information but couldn't format it. Could you be more specific?"
 
     def generate_fallback_response(self, intent: str, query: str, lang: str = 'en') -> str:
-        # Check if this was an "all officials" list query that failed
-        _ql = query.lower() if query else ''
-        _all_triggers = ['all official', 'all university official', 'all authorit',
-                         'all faculty', 'all staff', 'who are all', 'all personnel']
-        _is_list_fail = intent == 'authority_query' and any(t in _ql for t in _all_triggers)
-
-        if _is_list_fail:
-            if lang == 'tl':
-                return "Paumanhin, wala akong impormasyon tungkol sa mga opisyal sa aking database."
-            return "Sorry, I don't have that information in my database."
-
+        """Return a clean, uniform fallback — no long explanatory text."""
         if lang == 'tl':
-            tl_fb = {
-                'authority_query':    "Paumanhin, wala akong impormasyon tungkol sa taong iyon o posisyong iyan sa aking database.",
-                'location_query':     "Paumanhin, wala akong impormasyon tungkol sa lokasyong iyan sa aking database.",
-                'history_query':      "Paumanhin, wala akong impormasyon tungkol sa kasaysayang iyan sa aking database.",
-                'announcement_query': "Paumanhin, wala akong impormasyon tungkol sa anunsyong iyan sa aking database.",
-                'organization_query': "Paumanhin, wala akong impormasyon tungkol sa organisasyong iyan sa aking database.",
-                'navigation_query':   "Paumanhin, wala akong impormasyon tungkol diyan sa aking database.",
-                'general_info':       "Paumanhin, wala akong impormasyon tungkol diyan sa aking database.",
-            }
-            return tl_fb.get(intent, "Paumanhin, wala akong impormasyon tungkol diyan sa aking database.")
-
-        _no_info = "Sorry, I don't have that information in my database."
-        fallbacks = {
-            'authority_query':    _no_info,
-            'location_query':     _no_info,
-            'history_query':      _no_info,
-            'announcement_query': _no_info,
-            'organization_query': _no_info,
-            'navigation_query':   _no_info,
-            'general_info':       _no_info,
-        }
-        return fallbacks.get(intent, _no_info)
+            return "Paumanhin, wala akong impormasyon tungkol diyan sa aking database."
+        return "Sorry, I don't have that information in my database."
 
     def check_custom_response(self, query: str, db: Session,
                                lang: str = 'en') -> Optional[str]:
@@ -2468,9 +2590,9 @@ class EnhancedDatabaseRAG:
                     else:
                         # Person not found — return clean fallback immediately
                         _fb = (
-                            f"Paumanhin, wala akong impormasyon tungkol kay **{_raw_name.title()}** sa aking database."
+                            "Paumanhin, wala akong impormasyon tungkol diyan sa aking database."
                             if lang == 'tl' else
-                            f"Sorry, I don't have information about **{_raw_name.title()}** in my database."
+                            "Sorry, I don't have that information in my database."
                         )
                         return {
                             'response': _fb,
@@ -2536,6 +2658,47 @@ class EnhancedDatabaseRAG:
                     'entities_found': {}
                 }
 
+
+            # Step 0.5: Greeting detection
+            # Catches "hello", "hi", "hi SPARTA", "good morning", etc.
+            # Returns a friendly intro without hitting the retrieval pipeline.
+            _GREETING_RE = re.compile(
+                r'^(hello|hi|hey|good\s+morning|good\s+afternoon|good\s+evening|'
+                r'kumusta|kamusta|magandang\s+\w+|musta|sup|howdy|greetings|yo)'
+                r'(\s+(there|po|sparta|bot|chatbot))?[!\s]*$',
+                re.IGNORECASE
+            )
+            _q_greet = original_query.strip()
+            if _GREETING_RE.match(_q_greet):
+                _glang = forced_lang or detect_language(_q_greet) or 'en'
+                if _glang == 'tl':
+                    _greet_resp = (
+                        "Kumusta! Ako si **SPARTA**, ang iyong BSU Lipa campus assistant! 😊\n\n"
+                        "Maaari kitang tulungan sa:\n"
+                        "**👥 Mga Tao** — Mga itinalagang opisyal\n"
+                        "**📍 Mga Lokasyon** — Mga gusali at silid\n"
+                        "**🏛️ Kasaysayan** — BSU Lipa na nakaraan\n"
+                        "**🎓 Mga Organisasyon** — Mga estudyanteng organisasyon\n\n"
+                        "Ano ang gusto mong malaman tungkol sa kampus?"
+                    )
+                else:
+                    _greet_resp = (
+                        "Hello! I'm **SPARTA**, your BSU Lipa campus assistant! 😊\n\n"
+                        "I can help you with:\n"
+                        "**👥 People** — Designated officials & faculty\n"
+                        "**📍 Locations** — Buildings, rooms & facilities\n"
+                        "**🏛️ History** — BSU Lipa background\n"
+                        "**🎓 Organizations** — Student organizations\n\n"
+                        "What would you like to know about the campus?"
+                    )
+                return {
+                    'response': _greet_resp,
+                    'confidence': 1.0,
+                    'intent': 'general_info',
+                    'suggestions': [],
+                    'context_used': 0,
+                    'entities_found': {}
+                }
 
             # Step 0.6: College-number / college-name follow-up handler
             # When user replies "1"..."5" or a college name/code after the dean
@@ -2671,12 +2834,99 @@ class EnhancedDatabaseRAG:
                     'room', 'floor', 'saan', 'kailan', 'kasaysayan',
                     'milestone', 'milestones', 'achievement', 'achievements',
                     'tell me', 'about the', 'what is', 'what are',
+                    # Location-type words — prevent "speech lab", "gym", "canteen" etc.
+                    # from being treated as person name queries
+                    'lab', 'laboratory', 'library', 'canteen', 'cafeteria',
+                    'clinic', 'gym', 'gymnasium', 'chapel', 'auditorium',
+                    'restroom', 'comfort room', 'cr ', 'parking', 'entrance',
+                    'office', 'center', 'centre', 'hall', 'annex', 'area',
+                    'court', 'field', 'pool', 'garden', 'plaza',
                 ])
             )
             if _only_honorific_and_names and intent != 'authority_query':
                 print(f"[intent_override] bare-name query '{original_query}' -> authority_query")
                 intent = 'authority_query'
                 intent_confidence = 0.70
+
+            # Step 2.2.5: Bare location-name override
+            # Catches short queries like "speech lab", "room 502", "gym", "canteen"
+            # that contain location-type keywords or match a DB location name closely.
+            # Must run AFTER bare-name authority override so it can correct mis-routes.
+            _LOCATION_TYPE_WORDS = {
+                'lab', 'laboratory', 'library', 'canteen', 'cafeteria', 'clinic',
+                'gym', 'gymnasium', 'chapel', 'auditorium', 'restroom', 'comfort room',
+                'parking', 'entrance', 'gate', 'office', 'hall', 'annex', 'room',
+                'building', 'court', 'field', 'pool', 'plaza', 'center', 'centre',
+                'floor', 'corridor', 'area', 'lobby', 'stage', 'function room',
+            }
+            _ql_loc = original_query.strip().lower()
+            # Strip common question prefixes to get the bare location phrase
+            _loc_stripped = re.sub(
+                r'^(where is|where are|find|look for|locate|location of|'
+                r'saan ang|saan yung|saan po|show me|take me to|'
+                r'what floor is|what building is|how to get to)\s+',
+                '', _ql_loc
+            ).strip()
+            _loc_stripped = re.sub(r'^(the|ang|yung|si|ng)\s+', '', _loc_stripped).strip()
+
+            _has_location_type = any(lw in _ql_loc for lw in _LOCATION_TYPE_WORDS)
+            _has_room_number   = bool(re.search(r'\b(room|rm\.?|r\.?m\.?)\s*\d+\b', _ql_loc))
+
+            if (intent in ('authority_query', 'general_info') and
+                    len(_loc_stripped) >= 2 and
+                    (_has_location_type or _has_room_number)):
+                try:
+                    _all_locs = db.query(models.RoomLocation).all()
+                    _best_loc_score = 0.0
+                    _best_loc       = None
+                    for _loc in _all_locs:
+                        _lname = (_loc.name or '').lower()
+                        # Exact match
+                        if _loc_stripped == _lname:
+                            _best_loc_score = 5.0; _best_loc = _loc; break
+                        # Stripped query is substring of loc name
+                        if len(_loc_stripped) >= 3 and _loc_stripped in _lname:
+                            s = 3.5
+                            if s > _best_loc_score: _best_loc_score = s; _best_loc = _loc
+                        # Loc name is substring of stripped query
+                        if len(_lname) >= 4 and _lname in _loc_stripped:
+                            s = 3.0
+                            if s > _best_loc_score: _best_loc_score = s; _best_loc = _loc
+                        # Word overlap (3+ char words)
+                        _qws = set(w for w in _loc_stripped.split() if len(w) >= 3)
+                        _lws = set(w for w in _lname.split() if len(w) >= 3)
+                        _overlap = len(_qws & _lws)
+                        if _overlap >= 1:
+                            s = 1.5 + _overlap * 0.5
+                            if s > _best_loc_score: _best_loc_score = s; _best_loc = _loc
+                        # Word-level fuzzy ratio (handles typos like "speeech" → "speech")
+                        _qw_list = [w for w in _loc_stripped.split() if len(w) >= 3]
+                        _lw_list = [w for w in _lname.split() if len(w) >= 3]
+                        if _qw_list and _lw_list:
+                            _wscores = []
+                            for _qw in _qw_list:
+                                _best_wm = max(
+                                    SequenceMatcher(None, _qw, _lw).ratio()
+                                    for _lw in _lw_list
+                                )
+                                _wscores.append(_best_wm)
+                            _avg_ws = sum(_wscores) / len(_wscores)
+                            if _avg_ws >= 0.70:   # 70%+ average word similarity
+                                s = 1.0 + _avg_ws * 2.0
+                                if s > _best_loc_score: _best_loc_score = s; _best_loc = _loc
+                    if _best_loc_score >= 1.5 or (_has_location_type and _best_loc_score >= 1.0):
+                        print(f"[intent_override] bare-location '{original_query}' -> location_query "
+                              f"(score={_best_loc_score:.1f})")
+                        intent = 'location_query'
+                        intent_confidence = min(0.5 + _best_loc_score * 0.08, 0.90)
+                    elif _has_location_type and intent == 'authority_query':
+                        # Has a location-type word but no DB match — still route to location
+                        # so the user gets a location-style "not found" response
+                        print(f"[intent_override] location-type word '{original_query}' -> location_query (no match)")
+                        intent = 'location_query'
+                        intent_confidence = 0.55
+                except Exception as _le:
+                    print(f"[intent_override] location check failed: {_le}")
 
             # Step 2.3: Org acronym / name override
             # Catches queries like "who is SETS", "SETS", "tell me about SETS"
@@ -2689,6 +2939,52 @@ class EnhancedDatabaseRAG:
                 'administrator', 'supervisor', 'manager', 'chief'
             }
             _has_role_kw = any(rk in original_query.lower() for rk in _ROLE_KEYWORDS)
+
+            # Step 2.3.1: "role OF [org]" pattern override
+            # "who is the president of SETS" → org query with role filter
+            # Detects when a role keyword precedes "of [org name/acronym]"
+            _ORG_ROLE_ASKED = None   # will hold the role string if matched
+            _ql_lower2 = original_query.lower()
+            _org_role_match = re.search(
+                r'\b(president|vice[\s-]?president|secretary|treasurer|'
+                r'auditor|pio|officer|chairman|chairperson|moderator|'
+                r'p\.r\.o|pro)\b.*\bof\b\s+(.+?)(?:\s*\?.*)?$',
+                _ql_lower2
+            )
+            if _org_role_match and _has_role_kw:
+                _asked_role   = _org_role_match.group(1).strip()
+                _org_fragment = _org_role_match.group(2).strip()
+                # Remove trailing punctuation / filler
+                _org_fragment = re.sub(r'[?!.,;]+$', '', _org_fragment).strip()
+                _org_fragment = re.sub(r'\bthe\b|\bang\b|\bsi\b', '', _org_fragment).strip()
+                try:
+                    _all_orgs2 = db.query(models.Organization).all()
+                    _best2 = 0.0
+                    _best_org2 = None
+                    for _org2 in _all_orgs2:
+                        _on2 = (_org2.name or '').lower()
+                        _ow2 = _on2.split()
+                        _ac2 = ''.join(w[0] for w in _ow2 if w)
+                        if _org_fragment == _ac2:
+                            _best2 = 4.0; _best_org2 = _org2; break
+                        if _ac2 and len(_ac2) >= 2 and _ac2 in _org_fragment:
+                            if 4.0 > _best2: _best2 = 4.0; _best_org2 = _org2
+                        if len(_org_fragment) > 2 and _org_fragment in _on2:
+                            if 3.0 > _best2: _best2 = 3.0; _best_org2 = _org2
+                        for _ow in _ow2:
+                            if len(_ow) >= 4 and _ow in _org_fragment.split():
+                                if 2.5 > _best2: _best2 = 2.5; _best_org2 = _org2
+                    if _best2 >= 2.5 and _best_org2 is not None:
+                        print(f"[intent_override] role-of-org '{original_query}' -> organization_query "
+                              f"(role={_asked_role}, org={_best_org2.name})")
+                        intent = 'organization_query'
+                        intent_confidence = 0.92
+                        _ORG_ROLE_ASKED = _asked_role
+                        # Store in entities for use in format
+                        entities['_org_role_filter'] = _asked_role
+                        entities['_org_name_hint']   = _best_org2.name
+                except Exception as _ore:
+                    print(f"[intent_override] org-role check failed: {_ore}")
 
             if intent in ('authority_query', 'general_info', 'history_query') and not _has_role_kw:
                 try:
