@@ -480,6 +480,8 @@ app.add_middleware(
         "http://127.0.0.1:8000",
         "http://127.0.0.1:5500",
         "https://sparta-production-0acb.up.railway.app",
+        "https://sparta.help",
+        "https://www.sparta.help",
     ],
     allow_origin_regex=r"https://.*\.(vercel\.app|devtunnels\.ms|trycloudflare\.com|ngrok-free\.app|ngrok\.io)|http://192\.168\.\d+\.\d+:\d+",
     allow_credentials=True,
