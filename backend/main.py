@@ -83,18 +83,111 @@ from auth import verify_session, create_session, clear_session
 # ============================================
 
 class RateLimiter:
-    """Simple in-memory rate limiter per IP address."""
+    """
+    Enhanced in-memory rate limiter with:
+    - Per-IP sliding window limiting
+    - Session-based message flood detection
+    - Suspicious pattern detection (repeated identical messages)
+    - Automatic IP blocking for severe violators
+    - Periodic cleanup to prevent memory growth
+    """
     def __init__(self):
-        self.requests = defaultdict(list)
+        self.requests      = defaultdict(list)   # ip -> [timestamps]
+        self.blocked_until = {}                   # ip -> unblock_timestamp
+        self.violations    = defaultdict(int)     # ip -> violation count
+        self.last_cleanup  = time_module.time()
+        self.session_msgs  = defaultdict(list)    # session_id -> [timestamps]
+        self.session_hashes= defaultdict(list)    # session_id -> [msg_hashes]
+
+    def _cleanup(self):
+        """Remove stale data every 10 minutes to prevent memory growth."""
+        now = time_module.time()
+        if now - self.last_cleanup < 600:
+            return
+        cutoff = now - 3600
+        for ip in list(self.requests.keys()):
+            self.requests[ip] = [t for t in self.requests[ip] if t > cutoff]
+            if not self.requests[ip]:
+                del self.requests[ip]
+        self.blocked_until = {ip: t for ip, t in self.blocked_until.items() if t > now}
+        self.last_cleanup = now
+
+    def is_blocked(self, ip: str) -> bool:
+        unblock = self.blocked_until.get(ip, 0)
+        return time_module.time() < unblock
+
+    def block_ip(self, ip: str, duration_seconds: int = 900):
+        """Temporarily block an IP (default 15 minutes)."""
+        self.blocked_until[ip] = time_module.time() + duration_seconds
+        print(f"[security] Blocked IP {ip} for {duration_seconds}s")
 
     def is_allowed(self, ip: str, max_requests: int, window_seconds: int) -> bool:
+        self._cleanup()
         now = time_module.time()
-        # Remove old requests outside the window
+
+        # Hard block check
+        if self.is_blocked(ip):
+            return False
+
         self.requests[ip] = [t for t in self.requests[ip] if now - t < window_seconds]
         if len(self.requests[ip]) >= max_requests:
+            self.violations[ip] += 1
+            # Auto-block after 3 consecutive rate limit violations
+            if self.violations[ip] >= 3:
+                self.block_ip(ip, duration_seconds=900)  # 15 min block
             return False
+
         self.requests[ip].append(now)
+        # Reset violations on clean request
+        if self.violations.get(ip, 0) > 0:
+            self.violations[ip] = max(0, self.violations[ip] - 1)
         return True
+
+    def is_chat_allowed(self, ip: str, session_id: str, message: str) -> tuple:
+        """
+        Multi-layer chat spam check. Returns (allowed: bool, reason: str).
+        Checks:
+          1. IP hard block
+          2. Per-IP chat rate (15/min)
+          3. Per-session burst rate (5 in 3 seconds)
+          4. Repeated identical message spam (same message 5+ times)
+        """
+        now = time_module.time()
+        self._cleanup()
+
+        # 1. IP block check
+        if self.is_blocked(ip):
+            return False, "Your IP has been temporarily blocked due to abuse. Please try again later."
+
+        # 2. Per-IP rate limit: 20 messages per minute
+        self.requests[ip] = [t for t in self.requests[ip] if now - t < 60]
+        if len(self.requests[ip]) >= 20:
+            self.violations[ip] += 1
+            if self.violations[ip] >= 3:
+                self.block_ip(ip, 900)
+                return False, "Too many requests. Your IP has been temporarily blocked."
+            return False, "You are sending messages too fast. Please wait a moment."
+        self.requests[ip].append(now)
+
+        # 3. Per-session burst: max 5 messages in 3 seconds
+        self.session_msgs[session_id] = [
+            t for t in self.session_msgs[session_id] if now - t < 3
+        ]
+        if len(self.session_msgs[session_id]) >= 5:
+            return False, "You are typing too fast. Please slow down."
+        self.session_msgs[session_id].append(now)
+
+        # 4. Identical message spam: same message sent 5+ times in 60s
+        msg_hash = hash(message.strip().lower())
+        self.session_hashes[session_id] = [
+            (t, h) for t, h in self.session_hashes[session_id] if now - t < 60
+        ]
+        same_count = sum(1 for _, h in self.session_hashes[session_id] if h == msg_hash)
+        if same_count >= 5:
+            return False, "Please avoid sending the same message repeatedly."
+        self.session_hashes[session_id].append((now, msg_hash))
+
+        return True, ""
 
 rate_limiter = RateLimiter()
 
@@ -128,10 +221,12 @@ class SecurityMiddleware:
 
         # ── Rate limiting ──────────────────────────────────────────────
         if path == "/api/chat":
-            if not rate_limiter.is_allowed(ip, max_requests=30, window_seconds=60):
+            # Basic IP-level check at middleware — detailed session check in endpoint
+            if rate_limiter.is_blocked(ip):
                 await self._send_json(
                     send, 429,
-                    {"detail": "Too many requests. Please wait a moment before sending again."}
+                    {"detail": "Your IP has been temporarily blocked due to abuse. Please try again in 15 minutes.",
+                     "blocked": True}
                 )
                 return
 
@@ -143,8 +238,8 @@ class SecurityMiddleware:
                 )
                 return
 
-        if path.startswith("/api/"):
-            if not rate_limiter.is_allowed(f"api:{ip}", max_requests=200, window_seconds=60):
+        if path.startswith("/api/") and path not in ("/api/chat",):
+            if not rate_limiter.is_allowed(f"api:{ip}", max_requests=150, window_seconds=60):
                 await self._send_json(
                     send, 429,
                     {"detail": "Too many requests. Please slow down."}
@@ -154,17 +249,29 @@ class SecurityMiddleware:
         # ── Security Headers injected into http.response.start ─────────
         is_production = os.getenv("IS_PRODUCTION", "false").lower() == "true"
 
+        # The 3D model routes are large binary assets whose URL already
+        # carries a cache-busting ?v= token (see /api/active-3d-model).
+        # Blanket no-store on these means every single page load/reload
+        # re-downloads the full file (60MB+) — expensive against Neon's
+        # free-tier egress cap in particular. Safe to cache long-term here
+        # since a new upload always produces a new URL.
+        is_model_asset = path == "/api/3d-model-file" or path.startswith("/static/")
+
         async def send_with_headers(message):
             if message["type"] == "http.response.start":
                 # Convert existing headers list → dict-like, append ours, convert back
                 headers = list(message.get("headers", []))
+                cache_header = (
+                    b"public, max-age=604800, immutable" if is_model_asset
+                    else b"no-store, no-cache, must-revalidate"
+                )
                 extra = [
                     (b"x-content-type-options", b"nosniff"),
                     (b"x-frame-options",         b"SAMEORIGIN"),
                     (b"x-xss-protection",        b"1; mode=block"),
                     (b"referrer-policy",          b"strict-origin-when-cross-origin"),
                     (b"permissions-policy",       b"geolocation=(), microphone=(self), camera=()"),
-                    (b"cache-control",            b"no-store, no-cache, must-revalidate"),
+                    (b"cache-control",            cache_header),
                 ]
                 if is_production:
                     extra.append(
@@ -372,6 +479,7 @@ app.add_middleware(
         "http://localhost:5500",
         "http://127.0.0.1:8000",
         "http://127.0.0.1:5500",
+        "https://sparta-production-0acb.up.railway.app",
     ],
     allow_origin_regex=r"https://.*\.(vercel\.app|devtunnels\.ms|trycloudflare\.com|ngrok-free\.app|ngrok\.io)|http://192\.168\.\d+\.\d+:\d+",
     allow_credentials=True,
@@ -384,7 +492,7 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=os.getenv("SECRET_KEY", "fallback-secret-change-this"),
     session_cookie="spartha_session",
-    max_age=60 * 60 * 24,  # ← 24 hours instead of dynamic value
+    max_age=60 * 60 * int(os.getenv("ACCESS_TOKEN_EXPIRE_HOURS", 8)),  # respects env var
     https_only=True,
     same_site="none",  # ← change "lax" to "none" for cross-domain
 )
@@ -498,6 +606,16 @@ async def serve_admin_script():
     import os as _os
     return _FR(
         _os.path.join(BASE_DIR, "admin-script.js"),
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", "Pragma": "no-cache"}
+    )
+
+@app.get("/sparta-alert.js")
+async def serve_sparta_alert():
+    from fastapi.responses import FileResponse as _FR
+    import os as _os
+    return _FR(
+        _os.path.join(BASE_DIR, "sparta-alert.js"),
         media_type="application/javascript",
         headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", "Pragma": "no-cache"}
     )
@@ -736,13 +854,49 @@ async def chat(message: ChatMessage, request: Request, db: Session = Depends(get
             db.commit()
         except Exception: db.rollback()
     # ── End session tracking ──────────────────────────────────────────────
-    # Input validation
+
+    # ── Session hard cap — prevents single session from flooding ─────────────
+    try:
+        _qc_row = db.execute(
+            text("SELECT query_count FROM user_sessions WHERE session_id = :sid"),
+            {"sid": _sid}
+        ).fetchone()
+        if _qc_row and _qc_row[0] and _qc_row[0] > 300:
+            raise HTTPException(
+                status_code=429,
+                detail="Session message limit reached. Please refresh the page to continue."
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # non-fatal
+
+    # ── Spam / rate-limit check ──────────────────────────────────────────────
+    _client_ip  = request.client.host if request.client else "unknown"
+    _session_id = request.session.get("chatbot_session_id", _client_ip)
+    _allowed, _deny_reason = rate_limiter.is_chat_allowed(
+        _client_ip, _session_id, message.message or ""
+    )
+    if not _allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=_deny_reason or "Too many requests. Please wait before sending again."
+        )
+
+    # ── Input validation ─────────────────────────────────────────────────────
     if not message.message or not message.message.strip():
-        raise HTTPException(status_code=400, detail="Message cannot be empty")
-    if len(message.message) > 500:
-        raise HTTPException(status_code=400, detail="Message too long. Maximum 500 characters.")
-    # Sanitize — strip dangerous characters
-    clean_message = message.message.strip()
+        raise HTTPException(status_code=400, detail="Message cannot be empty.")
+    if len(message.message) > 600:
+        raise HTTPException(status_code=400, detail="Message too long. Please keep it under 600 characters.")
+    if len(message.message.strip()) < 2:
+        raise HTTPException(status_code=400, detail="Message too short.")
+
+    # ── Sanitize — strip control characters and excessive whitespace ──────────
+    import re as _re
+    clean_message = _re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", message.message)
+    clean_message = _re.sub(r"\s{10,}", " ", clean_message).strip()
+    if not clean_message:
+        raise HTTPException(status_code=400, detail="Message contains invalid characters.")
 
     try:
         result = process_chat_with_rag(
@@ -968,17 +1122,19 @@ async def get_quick_questions(intent: str = "general_info", db: Session = Depend
                 explore += custom_intent_qs(1)
 
         elif intent in ("location_query", "navigation_query"):
-            primary = location_qs(min(5, len(locations)))
-            # Explore shows a couple more locations first, then other categories
-            explore = location_qs(2) + authority_qs(1) + org_qs(1)
+            # Primary: all location suggestions
+            primary = location_qs(5)
+            primary.append({"text": "🗺️ Campus Navigator", "query": "Where is the main entrance?", "category": "location"})
+            # Explore: more locations first, then mix
+            explore = location_qs(3) + announcement_qs(1) + authority_qs(1)
             if custom_intents:
                 explore += custom_intent_qs(1)
 
         elif intent == "organization_query":
-            primary = org_qs(4)
+            primary = org_qs(5)
             if orgs:
                 primary.append({"text": "📋 All organizations", "query": "List all student organizations", "category": "organization"})
-            explore = authority_qs(1) + location_qs(2) + announcement_qs(1) + history_qs(1)
+            explore = org_qs(2) + location_qs(2) + announcement_qs(1)
             if custom_intents:
                 explore += custom_intent_qs(1)
 
@@ -993,6 +1149,12 @@ async def get_quick_questions(intent: str = "general_info", db: Session = Depend
             explore = authority_qs(2) + location_qs(1) + org_qs(1) + announcement_qs(1)
             if custom_intents:
                 explore += custom_intent_qs(1)
+
+        elif intent == "greeting":
+            # After a greeting, show a helpful mix of what SPARTA can do
+            primary = location_qs(2) + authority_qs(1) + org_qs(1) + announcement_qs(1)
+            random.shuffle(primary)
+            explore = history_qs(1) + (custom_intent_qs(1) if custom_intents else [])
 
         else:  # general_info / fallback
             primary = authority_qs(1) + location_qs(1) + org_qs(1) + announcement_qs(1) + history_qs(1)
@@ -1115,8 +1277,11 @@ async def create_authority(
         import re as _re
         if not _re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$", email.strip()):
             raise HTTPException(status_code=422, detail="Invalid email address format.")
-    if phone and len(re.sub(r'[^\d]', '', phone.strip())) < 4:
-        raise HTTPException(status_code=422, detail="Phone number must contain at least 4 digits.")
+    if phone:
+        import re as _re2
+        _digits = len(_re2.sub(r"[^\d]", "", phone.strip()))
+        if _digits < 5 or len(phone.strip()) > 50:
+            raise HTTPException(status_code=422, detail="Enter a valid phone number (e.g. (043) 757-3000 loc. 123).")
 
     db_authority = models.Authority(
         name=name.strip(),
@@ -1165,8 +1330,11 @@ async def update_authority(
         raise HTTPException(status_code=422, detail="Department must be at least 2 characters.")
     if email and not _re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$", email.strip()):
         raise HTTPException(status_code=422, detail="Invalid email address format.")
-    if phone and len(_re.sub(r'[^\d]', '', phone.strip())) < 4:
-        raise HTTPException(status_code=422, detail="Phone number must contain at least 4 digits.")
+    if phone:
+        import re as _re2
+        _digits = len(_re2.sub(r"[^\d]", "", phone.strip()))
+        if _digits < 5 or len(phone.strip()) > 50:
+            raise HTTPException(status_code=422, detail="Enter a valid phone number (e.g. (043) 757-3000 loc. 123).")
 
     db_authority = db.query(models.Authority).filter(models.Authority.id == authority_id).first()
     if not db_authority:
@@ -1510,43 +1678,15 @@ async def add_member_to_organization(org_id: int, member_data: dict, db: Session
         org = db.query(models.Organization).filter(models.Organization.id == org_id).first()
         if not org:
             raise HTTPException(status_code=404, detail="Organization not found")
-
-        requested_sort = member_data.get("sort_order")
-        member_name    = (member_data.get("name") or "").strip()
-        member_pos     = (member_data.get("position") or "").strip()
-
-        if not member_name:
-            raise HTTPException(status_code=422, detail="Member name is required.")
-        if not member_pos:
-            raise HTTPException(status_code=422, detail="Member position is required.")
-
-        existing_members = db.query(models.OrganizationMember)\
-                            .filter(models.OrganizationMember.org_chart_id == org_id).all()
-
-        # Prevent duplicate position title within the same org
-        for em in existing_members:
-            if (em.position or '').strip().lower() == member_pos.lower():
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Position '{member_pos}' already exists in this organization. "
-                           f"Use a unique position title."
-                )
-
-        # Prevent duplicate sort_order — if requested sort clashes, shift to next available
-        existing_sorts = {m.sort_order for m in existing_members if m.sort_order is not None}
-        max_sort = max(existing_sorts, default=0)
-        if requested_sort is not None and int(requested_sort) in existing_sorts:
-            next_sort = max_sort + 1
-        elif requested_sort is not None:
-            next_sort = int(requested_sort)
-        else:
-            next_sort = max_sort + 1
-
+        max_sort = db.query(func.max(models.OrganizationMember.sort_order))\
+                    .filter(models.OrganizationMember.org_chart_id == org_id)\
+                    .scalar()
+        next_sort = (max_sort or 0) + 1
         db_member = models.OrganizationMember(
             org_chart_id=org_id,
-            name=member_name,
-            position=member_pos,
-            sort_order=next_sort,
+            name=member_data.get("name"),
+            position=member_data.get("position"),
+            sort_order=member_data.get("sort_order", next_sort),
             created_at=datetime.utcnow()
         )
         db.add(db_member)
@@ -1579,41 +1719,12 @@ async def update_organization_member(org_id: int, member_id: int, member_data: d
         ).first()
         if not db_member:
             raise HTTPException(status_code=404, detail="Member not found")
-
-        new_name = (member_data.get("name") or db_member.name or "").strip()
-        new_pos  = (member_data.get("position") or db_member.position or "").strip()
-        new_sort = member_data.get("sort_order")
-
-        if not new_name:
-            raise HTTPException(status_code=422, detail="Member name is required.")
-        if not new_pos:
-            raise HTTPException(status_code=422, detail="Member position is required.")
-
-        # Check position duplicate (exclude self)
-        other_members = db.query(models.OrganizationMember).filter(
-            models.OrganizationMember.org_chart_id == org_id,
-            models.OrganizationMember.id != member_id
-        ).all()
-
-        if new_pos.lower() != (db_member.position or '').lower():
-            for om in other_members:
-                if (om.position or '').strip().lower() == new_pos.lower():
-                    raise HTTPException(
-                        status_code=422,
-                        detail=f"Position '{new_pos}' already exists in this organization."
-                    )
-
-        # Fix sort_order duplicate (exclude self)
-        if new_sort is not None:
-            existing_sorts = {m.sort_order for m in other_members if m.sort_order is not None}
-            if int(new_sort) in existing_sorts:
-                max_sort = max(existing_sorts, default=0)
-                new_sort = max_sort + 1
-
-        db_member.name     = new_name
-        db_member.position = new_pos
-        if new_sort is not None:
-            db_member.sort_order = int(new_sort)
+        if "name" in member_data:
+            db_member.name = member_data["name"]
+        if "position" in member_data:
+            db_member.position = member_data["position"]
+        if "sort_order" in member_data:
+            db_member.sort_order = member_data["sort_order"]
         db.commit()
         db.refresh(db_member)
         log_activity(db, "updated", "member", db_member.id, f"Updated member '{db_member.name}' ({db_member.position})")
@@ -1780,15 +1891,36 @@ async def delete_intent(intent_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 # --- 3D MAP UPLOAD ---
+# NOTE: the admin UI (admin-script.js handleModel3DUpload) posts to
+# "/upload-3d-model" (singular "model"), not "/upload-3d-map" — that
+# mismatch was silently breaking every upload (404). Also, uploads
+# previously never deactivated older rows, so is_active could end up
+# true on more than one row with no defined "current" model.
 
-@admin_router.post("/upload-3d-map")
+@admin_router.post("/upload-3d-model")
 async def upload_3d_map(
     file: UploadFile = File(...),
     description: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
+    filename = file.filename or ""
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in (".glb", ".gltf"):
+        raise HTTPException(status_code=400, detail="File must be a .glb or .gltf model.")
+
+    MAX_BYTES = 150 * 1024 * 1024  # 150 MB
     try:
         file_content = await file.read()
+        if len(file_content) == 0:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+        if len(file_content) > MAX_BYTES:
+            raise HTTPException(status_code=400, detail="File must be under 150 MB.")
+
+        # Only one model should ever be "active" at a time.
+        db.query(models.Map3DUpload).filter(models.Map3DUpload.is_active == True).update(
+            {models.Map3DUpload.is_active: False}
+        )
+
         db_upload = models.Map3DUpload(
             filename=file.filename,
             original_filename=file.filename,
@@ -1809,7 +1941,10 @@ async def upload_3d_map(
             "filename": db_upload.filename,
             "size": db_upload.file_size
         }
+    except HTTPException:
+        raise
     except Exception as e:
+        db.rollback()
         print(f"Upload error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1846,6 +1981,19 @@ async def delete_3d_map(map_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Map deleted successfully"}
 
+@admin_router.post("/3d-maps/{map_id}/activate")
+async def activate_3d_map(map_id: int, db: Session = Depends(get_db)):
+    map_file = db.query(models.Map3DUpload).filter(models.Map3DUpload.id == map_id).first()
+    if not map_file:
+        raise HTTPException(status_code=404, detail="Map not found")
+    db.query(models.Map3DUpload).filter(models.Map3DUpload.is_active == True).update(
+        {models.Map3DUpload.is_active: False}
+    )
+    map_file.is_active = True
+    db.commit()
+    log_activity(db, "updated", "3d_map", map_file.id, f"Activated 3D map '{map_file.filename}'")
+    return {"message": "Model activated", "id": map_file.id}
+
 @admin_router.get("/model-upload-history")
 async def get_model_upload_history(db: Session = Depends(get_db)):
     try:
@@ -1861,7 +2009,8 @@ async def get_model_upload_history(db: Session = Depends(get_db)):
                 "uploaded_at": m.uploaded_at.isoformat() if m.uploaded_at else None,
                 "uploaded_by": m.uploaded_by,
                 "description": m.description,
-                "is_active": m.is_active
+                "is_active": m.is_active,
+                "status": "success"  # only successful uploads ever reach this table
             }
             for m in maps
         ]
@@ -1981,10 +2130,38 @@ async def delete_route(route_id: int, db: Session = Depends(get_db)):
 # --- CREDENTIALS ---
 
 @admin_router.get("/credentials")
-async def get_credentials(db: Session = Depends(get_db)):
+async def get_credentials(request: Request, db: Session = Depends(get_db)):
+    """
+    Returns the current admin username IF the session is valid.
+    Used by the frontend as a session liveness check on load.
+    Returns 401 if not logged in (expected behaviour — frontend redirects to login).
+    NOTE: verify_session is already applied via admin_router Depends,
+    so this correctly returns 401 when not authenticated.
+    """
     ensure_default_admin(db)
     credential = db.query(models.AdminCredentials).first()
     return {"username": credential.username if credential else "admin"}
+
+# ── Public session-check endpoint (no auth required) ──────────────────────────
+# The admin shell JS calls /api/admin/credentials on page load to check if
+# already logged in. Since admin_router requires verify_session, it always
+# returns 401 on first load (before login). This public endpoint is the
+# correct way to do the liveness check without triggering a 401.
+@app.get("/api/admin/session-check")
+async def session_check(request: Request, db: Session = Depends(get_db)):
+    """
+    Lightweight session validity check — no 401, just returns is_authenticated.
+    Frontend uses this instead of /credentials to avoid spurious 401 logs.
+    """
+    username = request.session.get("username")
+    if not username:
+        return {"authenticated": False}
+    expires_at = request.session.get("expires_at")
+    from datetime import datetime as _dt
+    if expires_at and _dt.utcnow().isoformat() > expires_at:
+        request.session.clear()
+        return {"authenticated": False}
+    return {"authenticated": True, "username": username}
 
 @admin_router.put("/credentials")
 async def update_credentials(request: AdminCredentialUpdate, db: Session = Depends(get_db)):
@@ -2142,6 +2319,31 @@ async def update_popup(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@admin_router.patch("/announcement-popups/{popup_id}")
+async def patch_popup(popup_id: int, request: Request, db: Session = Depends(get_db)):
+    """PATCH endpoint — accepts JSON body for partial updates like archiving."""
+    try:
+        data  = await request.json()
+        popup = db.query(models.AnnouncementPopup).filter(
+            models.AnnouncementPopup.id == popup_id).first()
+        if not popup:
+            raise HTTPException(status_code=404, detail="Popup not found")
+        if "is_archived" in data:
+            popup.is_archived = bool(data["is_archived"])
+        if "is_active" in data:
+            popup.is_active   = bool(data["is_active"])
+        if "title"   in data: popup.title   = data["title"]
+        if "content" in data: popup.content = data["content"]
+        popup.updated_at = datetime.utcnow()
+        db.commit()
+        return {"message": "Popup updated", "id": popup_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @admin_router.patch("/announcement-popups/{popup_id}/toggle")
 async def toggle_popup(popup_id: int, db: Session = Depends(get_db)):
     try:
@@ -2152,24 +2354,6 @@ async def toggle_popup(popup_id: int, db: Session = Depends(get_db)):
         popup.updated_at = datetime.utcnow()
         db.commit()
         return {"message": f"Popup {'activated' if popup.is_active else 'deactivated'}", "is_active": popup.is_active}
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-
-@admin_router.patch("/announcement-popups/{popup_id}/archive")
-async def archive_popup(popup_id: int, db: Session = Depends(get_db)):
-    """Archive (or un-archive) a popup announcement without requiring all form fields."""
-    try:
-        popup = db.query(models.AnnouncementPopup).filter(models.AnnouncementPopup.id == popup_id).first()
-        if not popup:
-            raise HTTPException(status_code=404, detail="Popup not found")
-        popup.is_archived = True
-        popup.is_active   = False
-        popup.updated_at  = datetime.utcnow()
-        db.commit()
-        return {"message": "Popup archived successfully", "is_archived": True}
     except HTTPException:
         raise
     except Exception as e:
@@ -2412,6 +2596,89 @@ async def delete_faq_document(doc_id: int, db: Session = Depends(get_db)):
 # ============================================
 # HEALTH CHECK (PUBLIC)
 # ============================================
+
+
+@app.get("/api/3d-model-file")
+async def get_active_3d_model_file(db: Session = Depends(get_db)):
+    """
+    PUBLIC (no auth) — streams the bytes of whichever Map3DUpload row is
+    currently marked is_active. This is what the campus navigator actually
+    fetches when an admin has uploaded a model via the dashboard. The
+    existing /api/admin/3d-maps/{id} route can't be used for this because
+    it sits behind admin_router's login requirement, and the navigator is
+    a public page.
+    """
+    map_row = (
+        db.query(models.Map3DUpload)
+        .filter(models.Map3DUpload.is_active == True)
+        .order_by(models.Map3DUpload.uploaded_at.desc())
+        .first()
+    )
+    if not map_row:
+        raise HTTPException(status_code=404, detail="No active 3D model uploaded.")
+    return StreamingResponse(
+        io.BytesIO(map_row.file_data),
+        media_type="model/gltf-binary",
+        headers={"Content-Disposition": f"inline; filename={map_row.filename or 'model.glb'}"}
+    )
+
+
+@app.get("/api/active-3d-model")
+async def get_active_3d_model(db: Session = Depends(get_db)):
+    """
+    Returns the active 3D campus model path. Priority order:
+      1. A model uploaded via the admin dashboard (map_3d_uploads table)
+      2. A custom glb_model_url saved directly in campus_settings
+      3. The default static file shipped with the app
+    """
+    try:
+        map_row = (
+            db.query(models.Map3DUpload)
+            .filter(models.Map3DUpload.is_active == True)
+            .order_by(models.Map3DUpload.uploaded_at.desc())
+            .first()
+        )
+        if map_row:
+            cache_buster = (
+                str(int(map_row.uploaded_at.timestamp())) if map_row.uploaded_at else str(map_row.id)
+            )
+            return {
+                "path": f"/api/3d-model-file?v={cache_buster}",
+                "source": "admin_upload",
+                "cache_buster": cache_buster
+            }
+    except Exception as e:
+        print(f"[active-3d-model] Map3DUpload lookup failed: {e}")
+
+    try:
+        row = db.execute(
+            text("SELECT value FROM campus_settings WHERE key = 'glb_model_url'")
+        ).fetchone()
+        if row and row[0] and row[0].startswith("http"):
+            # Custom URL saved in settings
+            return {
+                "path": row[0],
+                "source": "settings",
+                "cache_buster": None
+            }
+    except Exception:
+        pass
+
+    # Default: serve from /static/ on this same server
+    import time as _t
+    base_url = os.getenv("RAILWAY_PUBLIC_DOMAIN", "")
+    if base_url:
+        base_url = f"https://{base_url}"
+    else:
+        base_url = ""  # relative URL — works when frontend is same origin
+
+    default_glb = f"{base_url}/static/batangas_state_university-_the_neu_lipa_map.glb"
+    return {
+        "path": default_glb,
+        "source": "default",
+        "cache_buster": str(int(_t.time()))
+    }
+
 
 @app.get("/health")
 async def health_check():
@@ -2944,11 +3211,21 @@ async def get_sessions(db: Session = Depends(get_db)):
                 return dt.replace(tzinfo=_tz.utc)
             return dt.astimezone(_tz.utc)
 
+        # Count actual search logs per session for accurate query counts
+        try:
+            log_counts = {row[0]: row[1] for row in db.execute(text("""
+                SELECT session_id, COUNT(*) FROM search_logs
+                WHERE session_id IS NOT NULL
+                GROUP BY session_id
+            """)).fetchall()}
+        except Exception:
+            log_counts = {}
+
         for r in rows:
             started   = _to_utc(r[1])
             last_act  = _to_utc(r[2])
             ended     = _to_utc(r[3])
-            q_count   = r[4] or 0
+            q_count   = log_counts.get(r[0], r[4] or 0)  # prefer actual search_logs count
             lang      = r[5] or "en"
             device    = r[6] or "—"
             status    = r[7] or "active"

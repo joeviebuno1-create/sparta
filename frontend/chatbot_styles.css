@@ -49,6 +49,17 @@ html {
     z-index: -2;
 }
 
+/* Material Symbols - must beat body font-family */
+.ms, span.ms {
+    font-family: 'Material Symbols Outlined' !important;
+    font-style: normal !important;
+    font-weight: normal !important;
+    font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24 !important;
+    display: inline-block;
+    line-height: 1;
+    vertical-align: -3px;
+}
+
 body {
     font-family: 'Sora', sans-serif;
     background: transparent;

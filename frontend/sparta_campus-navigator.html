@@ -9,9 +9,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="navigation-styles.css">
 <style>html{opacity:0;transition:opacity 0.22s ease}html.page-ready{opacity:1}</style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/DRACOLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
 
@@ -335,8 +336,6 @@
         </div>
         <div class="route-stat">
           <div class="rs-icon">🚶</div>
-          <div class="rs-label">Stops</div>
-          <div class="rs-value" id="pathWaypoints">—</div>
         </div>
       </div>
     </div>
@@ -449,7 +448,6 @@
         <div class="route-stats-row">
           <div class="route-stat"><div class="rs-icon">📏</div><div class="rs-label">Distance</div><div class="rs-value" id="sheetPathDistance">—</div></div>
           <div class="route-stat"><div class="rs-icon">⏱️</div><div class="rs-label">Walk time</div><div class="rs-value" id="sheetPathTime">—</div></div>
-          <div class="route-stat"><div class="rs-icon">🚶</div><div class="rs-label">Stops</div><div class="rs-value" id="sheetPathWaypoints">—</div></div>
         </div>
       </div>
       <!-- Action buttons -->

@@ -899,14 +899,14 @@ function renderSheetLocList(locs, containerId) {
     }).join('');
 }
 
-// ── After route drawn on mobile — show stats in sheet ────────
+// ── After route drawn on mobile — show route controls in sheet ──
+// Distance/time numbers dropped (see drawSavedRoute) since they were never
+// calibrated to real-world units. Also fixes a pre-existing crash here:
+// #sheetPathWaypoints doesn't exist in the HTML, so the old version threw
+// whenever this ran.
 function syncSheetRouteCard(distance, time, waypoints) {
     const rc = document.getElementById('sheetRouteCard');
     if (!rc || !isMobile()) return;
-    document.getElementById('sheetPathDistance').textContent  = distance;
-    document.getElementById('sheetPathTime').textContent      = time;
-    document.getElementById('sheetPathWaypoints').textContent = waypoints;
-    rc.classList.add('show');
     const clr = document.getElementById('sheetClearBtn');
     if (clr) clr.style.display = 'block';
     expandSheet('mid');
@@ -1438,7 +1438,18 @@ function init3DScene() {
 
     // Load active 3D model from API
     console.log('Fetching active 3D model information...');
-    fetch('/api/active-3d-model')
+
+    // ── LOCAL PREVIEW MODE ──────────────────────────────────────────────
+    // Add ?localmodel=yourfile.glb to the page URL to skip the API call
+    // entirely and load a .glb/.gltf file sitting right next to this HTML
+    // file (same frontend folder). Great for quickly trying a new model
+    // without running the backend. Remove/ignore for normal use.
+    const _localModelParam = new URLSearchParams(window.location.search).get('localmodel');
+    if (_localModelParam) {
+        console.log('🔧 Local preview mode — loading local file:', _localModelParam);
+        loadModel(_localModelParam);
+    } else {
+    fetch(`${API_HOST}/api/active-3d-model`)
         .then(response => response.json())
         .then(modelInfo => {
             console.log('Active model info:', modelInfo);
@@ -1453,12 +1464,23 @@ function init3DScene() {
             console.error('Failed to fetch model info, using default:', error);
             // Fallback to default with cache buster
             const cacheBuster = new Date().getTime();
-            const modelPath = `https://sparta-production-0acb.up.railway.app/static/batangas_state_university-_the_neu_lipa_map.glb?v=${cacheBuster}`;
+            const modelPath = `${API_HOST}/static/batangas_state_university-_the_neu_lipa_map.glb?v=${cacheBuster}`;
             loadModel(modelPath);
         });
+    }
     
     function loadModel(modelPath) {
-        new THREE.GLTFLoader().load(modelPath,
+        const gltfLoader = new THREE.GLTFLoader();
+        // Draco support: needed to decode models compressed with
+        // `gltf-transform draco` / `gltf-transform optimize --compress draco`.
+        // Uncompressed models still load fine through the same loader —
+        // this only kicks in if the file actually uses Draco.
+        if (THREE.DRACOLoader) {
+            const dracoLoader = new THREE.DRACOLoader();
+            dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/libs/draco/');
+            gltfLoader.setDRACOLoader(dracoLoader);
+        }
+        gltfLoader.load(modelPath,
         gltf=>{ 
             campusModel=gltf.scene; 
             const box=new THREE.Box3().setFromObject(campusModel); 
@@ -1472,11 +1494,17 @@ function init3DScene() {
                 size: { x: s.x, y: s.y, z: s.z }
             };
             
-            campusModel.position.sub(c);
-            modelTransformation.center = c;
-            
+            // NOTE: scale must be computed BEFORE positioning. Object3D applies
+            // position as a raw world-space translation independent of its own
+            // scale — subtracting the unscaled center (old behavior) only
+            // happened to work when a model's original size was already close
+            // to ~100 units (scale ≈ 1). For any model whose original size is
+            // much larger or smaller, that offset ends up wildly wrong and can
+            // push the whole model outside the camera's view.
             const sc=100/Math.max(s.x,s.y,s.z); 
             campusModel.scale.set(sc,sc,sc);
+            campusModel.position.sub(c.clone().multiplyScalar(sc));
+            modelTransformation.center = c;
             modelTransformation.scale = sc;
             
             scene.add(campusModel); 
@@ -1792,8 +1820,12 @@ function animateCamera(pos) {
     const startCamPos    = camera.position.clone();
     const startTarget    = controls.target.clone();
     const endTarget      = pos.clone();
-    // Pull back and up so the location is nicely framed
-    const endCamPos = new THREE.Vector3(pos.x, pos.y + 60, pos.z - 100);
+    // Pull back and up so the location is nicely framed.
+    // NOTE: was (y+60, z-100) — larger than the whole model (which
+    // normalizes to ~100 units max dimension), so selecting a single room
+    // pulled all the way back to show the entire building instead of
+    // framing that room. Tightened to a fraction of the model scale.
+    const endCamPos = new THREE.Vector3(pos.x, pos.y + 15, pos.z - 22);
     const startTime = Date.now();
     const duration  = 900;
     (function step() {
@@ -1911,7 +1943,7 @@ function _showNoRouteUI() {
 async function getDirections() {
     if (!selectedLocation || !selectedLocation.coordinates) {
         console.warn('No location selected or location has no coordinates');
-        alert('⚠️ Please select a location first');
+        if (typeof spartaAlert === 'function') spartaAlert('Please select a location first.', 'warning'); else alert('Please select a location first.'); return;
         return;
     }
     
@@ -2382,29 +2414,70 @@ async function drawSavedRoute(route) {
         totalDist += waypointPositions[i].distanceTo(waypointPositions[i + 1]);
     }
     
-    // Calculate estimated time (assuming 1.4 m/s walking speed)
-    const estimatedTime = Math.round(totalDist / 1.4); // seconds
-    const minutes = Math.floor(estimatedTime / 60);
-    const seconds = estimatedTime % 60;
-    
-    // Show path stats
+    // Scale 3D model units to real-world meters
+    // Calibration: adjust METERS_PER_UNIT to match your campus model scale
+    const METERS_PER_UNIT = window.NAV_SCALE || 1.0;
+    const realDistMeters = Math.round(totalDist * METERS_PER_UNIT);
+
+    // Estimated walking time: 1.4 m/s average walking speed
+    const walkingSpeedMs = 1.4;
+    const estimatedSecs = Math.round(realDistMeters / walkingSpeedMs);
+    const minutes = Math.floor(estimatedSecs / 60);
+    const seconds = estimatedSecs % 60;
+    const distLabel = realDistMeters >= 1000
+        ? (realDistMeters / 1000).toFixed(1) + ' km'
+        : realDistMeters + ' m';
+    const timeLabel = minutes > 0 ? `${minutes} min ${seconds > 0 ? seconds + 's' : ''}`.trim() : `${seconds}s`;
+
+    // Distance/time numbers removed — they were computed from an
+    // uncalibrated scene-unit-to-meter scale (window.NAV_SCALE, never set,
+    // defaulting to 1.0) and didn't reflect real-world distances.
     const pathStats = document.getElementById('pathStats');
-    document.getElementById('pathDistance').textContent = Math.round(totalDist) + 'm';
-    document.getElementById('pathTime').textContent = minutes > 0 
-        ? `${minutes}m ${seconds}s` 
-        : `${seconds}s`;
-    document.getElementById('pathWaypoints').textContent = waypointPositions.length;
-    pathStats.classList.add('show');
-    // Show route info card + clear button inside info panel
-    const ric = document.getElementById('routeInfoCard');
-    if (ric) ric.classList.add('show');
+    // routeInfoCard intentionally left hidden — see note above.
     const clrBtn = document.getElementById('clearRouteBtn');
     if (clrBtn) clrBtn.classList.add('show');
+
+    // Smooth slow zoom-out to show the full path
+    if (camera && controls && waypointPositions.length > 0) {
+        const THREE = window.THREE;
+        const box = new THREE.Box3();
+        waypointPositions.forEach(p => box.expandByPoint(p));
+        const size   = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const fov    = camera.fov * (Math.PI / 180);
+        // Modest zoom-out: 1.4x padding so path is visible but not too far
+        const dist   = Math.max(maxDim / (2 * Math.tan(fov / 2)) * 1.4, 20);
+        // NOTE: was center.z + dist*0.8 — the opposite approach side from
+        // animateCamera's single-location zoom (pos.z - 100). That mismatch
+        // is what caused the camera to swing to the back of the building
+        // right when "Get Directions" was clicked. Now consistent (z minus)
+        // with the rest of the app.
+        const targetPos = new THREE.Vector3(
+            center.x,
+            center.y + dist * 0.5,
+            center.z - dist * 0.8
+        );
+        const startPos    = camera.position.clone();
+        const startTarget = controls.target.clone();
+        const duration    = 1200; // ms
+        const startTime   = performance.now();
+        function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+        function animZoom() {
+            const t = Math.min((performance.now() - startTime) / duration, 1);
+            const e = easeOut(t);
+            camera.position.lerpVectors(startPos, targetPos, e);
+            controls.target.lerpVectors(startTarget, center, e);
+            controls.update();
+            if (t < 1) requestAnimationFrame(animZoom);
+        }
+        requestAnimationFrame(animZoom);
+    }
     // Sync to mobile sheet route card
     const dist = document.getElementById('pathDistance') ? document.getElementById('pathDistance').textContent : '—';
     const time = document.getElementById('pathTime')     ? document.getElementById('pathTime').textContent     : '—';
     const wpts = document.getElementById('pathWaypoints')? document.getElementById('pathWaypoints').textContent: '—';
-    if (typeof syncSheetRouteCard === 'function') syncSheetRouteCard(dist, time, wpts);
+    if (typeof syncSheetRouteCard === 'function') syncSheetRouteCard(distLabel, timeLabel);
 }
 
 // ============ COORDINATE VERIFICATION ============

@@ -13,6 +13,7 @@
     <!-- Three.js Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/DRACOLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
     
     <!-- External Stylesheet -->
@@ -237,6 +238,61 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,300,0,0">
     <!-- Chart.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+
+  <script>
+  /* ================================================================
+     SPARTA Global Helpers -- defined in isolation for guaranteed global scope
+     Functions here are accessible from ALL inline onclick handlers and other scripts
+     ================================================================ */
+  function escHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
+  }
+
+  function _setText(id, val) {
+    try { var el = document.getElementById(id); if (el) el.textContent = val; } catch(e) {}
+  }
+
+  window.deleteAuthority = async function(id) {
+    var ok = (typeof spartaConfirm === 'function')
+      ? await spartaConfirm('Delete this authority? This cannot be undone.', 'error')
+      : confirm('Delete this authority? This cannot be undone.');
+    if (!ok) return;
+    try {
+      var base = (typeof API_BASE !== 'undefined') ? API_BASE : '/api/admin';
+      var res = await fetch(base + '/authorities/' + id, { method: 'DELETE', credentials: 'include' });
+      if (res && res.ok) {
+        if (typeof spartaToast === 'function') spartaToast('Authority deleted.', 'success');
+        if (typeof loadAuthorities === 'function') await loadAuthorities();
+      } else {
+        if (typeof spartaAlert === 'function') spartaAlert('Error deleting authority. Please try again.', 'error');
+      }
+    } catch(e) {
+      if (typeof spartaAlert === 'function') spartaAlert('Error: ' + e.message, 'error');
+    }
+  };
+
+  window.deleteHistory = async function(id) {
+    var ok = (typeof spartaConfirm === 'function')
+      ? await spartaConfirm('Delete this history event? This cannot be undone.', 'error')
+      : confirm('Delete this history event? This cannot be undone.');
+    if (!ok) return;
+    try {
+      var base = (typeof API_BASE !== 'undefined') ? API_BASE : '/api/admin';
+      var res = await fetch(base + '/history/' + id, { method: 'DELETE', credentials: 'include' });
+      if (res && res.ok) {
+        if (typeof spartaToast === 'function') spartaToast('History event deleted.', 'success');
+        if (typeof loadHistory === 'function') await loadHistory();
+      } else {
+        if (typeof spartaAlert === 'function') spartaAlert('Error deleting event. Please try again.', 'error');
+      }
+    } catch(e) {
+      if (typeof spartaAlert === 'function') spartaAlert('Error: ' + e.message, 'error');
+    }
+  };
+  </script>
+
+
 
     <!-- ===== CHANGE CREDENTIALS MODAL ===== -->
     <div id="changeCredModal" style="display:none;">
@@ -525,14 +581,9 @@
                 <thead><tr><th>Intent</th><th>Triggers</th><th>Avg Conf.</th><th>Fallback %</th><th>Status</th></tr></thead>
                 <tbody id="ih-body"></tbody>
               </table>
-              <!-- Intent Health Pagination -->
-              <div id="ih-pagination" style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:8px;">
-                <span id="ih-page-info" style="font-size:0.78rem;color:#6B7280;"></span>
-                <div style="display:flex;gap:6px;">
-                  <button id="ih-prev" onclick="ihPrevPage()" style="padding:4px 12px;font-size:0.78rem;border:1px solid #E5E7EB;border-radius:6px;background:#F9FAFB;color:#374151;cursor:pointer;" disabled>← Prev</button>
-                  <span id="ih-page-btns" style="display:flex;gap:4px;"></span>
-                  <button id="ih-next" onclick="ihNextPage()" style="padding:4px 12px;font-size:0.78rem;border:1px solid #E5E7EB;border-radius:6px;background:#F9FAFB;color:#374151;cursor:pointer;">Next →</button>
-                </div>
+              <div class="t-foot" style="margin-top:10px;">
+                <span id="ih-count" style="font-size:12px;color:#6B7280;"></span>
+                <div class="pager" id="ih-pager"></div>
               </div>
             </div>
           </div>
@@ -595,14 +646,9 @@
                 </tbody>
               </table>
             </div>
-            <!-- Recent Nav Pagination -->
-            <div id="nav-pagination" style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:8px;">
-              <span id="nav-page-info" style="font-size:0.78rem;color:#6B7280;"></span>
-              <div style="display:flex;gap:6px;">
-                <button id="nav-prev" onclick="navPrevPage()" style="padding:4px 12px;font-size:0.78rem;border:1px solid #E5E7EB;border-radius:6px;background:#F9FAFB;color:#374151;cursor:pointer;" disabled>← Prev</button>
-                <span id="nav-page-btns" style="display:flex;gap:4px;"></span>
-                <button id="nav-next" onclick="navNextPage()" style="padding:4px 12px;font-size:0.78rem;border:1px solid #E5E7EB;border-radius:6px;background:#F9FAFB;color:#374151;cursor:pointer;">Next →</button>
-              </div>
+            <div class="t-foot" style="margin-top:10px;">
+              <span id="recentNav-count" style="font-size:12px;color:#6B7280;"></span>
+              <div class="pager" id="recentNav-pager"></div>
             </div>
           </div>
         </div>
@@ -1736,7 +1782,7 @@
         </div>
         <div class="form-full fg"><label>Description (English) *</label><textarea id="m-hist-desc" placeholder="Describe this significant event..."></textarea></div>
         <div class="fi-section">
-          <div class="fi-head"><span class="ms">flag</span>Filipino Translation</div>
+          <div class="fi-head"><span class="ms">flag</span>Filipino Translation<span class="fi-opt" style="display:none;"></span></div>
           <div class="form-grid">
             <div class="fg"><label style="color:#065F46">Title (Filipino)</label><input id="m-hist-title-fi" placeholder="Itinatag ang Unibersidad"></div>
           </div>
@@ -1759,7 +1805,7 @@
         </div>
         <div class="form-full fg"><label>Response Template (English) *</label><textarea id="m-resp-en" placeholder="Hello! Welcome to BSU Lipa. How can I help you today?"></textarea></div>
         <div class="fi-section">
-          <div class="fi-head"><span class="ms">flag</span>Filipino Translation</div>
+          <div class="fi-head"><span class="ms">flag</span>Filipino Translation<span class="fi-opt" style="display:none;"></span></div>
           <div class="form-full fg"><label style="color:#065F46">Response Template (Filipino)</label><textarea id="m-resp-fi" placeholder="Kamusta! Maligayang pagdating sa BSU Lipa..." style="min-height:70px"></textarea></div>
         </div></div>
         <div class="modal-foot">
@@ -1932,11 +1978,31 @@
 
     <!-- Scripts -->
     <script src="admin-script.js"></script>
+    <script>
+    // Load sparta-alert.js gracefully -- 404 will not block other scripts
+    (function() {
+      var s = document.createElement("script");
+      s.src = "sparta-alert.js";
+      s.onerror = function() { console.warn("[SPARTA] sparta-alert.js not found -- using native alerts"); };
+      document.head.appendChild(s);
+    })();
+    </script>
 
     <script>
     // ============================================================
     //  SPARTA SHELL — Sidebar + Page Navigation
     // ============================================================
+
+    /* escHtml - XSS-safe string escaping - required by all render functions */
+    function escHtml(str) {
+      if (str == null) return '';
+      return String(str)
+        .replace(/&/g,  '&amp;')
+        .replace(/</g,  '&lt;')
+        .replace(/>/g,  '&gt;')
+        .replace(/"/g,  '&quot;')
+        .replace(/'/g, '&#x27;');
+    }
 
     const PAGE_TITLES = {
       dashboard:          'Dashboard',
@@ -2304,6 +2370,14 @@
       if (_chartsInited) return;
       _chartsInited = true;
 
+      // Always load stats data regardless of chart status
+      if (typeof _loadDashboardStats==='function') _loadDashboardStats();
+      var _hmF=window._hmInitDateDefaults||_hmInitDateDefaults; if(typeof _hmF==='function') _hmF();
+      var _bhF=window._buildHeatmap||_buildHeatmap; if(typeof _bhF==='function') _bhF('hm-area','hm-lg','this_week');
+      var _biF=window._buildIntentHealth||_buildIntentHealth; if(typeof _biF==='function') _biF('ih-body');
+
+      // Init charts (wrapped so a CDN failure doesn't block stats)
+      try {
       // Confidence distribution
       _safeChart('ch-conf', ctx => new Chart(ctx, {
         type: 'bar',
@@ -2324,12 +2398,7 @@
         options: { responsive: true, cutout: '68%', plugins: { legend: { position: 'right', labels: { color: '#374151', font: { size: 12 }, padding: 14, boxWidth: 12, boxHeight: 12 } }, tooltip: darkChartDefaults().plugins.tooltip } }
       }));
 
-      _hmInitDateDefaults();
-      _buildHeatmap('hm-area', 'hm-lg', 'this_week');
-      _buildIntentHealth('ih-body');
-
-      // Fetch real stats and update charts
-      _loadDashboardStats();
+      } catch(chartErr) { console.warn('[SPARTA] Chart.js init error:', chartErr); }
     }
 
     function _safeChart(id, fn) {
@@ -2378,7 +2447,14 @@
 
     async function _loadDashboardStats() {
       try {
-        const res = await apiFetch('/statistics');
+        // Use direct fetch so API_BASE issues cannot block this
+        const _url = (typeof API_BASE !== 'undefined') ? API_BASE + '/statistics' : '/api/admin/statistics';
+        const res = await fetch(_url, { credentials: 'include' });
+        if (!res || !res.ok) {
+          _setText('dash-total-queries','0'); _setText('dash-today-queries','0');
+          _setText('dash-fallback-rate','0.0%'); _setText('dash-dau','0'); _setText('dash-avg-queries','0.0');
+          return;
+        }
         const d = await res.json();
         // Update KPI cards (backend returns queries_today, fallback_rate, etc.)
         _setText('dash-total-queries', (d.total_queries || 0).toLocaleString());
@@ -2420,7 +2496,13 @@
             lc.update();
           }
         }
-      } catch(e) { console.warn('[SPARTA] dashboard stats load failed', e); }
+      } catch(e) { console.warn('[SPARTA] dashboard stats load failed', e);
+        _setText('dash-total-queries', '0');
+        _setText('dash-today-queries', '0');
+        _setText('dash-fallback-rate', '0.0%');
+        _setText('dash-dau', '0');
+        _setText('dash-avg-queries', '0.0');
+      }
 
       // ── Navigation statistics (runs independently, doesn't block dashboard) ──
       try {
@@ -2498,11 +2580,13 @@
       const typeBreak  = (hasSearchData && navData.type_breakdown?.length) ? navData.type_breakdown : inv?.type_breakdown  || [];
       const recentRows = hasSearchData ? (navData.recent_searches || []) : [];
 
-      // KPI cards
-      _setText('navStatTotalSearches', (navData.total_searches ?? '—').toLocaleString?.() || navData.total_searches);
-      _setText('navStatTodaySearches', navData.today_searches ?? '—');
-      _setText('navStatUniqueLocations', navData.unique_locations ?? '—');
-      _setText('navStatTopLocation', navData.top_location || '—');
+      // KPI cards — only update if navData was successfully fetched
+      if (navData) {
+        _setText('navStatTotalSearches', (navData.total_searches ?? '—').toLocaleString?.() || navData.total_searches);
+        _setText('navStatTodaySearches', navData.today_searches ?? '—');
+        _setText('navStatUniqueLocations', navData.unique_locations ?? '—');
+        _setText('navStatTopLocation', navData.top_location || '—');
+      }
 
       // Top locations bar chart
       const locDiv = document.getElementById('navLocationChart');
@@ -2550,31 +2634,21 @@
         }
       }
 
-      // Recent nav searches table
-      const tbody = document.getElementById('recentNavBody');
-      if (tbody) {
-        const rows = recentRows;
-        if (rows.length) {
-          tbody.innerHTML = rows.map(s => {
-            const dt = s.searched_at
-              ? new Date(s.searched_at).toLocaleString('en-PH', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})
-              : '—';
-            return `<tr>
-              <td><div style="display:flex;align-items:center;gap:6px;">
-                <span class="ms" style="color:var(--red,#c93030);font-size:1rem;">location_on</span>
-                <strong>${escHtml(s.name||s.location_name||'—')}</strong>
-              </div></td>
-              <td>${ICON_MAP_LOCAL[s.type]||'📌'} ${s.type||'—'}</td>
-              <td>${s.floor != null ? 'Floor '+s.floor : '—'}</td>
-              <td style="color:#64748b;">${escHtml(s.building||'—')}</td>
-              <td style="font-size:0.82rem;color:#6B7280;">${dt}</td>
-            </tr>`;
-          }).join('');
-        } else {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:1.5rem;">No recent navigation searches.</td></tr>';
-        }
+      // Recent nav searches -- pipe through paginator
+      if (typeof _applyRecentNavPagination === 'function') {
+        _applyRecentNavPagination(recentRows);
+      } else {
+        const tbody = document.getElementById('recentNavBody');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#9CA3AF;padding:2rem;">No recent navigation searches yet.</td></tr>';
       }
     }
+    // NOTE: everything below used to be accidentally nested inside
+    // _loadNavStatsForDashboard() above (a missing closing brace here meant
+    // this whole section — heatmap, intent health, DOMContentLoaded
+    // handlers, the announcements loader, etc. — was only defined after the
+    // dashboard's nav-stats fetch finished running). That's what caused
+    // "_hmInitDateDefaults is not defined" and the charts/heatmap/intent
+    // health/recent-nav table never rendering on first load.
 
     function _setText(id, val) {
       try {
@@ -2600,6 +2674,8 @@
       if (toEl)   toEl.max    = today.toISOString().slice(0,10);
       if (fromEl) fromEl.max  = today.toISOString().slice(0,10);
     }
+  window._hmInitDateDefaults = _hmInitDateDefaults;
+    window._hmInitDateDefaults = _hmInitDateDefaults;
 
     function hmSetPeriod(btn, period) {
       document.querySelectorAll('.hm-period-btn').forEach(b => b.classList.remove('active'));
@@ -2787,22 +2863,19 @@
 
       if (loader) loader.style.display = 'none';
     }
-
-    // ── Intent Health Pagination State ─────────────────────────────────────────
-    let _ihAllData  = [];
-    let _ihPage     = 1;
-    const _ihPerPage = 8;
+  window._buildHeatmap = _buildHeatmap;
 
     function _buildIntentHealth(tbodyId) {
       const tbody = document.getElementById(tbodyId);
       if (!tbody) return;
+      // Attempt to fetch real intent health from API
       apiFetch('/intents/health').then(r => r.json()).then(data => {
         if (!Array.isArray(data) || !data.length) { _buildIntentHealthStatic(tbody); return; }
-        _ihAllData = data;
-        _ihPage = 1;
-        _renderIhPage();
+        tbody.innerHTML = '';
+        data.forEach(i => { _appendIntentRow(tbody, i); });
       }).catch(() => _buildIntentHealthStatic(tbody));
     }
+  window._buildIntentHealth = _buildIntentHealth;
 
     function _buildIntentHealthStatic(tbody) {
       const INTENTS_DEMO = [
@@ -2814,112 +2887,9 @@
         { name:'org_info', triggers:12, conf:55, fallback:61, status:'highfallback' },
         { name:'library_hours', triggers:0, conf:0, fallback:100, status:'dead' },
       ];
-      _ihAllData = INTENTS_DEMO;
-      _ihPage = 1;
-      _renderIhPage();
-    }
-
-    function _renderIhPage() {
-      const tbody   = document.getElementById('ih-body');
-      if (!tbody) return;
-      const total   = _ihAllData.length;
-      const pages   = Math.max(1, Math.ceil(total / _ihPerPage));
-      _ihPage       = Math.min(_ihPage, pages);
-      const start   = (_ihPage - 1) * _ihPerPage;
-      const slice   = _ihAllData.slice(start, start + _ihPerPage);
       tbody.innerHTML = '';
-      slice.forEach(i => _appendIntentRow(tbody, i));
-
-      const prevBtn  = document.getElementById('ih-prev');
-      const nextBtn  = document.getElementById('ih-next');
-      const pageInfo = document.getElementById('ih-page-info');
-      const pageBtns = document.getElementById('ih-page-btns');
-      if (prevBtn)  prevBtn.disabled  = _ihPage <= 1;
-      if (nextBtn)  nextBtn.disabled  = _ihPage >= pages;
-      if (pageInfo) pageInfo.textContent = total > 0
-        ? `Showing ${start + 1}\u2013${Math.min(start + _ihPerPage, total)} of ${total} intents`
-        : 'No data';
-      if (pageBtns) {
-        pageBtns.innerHTML = '';
-        const maxB = 5, pg = _ihPage;
-        let s = Math.max(1, pg - 2), e = Math.min(pages, s + maxB - 1);
-        if (e - s < maxB - 1) s = Math.max(1, e - maxB + 1);
-        for (let p = s; p <= e; p++) {
-          const b = document.createElement('button');
-          b.textContent = p;
-          b.style.cssText = `padding:4px 10px;font-size:0.78rem;border:1px solid ${p===pg?'#c93030':'#E5E7EB'};border-radius:6px;background:${p===pg?'#c93030':'#F9FAFB'};color:${p===pg?'#fff':'#374151'};cursor:pointer;font-weight:${p===pg?700:400};`;
-          const pn = p;
-          b.onclick = () => { _ihPage = pn; _renderIhPage(); };
-          pageBtns.appendChild(b);
-        }
-      }
-      const pg = document.getElementById('ih-pagination');
-      if (pg) pg.style.display = total > _ihPerPage ? 'flex' : 'none';
+      INTENTS_DEMO.forEach(i => _appendIntentRow(tbody, i));
     }
-    window.ihPrevPage = () => { if (_ihPage > 1) { _ihPage--; _renderIhPage(); } };
-    window.ihNextPage = () => { _ihPage++; _renderIhPage(); };
-
-    // ── Navigation Searches Pagination State ─────────────────────────────────
-    let _navAllRows = [];
-    let _navPage    = 1;
-    const _navPerPage = 10;
-
-    function _setNavRows(rows) {
-      _navAllRows = rows;
-      _navPage    = 1;
-      _renderNavPage();
-    }
-
-    function _renderNavPage() {
-      const tbody  = document.getElementById('recentNavBody');
-      if (!tbody) return;
-      const total  = _navAllRows.length;
-      const pages  = Math.max(1, Math.ceil(total / _navPerPage));
-      _navPage     = Math.min(_navPage, pages);
-      const start  = (_navPage - 1) * _navPerPage;
-      const slice  = _navAllRows.slice(start, start + _navPerPage);
-      if (slice.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:2rem;">No navigation search data yet.</td></tr>';
-      } else {
-        tbody.innerHTML = slice.map(s => {
-          const dt = s.searched_at ? new Date(s.searched_at).toLocaleString('en-PH',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '\u2014';
-          return `<tr>
-            <td><strong>${escapeHtml(s.name || s.location_name || '\u2014')}</strong></td>
-            <td>${ICON_MAP[s.type] || '\u{1F4CC}'} ${s.type || '\u2014'}</td>
-            <td>${s.floor != null ? 'Floor ' + s.floor : '\u2014'}</td>
-            <td>${escapeHtml(s.building || '\u2014')}</td>
-            <td style="color:#64748b;font-size:0.82rem;">${dt}</td>
-          </tr>`;
-        }).join('');
-      }
-      const prevBtn  = document.getElementById('nav-prev');
-      const nextBtn  = document.getElementById('nav-next');
-      const pageInfo = document.getElementById('nav-page-info');
-      const pageBtns = document.getElementById('nav-page-btns');
-      if (prevBtn)  prevBtn.disabled  = _navPage <= 1;
-      if (nextBtn)  nextBtn.disabled  = _navPage >= pages;
-      if (pageInfo) pageInfo.textContent = total > 0
-        ? `Showing ${start + 1}\u2013${Math.min(start + _navPerPage, total)} of ${total} searches`
-        : 'No searches yet';
-      if (pageBtns) {
-        pageBtns.innerHTML = '';
-        const maxB = 5, pg = _navPage;
-        let s2 = Math.max(1, pg - 2), e2 = Math.min(pages, s2 + maxB - 1);
-        if (e2 - s2 < maxB - 1) s2 = Math.max(1, e2 - maxB + 1);
-        for (let p = s2; p <= e2; p++) {
-          const b = document.createElement('button');
-          b.textContent = p;
-          b.style.cssText = `padding:4px 10px;font-size:0.78rem;border:1px solid ${p===pg?'#c93030':'#E5E7EB'};border-radius:6px;background:${p===pg?'#c93030':'#F9FAFB'};color:${p===pg?'#fff':'#374151'};cursor:pointer;font-weight:${p===pg?700:400};`;
-          const pn = p;
-          b.onclick = () => { _navPage = pn; _renderNavPage(); };
-          pageBtns.appendChild(b);
-        }
-      }
-      const pgDiv = document.getElementById('nav-pagination');
-      if (pgDiv) pgDiv.style.display = total > _navPerPage ? 'flex' : 'none';
-    }
-    window.navPrevPage = () => { if (_navPage > 1) { _navPage--; _renderNavPage(); } };
-    window.navNextPage = () => { _navPage++; _renderNavPage(); };
 
     function _appendIntentRow(tbody, i) {
       const STATUS_MAP = {
@@ -2933,9 +2903,9 @@
       const confColor= i.conf >= 80 ? '#10B981' : i.conf >= 60 ? '#F59E0B' : '#EF4444';
       const confBar  = i.conf   || 0;
       const fbBar    = Math.min(i.fallback || 0, 100);
-      const intentLabel = (i.name || '\u2014')
+      const intentLabel = (i.name || '—')
         .replace(/_/g,' ')
-        .replace(/\b\w/g, c => c.toUpperCase());
+        .replace(/\w/g, c => c.toUpperCase());
 
       const row = document.createElement('tr');
       row.innerHTML = `
@@ -3166,7 +3136,8 @@
     };
 
     window.deleteAuthority = async function(id) {
-      if (!confirm('Delete this authority? This cannot be undone.')) return;
+      const _ok = typeof spartaConfirm==='function' ? await spartaConfirm('Delete this authority? This cannot be undone.','error') : confirm('Delete this authority? This cannot be undone.');
+      if (!_ok) return;
       const res = await apiFetch(`/authorities/${id}`, { method: 'DELETE' });
       if (res && res.ok) {
         // Show success alert in the authorities page
@@ -3180,7 +3151,7 @@
         if (typeof toast === 'function') toast('Authority deleted.', 'success');
         await loadAuthorities();
       } else {
-        if (typeof toast === 'function') toast('Error deleting authority.', 'error');
+        if (typeof spartaAlert==='function') spartaAlert('Error deleting authority. Please try again.','error');
         else alert('Error deleting authority.');
       }
     };
@@ -3231,9 +3202,11 @@
     };
 
     window.deleteHistory = async function(id) {
-      if (!confirm('Delete this event? This cannot be undone.')) return;
+      const _ok = typeof spartaConfirm==='function' ? await spartaConfirm('Delete this event? This cannot be undone.','error') : confirm('Delete this event? This cannot be undone.');
+      if (!_ok) return;
       const res = await apiFetch(`/history/${id}`, { method: 'DELETE' });
       if (res && res.ok) await loadHistory();
+      else if (typeof spartaAlert==='function') spartaAlert('Error deleting event. Please try again.','error');
       else alert('Error deleting event.');
     };
 
@@ -3262,186 +3235,12 @@
       }
     };
 
-    // On DOM ready — hook into post-login flow
-    // FIX: Use window.onload (not DOMContentLoaded) so _spartaShowShell is
-    // guaranteed defined before this runs. admin-script.js DOMContentLoaded
-    // fires before inline scripts are parsed, causing _spartaShowShell undefined.
-    window.addEventListener('load', () => {
-      fetch(`${API_BASE}/credentials`, { credentials: 'include' })
-        .then(r => {
-          if (r.ok) {
-            sessionStorage.setItem('sparta_logged_in', '1');
-            if (typeof _spartaShowShell === 'function') _spartaShowShell();
-          } else {
-            window.location.replace('/login?next=/admin');
-          }
-        })
-        .catch(() => {
-          if (typeof _spartaShowShell === 'function') _spartaShowShell();
-          else window.location.replace('/login?next=/admin');
-        });
-    });
-
-    </script>
+  </script>
 
     <script>
     // ── FAQ Documents Manager ──────────────────────────────────────────────
-    const FAQ_API = '/api/admin/faq-documents';
 
-    async function faqFetch(url, opts = {}) {
-        const res = await fetch(url, { credentials: 'include', ...opts });
-        if (!res.ok) {
-            const text = await res.text().catch(() => res.statusText);
-            let detail = text;
-            try { detail = JSON.parse(text).detail || text; } catch (_) {}
-            console.error('[faqFetch] Error', res.status, url, detail);
-            throw new Error(detail || 'HTTP ' + res.status);
-        }
-        return res.json();
-    }
 
-    function faqAlert(msg, type = 'success') {
-        const el = document.getElementById('faqAlert');
-        el.className = `alert alert-${type}`;
-        el.textContent = msg;
-        el.style.display = 'block';
-        el.style.fontSize = '14px';
-        el.style.padding = '12px 16px';
-        // Errors stay for 10s, success for 4s
-        setTimeout(() => el.style.display = 'none', type === 'error' ? 10000 : 4000);
-    }
-
-    async function loadFaqDocs() {
-        const tbody = document.getElementById('faqTableBody');
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888">Loading…</td></tr>';
-        try {
-            const docs = await faqFetch(FAQ_API);
-            if (!docs.length) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#aaa">No FAQ documents uploaded yet.</td></tr>';
-                return;
-            }
-            tbody.innerHTML = docs.map(d => `
-                <tr>
-                    <td><strong>${escHtml(d.title)}</strong></td>
-                    <td style="font-size:0.85em;color:#666">${escHtml(d.filename)}</td>
-                    <td style="text-align:center">${d.page_count ?? '—'}</td>
-                    <td style="font-size:0.8em;color:#555;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(d.text_preview)}">${escHtml(d.text_preview)}</td>
-                    <td style="text-align:center">
-                        <span class="status-badge ${d.is_active ? 'active' : 'inactive'}">
-                            ${d.is_active ? '✓ Active' : '✗ Inactive'}
-                        </span>
-                    </td>
-                    <td style="white-space:nowrap">
-                        <button class="btn btn-sm" onclick="toggleFaqDoc(${d.id},this)" style="background:#f39c12;padding:4px 10px;font-size:0.8em">
-                            ${d.is_active ? '⏸ Disable' : '▶ Enable'}
-                        </button>
-                        <button class="btn btn-sm btn-danger faq-delete-btn"
-                            data-id="${d.id}"
-                            data-title="${escHtml(d.title).replace(/"/g,'&quot;')}"
-                            style="padding:4px 10px;font-size:0.8em;margin-left:4px">
-                            🗑 Delete
-                        </button>
-                    </td>
-                </tr>
-            `).join('');
-        } catch (e) {
-            tbody.innerHTML = `<tr><td colspan="6" style="color:red;text-align:center">Error: ${e.message}</td></tr>`;
-        }
-    }
-
-    async function toggleFaqDoc(id, btn) {
-        try {
-            const res = await faqFetch(`${FAQ_API}/${id}/toggle`, { method: 'PATCH' });
-            faqAlert(res.message);
-            loadFaqDocs();
-        } catch (e) { faqAlert(e.message, 'error'); }
-    }
-
-    async function deleteFaqDoc(id, title) {
-        if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
-        try {
-            const url = `${FAQ_API}/${id}`;
-            console.log('[deleteFaqDoc] DELETE', url);
-            const res = await fetch(url, {
-                method: 'DELETE',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            console.log('[deleteFaqDoc] status:', res.status);
-            if (!res.ok) {
-                const text = await res.text().catch(() => res.statusText);
-                let detail = text;
-                try { detail = JSON.parse(text).detail || text; } catch (_) {}
-                console.error('[deleteFaqDoc] Error:', detail);
-                faqAlert(`❌ Delete failed (${res.status}): ${detail}`, 'error');
-                return;
-            }
-            faqAlert('✅ FAQ document deleted.');
-            loadFaqDocs();
-        } catch (e) {
-            console.error('[deleteFaqDoc] Exception:', e);
-            faqAlert(`❌ Delete failed: ${e.message}`, 'error');
-        }
-    }
-
-    // Event delegation for delete buttons — avoids apostrophe issues in onclick
-    document.addEventListener('click', function(e) {
-        const btn = e.target.closest('.faq-delete-btn');
-        if (!btn) return;
-        const id = btn.dataset.id;
-        const title = btn.dataset.title;
-        deleteFaqDoc(id, title);
-    });
-
-    // Upload handler + initial load
-    document.addEventListener('DOMContentLoaded', () => {
-        // Always attempt to load FAQ docs on page ready
-        loadFaqDocs();
-
-        const form = document.getElementById('faqUploadForm');
-        if (!form) return;
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const title = document.getElementById('faqTitle').value.trim();
-            const file  = document.getElementById('faqFile').files[0];
-            if (!title || !file) { faqAlert('Please fill in all fields.', 'error'); return; }
-
-            const submitBtn = form.querySelector('button[type=submit]');
-            submitBtn.disabled = true;
-            submitBtn.textContent = '⏳ Uploading & Extracting…';
-
-            const fd = new FormData();
-            fd.append('title', title);
-            fd.append('pdf', file);
-
-            try {
-                const res = await faqFetch(FAQ_API, { method: 'POST', body: fd });
-                faqAlert(res.message);
-                form.reset();
-                loadFaqDocs();
-            } catch (e) {
-                faqAlert(e.message, 'error');
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.textContent = '📤 Upload PDF';
-            }
-        });
-    });
-
-    // Load when tab is switched to — hook into window.switchTab chain
-    (function() {
-        const _prevSwitch = window.switchTab;
-        window.switchTab = function(name, evt) {
-            if (_prevSwitch) _prevSwitch(name, evt);
-        };
-    })();
-
-    function escHtml(str) {
-        if (!str) return '';
-        return String(str)
-            .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-            .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
     </script>
 
     <script>
@@ -3528,6 +3327,26 @@
       const position = document.getElementById('mf-position').value.trim();
       const sort     = parseInt(document.getElementById('mf-sort').value) || 0;
       if (!name || !position) { alert('Name and Position are required.'); return; }
+
+      // Duplicate check
+      const existingRows = document.querySelectorAll('#membersTableBody tr[data-mid]');
+      for (const row of existingRows) {
+        const mid = parseInt(row.dataset.mid);
+        if (_editingMemberId && mid === _editingMemberId) continue;
+        const rowName = row.querySelector('td:nth-child(1)')?.textContent?.trim().toLowerCase();
+        const rowPos  = row.querySelector('td:nth-child(2)')?.textContent?.trim().toLowerCase();
+        const rowSort = parseInt(row.querySelector('td:nth-child(3)')?.textContent?.trim()) || 0;
+        if (rowName === name.toLowerCase() && rowPos === position.toLowerCase()) {
+          alert('Duplicate: A member with the same name and position already exists.');
+          return;
+        }
+        if (sort > 0 && rowSort === sort) {
+          if (!confirm('Order #' + sort + ' is already used. Proceed anyway?')) return;
+          break;
+        }
+      }
+      // Auto-capitalize position
+      const positionFormatted = position.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
       const btn = document.querySelector('#member-form-wrap .btn-primary');
       btn.disabled = true; btn.textContent = 'Saving…';
       try {
@@ -3535,12 +3354,12 @@
         if (_editingMemberId) {
           res = await apiFetch(`/organizations/${_currentOrgId}/members/${_editingMemberId}`, {
             method: 'PUT',
-            body: JSON.stringify({ name, position, sort_order: sort })
+            body: JSON.stringify({ name, position: positionFormatted, sort_order: sort })
           });
         } else {
           res = await apiFetch(`/organizations/${_currentOrgId}/members`, {
             method: 'POST',
-            body: JSON.stringify({ name, position, sort_order: sort })
+            body: JSON.stringify({ name, position: positionFormatted, sort_order: sort })
           });
         }
         if (res && res.ok) {
@@ -3657,7 +3476,7 @@
     // ================================================================
     // FAQ MODAL UPLOAD
     // ================================================================
-    const FAQ_MODAL_API = '/api/admin/faq-documents';
+    const FAQ_MODAL_API = (typeof API_BASE !== 'undefined' ? API_BASE : '/api/admin') + '/faq-documents';
     window.submitFaqModalUpload = async function() {
       const title = document.getElementById('faqModalTitle')?.value?.trim();
       const file  = document.getElementById('faqModalFile')?.files?.[0];
@@ -3680,7 +3499,6 @@
         document.getElementById('faqModalTitle').value = '';
         document.getElementById('faqModalFile').value = '';
         alertEl.style.display = 'none';
-        await loadFaqDocs();
       } catch(e) {
         alertEl.className = 'alert alert-error';
         alertEl.textContent = '❌ ' + e.message;
@@ -4650,8 +4468,8 @@
 
       } catch(e) { console.warn('[loadWebsiteInfo]', e); }
 
-      // Load active popup preview
-      loadAnnouncementPreview();
+      // Load active popup preview (guarded — no preview UI is wired up yet)
+      if (typeof loadAnnouncementPreview === 'function') loadAnnouncementPreview();
     };
 
 
@@ -4786,20 +4604,22 @@
       else                        _renderAuthTable(filtered);
     };
 
-    // Patch loadAuthorities to use cached data + active view
-    const _origLoadAuth = window.loadAuthorities;
+    // Sync _authData after loadAuthorities for search/filter support
+    const _origLoadAuth2 = window.loadAuthorities;
     window.loadAuthorities = async function() {
-      const tbody = document.getElementById('authoritiesBody');
-      if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:2rem;">Loading…</td></tr>';
+      await _origLoadAuth2();
+      // Sync _authData from rendered table for filter functions
       try {
-        const res = await apiFetch('/authorities');
-        _authData = await res.json();
-        const cnt = document.getElementById('auth-count');
-        if (cnt) cnt.textContent = `${_authData.length} authorit${_authData.length===1?'y':'ies'}`;
-        setAuthView(_authView);
-      } catch(e) {
-        if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--red);padding:2rem;">Error loading authorities.</td></tr>';
-      }
+        const r = await fetch((typeof API_BASE!=='undefined'?API_BASE:'/api/admin')+'/authorities',{credentials:'include'});
+        if (r&&r.ok) _authData = await r.json();
+      } catch(e){}
+      // Re-render whichever view (cards/table) is currently active. Without
+      // this, the cards grid stayed stuck on its empty DOMContentLoaded-time
+      // render (which runs before any data has been fetched), even after
+      // _authData was populated — so switching to Card view showed
+      // "No authorities yet." despite the count showing 40 authorities.
+      if (_authView === 'cards') _renderAuthCards(_authData);
+      else                        _renderAuthTable(_authData);
     };
 
     // ================================================================
@@ -4897,6 +4717,7 @@
       if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:2rem;">Loading…</td></tr>';
       try {
         const res = await apiFetch('/history');
+        if (!res || !res.ok) { if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:2rem;">No history events yet.</td></tr>'; return; }
         _histData = await res.json();
         _histData.sort((a,b) => (a.year||0)-(b.year||0));
         _histAsc = true;
@@ -5456,7 +5277,7 @@
     minLen:    (v, n) => v.trim().length >= n,
     maxLen:    (v, n) => v.trim().length <= n,
     email:     (v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()),
-    phone:     (v) => !v || /^[\d\s\+\-\(\)]{7,20}$/.test(v.trim()),
+    phone:     (v) => !v || (v.replace(/[^\d]/g,'').length >= 5 && v.trim().length <= 50),
     url:       (v) => !v || /^https?:\/\/.+/.test(v.trim()),
     hex:       (v) => /^#[0-9A-Fa-f]{6}$/.test(v.trim()),
     year:      (v) => /^\d{4}$/.test(v.trim()) && +v >= 1900 && +v <= 2099,
@@ -5479,7 +5300,7 @@
           V.err(inputId, 'Enter a valid email address.', fgId); return false;
         }
         if (rule === 'phone' && !V.phone(v)) {
-          V.err(inputId, 'Enter a valid phone number.', fgId); return false;
+          V.err(inputId, 'Enter a valid phone number with at least 5 digits (e.g. (043) 757-3000 loc. 123).', fgId); return false;
         }
         if (rule === 'url' && !V.url(v)) {
           V.err(inputId, 'Enter a valid URL starting with https://', fgId); return false;
@@ -5863,5 +5684,211 @@
 
   </script>
 
-</body>
 
+  <script>
+  /* =============================================================
+     PAGINATION — Intent Health Score + Recent Nav Searches
+     ============================================================= */
+
+  // ── Intent Health Score pagination ────────────────────────────
+  let _ihData = [];
+  let _ihPage  = 1;
+  const IH_PER = 8;
+
+  function _renderIhPage(data, page) {
+    _ihPage = page;
+    const start  = (page - 1) * IH_PER;
+    const slice  = data.slice(start, start + IH_PER);
+    const tbody  = document.getElementById('ih-body');
+    const cnt    = document.getElementById('ih-count');
+    if (!tbody) return;
+
+    if (!slice.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#9CA3AF;padding:2rem;">No intent data yet — start using the chatbot to generate analytics.</td></tr>';
+      if (cnt) cnt.textContent = '';
+      buildPager('ih-pager', 0, 1, IH_PER, '');
+      return;
+    }
+
+    if (cnt) cnt.textContent = `Showing ${start + 1}–${Math.min(start + IH_PER, data.length)} of ${data.length} intent${data.length === 1 ? '' : 's'}`;
+
+    tbody.innerHTML = slice.map(r => {
+      const fbPct = r.fallback_rate != null ? r.fallback_rate.toFixed(1) : '—';
+      const conf  = r.avg_confidence != null ? (r.avg_confidence * 100).toFixed(1) + '%' : '—';
+      const fbNum = parseFloat(fbPct) || 0;
+      const status = r.status || (
+        r.triggers === 0 ? 'dead' :
+        fbNum > 40 ? 'highfallback' :
+        fbNum > 15 || (r.avg_confidence && r.avg_confidence < 0.6) ? 'needswork' : 'healthy'
+      );
+      const statusLabels = {
+        healthy:     '<span class="ih-status s-healthy"><span class="ms" style="font-size:0.85rem;vertical-align:-2px;">check_circle</span> Healthy</span>',
+        needswork:   '<span class="ih-status s-needswork"><span class="ms" style="font-size:0.85rem;vertical-align:-2px;">warning</span> Needs Work</span>',
+        highfallback:'<span class="ih-status s-highfallback"><span class="ms" style="font-size:0.85rem;vertical-align:-2px;">error</span> High Fallback</span>',
+        dead:        '<span class="ih-status s-dead"><span class="ms" style="font-size:0.85rem;vertical-align:-2px;">block</span> Dead Config</span>',
+      };
+      const fbColor = fbNum > 40 ? '#EF4444' : fbNum > 15 ? '#F59E0B' : '#374151';
+      return `<tr>
+        <td class="ih-intent"><span class="ms" style="font-size:0.9rem;vertical-align:-3px;color:#9CA3AF;margin-right:4px;">bolt</span>${escHtml(r.intent || '—')}</td>
+        <td style="font-weight:600;color:#374151;">${(r.triggers ?? 0).toLocaleString()}</td>
+        <td style="font-weight:600;color:#374151;">${conf}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <div class="fb-bar"><div class="fb-fill" style="width:${Math.min(fbNum,100)}%;background:${fbColor};"></div></div>
+            <span style="font-size:12px;font-weight:600;color:${fbColor};">${fbPct}%</span>
+          </div>
+        </td>
+        <td>${statusLabels[status] || statusLabels.dead}</td>
+      </tr>`;
+    }).join('');
+
+    buildPager('ih-pager', data.length, page, IH_PER, 'window._goIhPage');
+  }
+
+  window._goIhPage = function(page) {
+    _renderIhPage(_ihData, page);
+    document.querySelector('.dk .ih-table')?.closest('.dk')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
+  // Override _buildIntentHealth to use pagination
+  const _origBuildIH = window._buildIntentHealth;
+  window._buildIntentHealth = async function(bodyId) {
+    try {
+      const res = await apiFetch('/intents/health');
+      if (!res || !res.ok) return;
+      const data = await res.json();
+      _ihData = data.intents || data || [];
+      _renderIhPage(_ihData, 1);
+    } catch(e) {
+      const tbody = document.getElementById(bodyId || 'ih-body');
+      if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#9CA3AF;padding:1.5rem;">Could not load intent health data.</td></tr>';
+    }
+  };
+
+  // ── Recent Navigation Searches pagination ─────────────────────
+  let _recentNavData = [];
+  let _recentNavPage = 1;
+  const RNAV_PER     = 8;
+
+  function _renderRecentNavPage(data, page) {
+    _recentNavPage = page;
+    const start  = (page - 1) * RNAV_PER;
+    const slice  = data.slice(start, start + RNAV_PER);
+    const tbody  = document.getElementById('recentNavBody');
+    const cnt    = document.getElementById('recentNav-count');
+    if (!tbody) return;
+
+    const ICON_MAP_LOCAL = {
+      classroom:'🏫', laboratory:'🔬', office:'🏢', library:'📚',
+      cafeteria:'🍽️', auditorium:'🎭', gym:'🏃', restroom:'🚻',
+      parking:'🚗', entrance:'🚪', evacuation:'🚨', other:'📌'
+    };
+
+    if (!slice.length) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:2rem;">
+        <div style="color:#9CA3AF;font-size:13px;line-height:1.8;">
+          <div style="font-size:1.5rem;margin-bottom:8px;">🗺️</div>
+          <strong style="color:#374151;display:block;margin-bottom:4px;">No navigation searches yet</strong>
+          Students haven't searched for any campus locations through the chatbot yet.<br>
+          Data will appear here once they start asking location questions.
+        </div>
+      </td></tr>`;
+      if (cnt) cnt.textContent = '';
+      buildPager('recentNav-pager', 0, 1, RNAV_PER, '');
+      return;
+    }
+
+    if (cnt) cnt.textContent = `Showing ${start + 1}–${Math.min(start + RNAV_PER, data.length)} of ${data.length} search${data.length === 1 ? '' : 'es'}`;
+
+    tbody.innerHTML = slice.map(s => {
+      const dt = s.searched_at
+        ? new Date(s.searched_at).toLocaleString('en-PH', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })
+        : '—';
+      const icon = ICON_MAP_LOCAL[s.type] || '📌';
+      return `<tr>
+        <td><div style="display:flex;align-items:center;gap:6px;">
+          <span class="ms" style="color:#B71C1C;font-size:1rem;">location_on</span>
+          <strong style="color:#111827;">${escHtml(s.name || s.location_name || '—')}</strong>
+        </div></td>
+        <td>${icon} <span style="font-size:12px;color:#374151;">${s.type || '—'}</span></td>
+        <td style="color:#374151;">${s.floor != null ? 'Floor ' + s.floor : '—'}</td>
+        <td style="color:#374151;">${escHtml(s.building || '—')}</td>
+        <td style="font-size:0.82rem;color:#6B7280;">${dt}</td>
+      </tr>`;
+    }).join('');
+
+    buildPager('recentNav-pager', data.length, page, RNAV_PER, 'window._goRecentNavPage');
+  }
+
+  window._goRecentNavPage = function(page) {
+    _renderRecentNavPage(_recentNavData, page);
+    document.getElementById('recentNavTable')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
+  // Patch _loadNavStatsForDashboard to pipe data through pagination
+  const _origLoadNavStats = window._loadNavStatsForDashboard;
+  window._loadNavStatsForDashboard = async function() {
+    if (_origLoadNavStats) await _origLoadNavStats();
+    // After the original runs, pull the rendered rows and re-paginate
+    // (the original renders directly to recentNavBody — we intercept that)
+  };
+
+  // Override recentNavBody rendering — called after _loadNavStatsForDashboard sets _recentNavAllRows
+  window._applyRecentNavPagination = function(rows) {
+    _recentNavData = rows || [];
+    _renderRecentNavPage(_recentNavData, 1);
+  };
+
+  </script>
+
+
+  <script>
+  /* Session check in guaranteed global scope */
+  window.addEventListener('load', function() {
+    var base = (typeof API_BASE !== 'undefined') ? API_BASE : '/api/admin';
+    var attempts = 0;
+    function tryConnect() {
+      attempts++;
+    fetch(base + '/credentials', { credentials: 'include' })
+      .then(function(r) {
+        if (r.ok) {
+          sessionStorage.setItem('sparta_logged_in', '1');
+          r.json().then(function(d) {
+            if (d && d.username) sessionStorage.setItem('admin_username', d.username);
+          }).catch(function(){});
+          if (typeof _spartaShowShell === 'function') _spartaShowShell();
+        } else {
+          window.location.replace('/login?next=/admin');
+        }
+      })
+      .catch(function() {
+        if (attempts < 10) {
+          var ov = document.getElementById('wu-overlay');
+          if (ov) ov.style.display = 'flex';
+          var msg = document.getElementById('wu-msg');
+          if (msg) msg.textContent = 'Waking up server... (' + attempts + '/10)';
+          var bar = document.getElementById('wu-bar');
+          if (bar) bar.style.width = (attempts * 10) + '%';
+          setTimeout(tryConnect, 4000);
+        } else {
+          var ov2 = document.getElementById('wu-overlay');
+          if (ov2) ov2.style.display = 'none';
+          if (typeof _spartaShowShell === 'function') _spartaShowShell();
+        }
+      });
+  }
+  tryConnect();
+  });
+  </script>
+
+  <!-- Cold-start wakeup overlay -->
+  <div id='wu-overlay' style='display:none;position:fixed;inset:0;z-index:99999;background:#fff;flex-direction:column;align-items:center;justify-content:center;gap:18px;font-family:system-ui,sans-serif;'>
+    <img src='https://sparta-production-0acb.up.railway.app/images/logo.png' style='width:72px;height:72px;border-radius:50%;object-fit:cover;' onerror='this.style.display="none"'>
+    <div style='font-size:1.2rem;font-weight:700;color:#B71C1C;'>SPARTA Admin</div>
+    <div id='wu-msg' style='font-size:0.9rem;color:#6B7280;'>Waking up server...</div>
+    <div style='width:240px;height:6px;background:#F3F4F6;border-radius:99px;overflow:hidden;'>
+      <div id='wu-bar' style='height:100%;width:10%;background:#B71C1C;border-radius:99px;transition:width 0.4s;'></div>
+    </div>
+    <div style='font-size:0.78rem;color:#9CA3AF;'>Render free tier wakes up in ~30 seconds</div>
+  </div>
+</body>

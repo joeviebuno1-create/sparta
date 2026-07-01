@@ -7,6 +7,7 @@
     <link rel="icon" type="image/png" href="https://sparta-production-0acb.up.railway.app/images/logo.png">
     <link rel="apple-touch-icon" href="https://sparta-production-0acb.up.railway.app/images/logo.png">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,300,0,0" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -217,12 +218,23 @@
         .menu-button:active { transform: translateY(-2px) scale(1.01); }
 
         .menu-button-icon {
-            display: inline-block;
-            margin-right: 0.8rem;
-            font-size: 1.35rem;
-            transition: transform 0.3s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px; height: 36px;
+            background: rgba(183,28,28,0.1);
+            border-radius: 10px;
+            margin-right: 0.9rem;
+            flex-shrink: 0;
+            transition: transform 0.3s, background 0.2s;
         }
-        .menu-button:hover .menu-button-icon { transform: scale(1.18) rotate(5deg); }
+        .menu-button-icon .ms {
+            font-family: "Material Symbols Outlined";
+            font-size: 1.3rem;
+            color: var(--sparta-red, #B71C1C);
+            font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
+        }
+        .menu-button:hover .menu-button-icon { transform: scale(1.1); background: rgba(183,28,28,0.18); }
 
         .menu-button-text { flex: 1; text-align: left; }
         .menu-button-arrow {
@@ -286,6 +298,16 @@
             display: block;
             animation: bellRing 4s ease-in-out 2s infinite;
             transform-origin: top center;
+        }
+        .notif-bell-icon .ms {
+            font-family: "Material Symbols Outlined";
+            font-size: 1.4rem;
+            font-style: normal;
+            font-weight: normal;
+            font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
+            color: #fff;
+            display: inline-block;
+            line-height: 1;
         }
         @keyframes bellRing {
             0%,80%,100%{transform:rotate(0)}
@@ -429,7 +451,7 @@
     <div class="pattern-overlay"></div>
 
     <button class="notif-bell" onclick="openAnnouncementsPopup()" id="notifBell" title="View Announcements" style="display:none;">
-        <span class="notif-bell-icon">🔔</span>
+        <span class="notif-bell-icon"><span class="ms" style="font-size:1.3rem;">notifications</span></span>
         <span class="notif-badge" id="notifBadge">0</span>
     </button>
 
@@ -440,7 +462,7 @@
             </div>
             <div class="popup-body" id="popupBody">
                 <div class="popup-empty">
-                    <span class="popup-empty-icon">📭</span>
+                    <span class="popup-empty-icon"><span class="ms" style="font-size:2rem;color:#D1D5DB;">campaign</span></span>
                     <span class="popup-empty-text">No announcements at this time.</span>
                 </div>
             </div>
@@ -473,22 +495,22 @@
 
         <div class="menu">
             <button class="menu-button" onclick="_nav('sparta_chatbot.html')">
-                <span class="menu-button-icon">💬</span>
+                <span class="menu-button-icon"><span class="ms">smart_toy</span></span>
                 <span class="menu-button-text">Talk to SPARTA</span>
                 <span class="menu-button-arrow">›</span>
             </button>
             <button class="menu-button" onclick="_nav('sparta_campus-navigator.html')">
-                <span class="menu-button-icon">🗺️</span>
+                <span class="menu-button-icon"><span class="ms">explore</span></span>
                 <span class="menu-button-text">Navigate the Campus</span>
                 <span class="menu-button-arrow">›</span>
             </button>
             <button class="menu-button" onclick="_nav('how_to_use.html')">
-                <span class="menu-button-icon">📖</span>
+                <span class="menu-button-icon"><span class="ms">menu_book</span></span>
                 <span class="menu-button-text">How to Use SPARTA</span>
                 <span class="menu-button-arrow">›</span>
             </button>
             <button class="menu-button" onclick="_nav('sparta_about.html')">
-                <span class="menu-button-icon">ℹ️</span>
+                <span class="menu-button-icon"><span class="ms">info</span></span>
                 <span class="menu-button-text">About SPARTA</span>
                 <span class="menu-button-arrow">›</span>
             </button>
@@ -541,8 +563,8 @@
             const prev=document.getElementById('prevBtn'), next=document.getElementById('nextBtn');
             const ctr=document.getElementById('popupCounter');
             if(popupAnnouncements.length===0){
-                hero.innerHTML=`<button class="popup-close" onclick="closeAnnouncementsPopup()" title="Close">✕</button><div class="popup-hero-noimg"><span class="popup-hero-noimg-icon">📢</span></div>`;
-                body.innerHTML=`<div class="popup-empty"><span class="popup-empty-icon">📭</span><span class="popup-empty-text">No announcements at this time.</span></div>`;
+                hero.innerHTML=`<button class="popup-close" onclick="closeAnnouncementsPopup()" title="Close">✕</button><div class="popup-hero-noimg"><span class="popup-hero-noimg-icon"><span class="ms" style="font-size:2rem;color:rgba(255,255,255,0.6);">campaign</span></span></div>`;
+                body.innerHTML=`<div class="popup-empty"><span class="popup-empty-icon"><span class="ms" style="font-size:2rem;color:#D1D5DB;">campaign</span></span><span class="popup-empty-text">No announcements at this time.</span></div>`;
                 dots.innerHTML=''; footer.style.display='none'; return;
             }
             const ann=popupAnnouncements[currentPopupIndex];
@@ -552,7 +574,7 @@
             } else {
                 hero.innerHTML=`<button class="popup-close" onclick="closeAnnouncementsPopup()" title="Close">✕</button><div class="popup-hero-noimg"><span class="popup-hero-noimg-icon">${getCategoryIcon(ann.category)}</span></div><div class="popup-hero-overlay"></div><span class="popup-hero-badge ${catClass}">${escText(ann.category)}</span>`;
             }
-            body.innerHTML=`<div class="popup-item active"><div class="popup-ann-title">${escText(ann.title)}</div>${ann.content?`<div class="popup-ann-content">${escText(ann.content)}</div>`:''}<div class="popup-ann-date"><span>📅</span><span>Posted ${formatDate(ann.created_at)}</span></div></div>`;
+            body.innerHTML=`<div class="popup-item active"><div class="popup-ann-title">${escText(ann.title)}</div>${ann.content?`<div class="popup-ann-content">${escText(ann.content)}</div>`:''}<div class="popup-ann-date"><span class="ms" style="font-size:0.95rem;vertical-align:-3px;">calendar_today</span><span>Posted ${formatDate(ann.created_at)}</span></div></div>`;
             if(popupAnnouncements.length>1){
                 footer.style.display='flex';
                 prev.disabled=currentPopupIndex===0;
@@ -562,7 +584,7 @@
             } else { footer.style.display='none'; }
         }
 
-        function getCategoryIcon(cat) { const i={Academic:'🎓',Events:'🎉',Emergency:'🚨',General:'📢'}; return i[cat]||'📢'; }
+        function getCategoryIcon(cat) { const icons={Academic:'school',Events:'event',Emergency:'emergency',General:'campaign',Enrollment:'assignment',Maintenance:'build'}; const n=icons[cat]||'campaign'; return `<span class="ms" style="font-size:1rem;vertical-align:-3px;">${n}</span>`; }
         function escText(str) { if(!str)return''; const d=document.createElement('div'); d.textContent=str; return d.innerHTML; }
 
         loadAnnouncements();

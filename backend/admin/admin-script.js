@@ -221,6 +221,10 @@ const API_BASE = (_isLocal && !_isLiveServer)
     : _isLiveServer
         ? 'http://127.0.0.1:8000/api/admin'                                // VS Code Live Server
         : 'https://sparta-production-0acb.up.railway.app/api/admin';       // Production
+
+// Root app host (no /api/admin suffix) — needed for public routes like
+// /api/active-3d-model, which live outside the admin router.
+const APP_ROOT = API_BASE.replace(/\/api\/admin$/, '');
     
 // Global state
 let allLocations = [];
@@ -531,6 +535,8 @@ async function loadData(tabName) {
         
         if (endpoint && displayFunction) {
             const response = await apiFetch(endpoint);
+            if (!response) return;       // null = 401 redirect in progress
+            if (!response.ok) return;    // non-2xx — skip rendering
             const data = await response.json();
             displayFunction(data);
         }
@@ -634,7 +640,7 @@ function displayIntents(intents) {
 
 // Delete item
 async function deleteItem(type, id) {
-    if (!confirm('Are you sure you want to delete this item?')) return;
+    if (!(typeof spartaConfirm==='function' ? await spartaConfirm('Are you sure you want to delete this item?','error') : confirm('Are you sure you want to delete this item?'))) return;
     
     try {
         const response = await apiFetch(`/${type}/${id}`, { method: 'DELETE' });
@@ -822,66 +828,56 @@ async function loadNavigationStatistics() {
             typeDiv.innerHTML = '<p style="color:#94a3b8;font-size:0.85rem;">No type data yet.</p>';
         }
 
-        // Recent nav searches table — feed into paginator
+        // Recent nav searches table
+        const tbody = document.getElementById('recentNavBody');
         if (navData.recent_searches && navData.recent_searches.length) {
-            // Real search log data: map to standard shape and hand to paginator
-            const rows = navData.recent_searches.map(s => ({
-                name:        s.name || s.location_name || '',
-                type:        s.type || '',
-                floor:       s.floor,
-                building:    s.building || '',
-                searched_at: s.searched_at || null
-            }));
-            if (typeof _setNavRows === 'function') {
-                _setNavRows(rows);
-            } else {
-                const tbody = document.getElementById('recentNavBody');
-                if (tbody) tbody.innerHTML = rows.map(s => {
-                    const dt = s.searched_at ? new Date(s.searched_at).toLocaleString('en-PH',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '\u2014';
-                    return `<tr><td><strong>${escapeHtml(s.name||'\u2014')}</strong></td><td>${ICON_MAP[s.type]||'\uD83D\uDCCC'} ${s.type||'\u2014'}</td><td>${s.floor!=null?'Floor '+s.floor:'\u2014'}</td><td>${escapeHtml(s.building||'\u2014')}</td><td style="color:#64748b;font-size:0.82rem;">${dt}</td></tr>`;
-                }).join('');
-            }
+            tbody.innerHTML = navData.recent_searches.map(s => {
+                const dt = s.searched_at ? new Date(s.searched_at).toLocaleString('en-PH', {
+                    month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '—';
+                return `<tr>
+                    <td><strong>${escapeHtml(s.name || s.location_name || '—')}</strong></td>
+                    <td>${ICON_MAP[s.type] || '📌'} ${s.type || '—'}</td>
+                    <td>${s.floor != null ? 'Floor ' + s.floor : '—'}</td>
+                    <td>${escapeHtml(s.building || '—')}</td>
+                    <td style="color:#64748b;font-size:0.82rem;">${dt}</td>
+                </tr>`;
+            }).join('');
         } else {
-            // Fallback: show all locations as inventory with pagination
+            // Fallback: show all locations as inventory
             const locResp2 = await apiFetch('/locations');
             if (locResp2 && locResp2.ok) {
                 const locs2 = await locResp2.json();
-                document.getElementById('navStatTotalSearches').textContent  = locs2.length;
+                document.getElementById('navStatTotalSearches').textContent = locs2.length;
                 document.getElementById('navStatUniqueLocations').textContent = [...new Set(locs2.map(l => l.name))].length;
-                document.getElementById('navStatTopLocation').textContent    = locs2[0]?.name ?? '\u2014';
-                document.getElementById('navStatTodaySearches').textContent  = '\u2014';
-
-                // Feed location inventory into nav paginator with no timestamp
-                const invRows = locs2.map(s => ({
-                    name:        s.name || '',
-                    type:        s.type || '',
-                    floor:       s.floor,
-                    building:    s.building || '',
-                    searched_at: null
-                }));
-                if (typeof _setNavRows === 'function') {
-                    _setNavRows(invRows);
-                }
+                document.getElementById('navStatTopLocation').textContent = locs2[0]?.name ?? '—';
+                document.getElementById('navStatTodaySearches').textContent = '—';
+                tbody.innerHTML = locs2.slice(0, 20).map(s => `<tr>
+                    <td><strong>${escapeHtml(s.name)}</strong></td>
+                    <td>${ICON_MAP[s.type] || '📌'} ${s.type || '—'}</td>
+                    <td>${s.floor != null ? 'Floor ' + s.floor : '—'}</td>
+                    <td>${escapeHtml(s.building || '—')}</td>
+                    <td style="color:#64748b;font-size:0.82rem;">—</td>
+                </tr>`).join('');
 
                 // Build type breakdown from locations list
                 const typeCounts = {};
                 locs2.forEach(l => { typeCounts[l.type] = (typeCounts[l.type] || 0) + 1; });
                 const typeArr = Object.entries(typeCounts).map(([type, count]) => ({ type, count }))
                     .sort((a, b) => b.count - a.count);
-                const maxT2 = Math.max(...typeArr.map(t => t.count), 1);
+                const maxT2 = Math.max(...typeArr.map(t => t.count));
                 const typeColors2 = {
-                    classroom:'#3b82f6', laboratory:'#10b981', office:'#f59e0b',
-                    library:'#8b5cf6',  cafeteria:'#ef4444',  auditorium:'#ec4899',
-                    gym:'#14b8a6',      restroom:'#64748b',   parking:'#6366f1',
-                    entrance:'#c41e3a', evacuation:'#dc2626', other:'#94a3b8'
+                    classroom: '#3b82f6', laboratory: '#10b981', office: '#f59e0b',
+                    library: '#8b5cf6', cafeteria: '#ef4444', auditorium: '#ec4899',
+                    gym: '#14b8a6', restroom: '#64748b', parking: '#6366f1',
+                    entrance: '#c41e3a', evacuation: '#dc2626', other: '#94a3b8'
                 };
                 document.getElementById('navTypeChart').innerHTML = typeArr.map(item => {
-                    const pct = (item.count / maxT2 * 100).toFixed(0);
+                    const pct = maxT2 > 0 ? (item.count / maxT2 * 100).toFixed(0) : 0;
                     const color = typeColors2[item.type] || '#94a3b8';
-                    const icon  = ICON_MAP[item.type] || '\uD83D\uDCCC';
+                    const icon = ICON_MAP[item.type] || '📌';
                     return `<div style="margin-bottom:10px;">
                         <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:rgba(255,255,255,0.85);margin-bottom:3px;">
-                            <span>${icon} ${item.type.charAt(0).toUpperCase()+item.type.slice(1)}</span><span><strong style="color:#F4D03F;">${item.count}</strong></span>
+                            <span>${icon} ${item.type.charAt(0).toUpperCase() + item.type.slice(1)}</span><span><strong style="color:#F4D03F;">${item.count}</strong></span>
                         </div>
                         <div style="background:rgba(255,255,255,0.08);border-radius:99px;height:10px;overflow:hidden;">
                             <div style="height:100%;width:${pct}%;background:${color};border-radius:99px;transition:width 0.6s ease;"></div>
@@ -894,12 +890,12 @@ async function loadNavigationStatistics() {
                 locs2.forEach(l => { nameCounts[l.name] = (nameCounts[l.name] || 0) + 1; });
                 const topLocs = Object.entries(nameCounts).map(([name, count]) => ({ name, count }))
                     .sort((a, b) => b.count - a.count).slice(0, 8);
-                const maxL2 = Math.max(...topLocs.map(l => l.count), 1);
+                const maxL2 = Math.max(...topLocs.map(l => l.count));
                 document.getElementById('navLocationChart').innerHTML = topLocs.map(item => {
-                    const pct = (item.count / maxL2 * 100).toFixed(0);
+                    const pct = maxL2 > 0 ? (item.count / maxL2 * 100).toFixed(0) : 0;
                     return `<div style="margin-bottom:10px;">
                         <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:rgba(255,255,255,0.85);margin-bottom:3px;">
-                            <span>\uD83D\uDCCD ${escapeHtml(item.name)}</span><span><strong style="color:#F4D03F;">${item.count}</strong></span>
+                            <span>📍 ${escapeHtml(item.name)}</span><span><strong style="color:#F4D03F;">${item.count}</strong></span>
                         </div>
                         <div style="background:rgba(255,255,255,0.08);border-radius:99px;height:10px;overflow:hidden;">
                             <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#c93030,#F4D03F);border-radius:99px;transition:width 0.6s ease;"></div>
@@ -907,7 +903,7 @@ async function loadNavigationStatistics() {
                     </div>`;
                 }).join('');
             } else {
-                if (typeof _setNavRows === 'function') _setNavRows([]);
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:2rem;">No navigation search data yet.</td></tr>';
             }
         }
     } catch (err) {
@@ -1236,7 +1232,7 @@ function cancelEditLocation() {
 }
 
 async function deleteLocation(locationId) {
-    if (!confirm('Are you sure you want to delete this location? This will also delete any paths connected to it.')) return;
+    if (!(typeof spartaConfirm==='function' ? await spartaConfirm('Delete this location? All connected paths will also be deleted.','error') : confirm('Delete this location?'))) return;
     
     try {
         const response = await apiFetch(`/locations/${locationId}`, { method: 'DELETE' });
@@ -1891,51 +1887,80 @@ function initNavigationTab() {
     controls.maxPolarAngle = Math.PI / 2.1;
     
     // Load GLB model
+    // NOTE: this used to be hardcoded to a fixed production URL pointing at
+    // the old default map file, so uploading a new model via the admin's
+    // "3D Campus Model" page never showed up here. Now fetches whichever
+    // model is actually active, same as the public campus navigator does.
     const loader = new THREE.GLTFLoader();
-    loader.load(
-        'https://sparta-production-0acb.up.railway.app/static/batangas_state_university-_the_neu_lipa_map.glb',
-        (gltf) => {
-            campusModel = gltf.scene;
-            
-            // Center and scale model
-            const box = new THREE.Box3().setFromObject(campusModel);
-            const center = box.getCenter(new THREE.Vector3());
-            const size = box.getSize(new THREE.Vector3());
-            
-            campusModel.position.sub(center);
-            
-            const scale = 100 / Math.max(size.x, size.y, size.z);
-            campusModel.scale.set(scale, scale, scale);
-            
-            // Enable shadows
-            campusModel.traverse((node) => {
-                if (node.isMesh) {
-                    node.castShadow = true;
-                    node.receiveShadow = true;
-                }
-            });
-            
-            scene.add(campusModel);
-            
-            document.getElementById('mapLoading').style.display = 'none';
-            showAlert('navAlert', '✅ 3D Campus Map loaded! Click to place markers.', 'success');
-        },
-        (xhr) => {
-            const progress = (xhr.loaded / xhr.total * 100).toFixed(0);
-            console.log(`Loading: ${progress}%`);
-            document.querySelector('.loading-text').textContent = `Loading 3D Campus Map (${progress}%)`;
-        },
-        (error) => {
-            console.error('Error loading model:', error);
-            document.getElementById('mapLoading').innerHTML = `
-                <div style="color: white; text-align: center;">
-                    <div style="font-size: 3rem;">⚠️</div>
-                    <div style="font-size: 1.2rem; font-weight: 600;">Failed to Load Model</div>
-                    <div style="font-size: 0.9rem; margin-top: 0.5rem;">Check GLB file path</div>
-                </div>
-            `;
-        }
-    );
+    if (THREE.DRACOLoader) {
+        const dracoLoader = new THREE.DRACOLoader();
+        dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/libs/draco/');
+        loader.setDRACOLoader(dracoLoader);
+    }
+
+    function loadNavModel(modelPath) {
+        loader.load(
+            modelPath,
+            (gltf) => {
+                campusModel = gltf.scene;
+                
+                // Center and scale model.
+                // NOTE: position must be offset by center*scale, not just
+                // center — Object3D applies position as a raw world-space
+                // translation independent of its own scale. Subtracting the
+                // unscaled center only happened to look right for models
+                // whose original size was already close to ~100 units.
+                const box = new THREE.Box3().setFromObject(campusModel);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+                
+                const scale = 100 / Math.max(size.x, size.y, size.z);
+                campusModel.scale.set(scale, scale, scale);
+                campusModel.position.sub(center.clone().multiplyScalar(scale));
+                
+                // Enable shadows
+                campusModel.traverse((node) => {
+                    if (node.isMesh) {
+                        node.castShadow = true;
+                        node.receiveShadow = true;
+                    }
+                });
+                
+                scene.add(campusModel);
+                
+                document.getElementById('mapLoading').style.display = 'none';
+                showAlert('navAlert', '✅ 3D Campus Map loaded! Click to place markers.', 'success');
+            },
+            (xhr) => {
+                const progress = xhr.total > 0 ? (xhr.loaded / xhr.total * 100).toFixed(0) : 0;
+                console.log(`Loading: ${progress}%`);
+                document.querySelector('.loading-text').textContent = 'Loading 3D Campus Map…';
+            },
+            (error) => {
+                console.error('Error loading model:', error);
+                document.getElementById('mapLoading').innerHTML = `
+                    <div style="color: white; text-align: center;">
+                        <div style="font-size: 3rem;">⚠️</div>
+                        <div style="font-size: 1.2rem; font-weight: 600;">Failed to Load Model</div>
+                        <div style="font-size: 0.9rem; margin-top: 0.5rem;">Check GLB file path</div>
+                    </div>
+                `;
+            }
+        );
+    }
+
+    fetch(`${APP_ROOT}/api/active-3d-model`)
+        .then(res => res.json())
+        .then(info => {
+            // path may be relative ("/api/3d-model-file?v=...", "/static/...")
+            // or absolute (a full Cloudinary/settings URL) — only prefix if relative.
+            const modelPath = /^https?:\/\//.test(info.path) ? info.path : `${APP_ROOT}${info.path}`;
+            loadNavModel(modelPath);
+        })
+        .catch(err => {
+            console.error('Failed to fetch active model info, falling back to default:', err);
+            loadNavModel(`${APP_ROOT}/static/batangas_state_university-_the_neu_lipa_map.glb`);
+        });
     
     // Raycaster for click detection
     raycaster = new THREE.Raycaster();
@@ -2635,6 +2660,35 @@ function formatFileSize(bytes) {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
 
+async function activate3DModel(id) {
+    try {
+        const res = await apiFetch(`/3d-maps/${id}/activate`, { method: 'POST' });
+        if (res && res.ok) {
+            showAlert('model3dAlert', '✅ Model activated. Refresh the campus navigator to see it.', 'success');
+            loadModelUploadHistory();
+        } else {
+            showAlert('model3dAlert', '❌ Failed to activate model.', 'error');
+        }
+    } catch (error) {
+        showAlert('model3dAlert', '❌ Error: ' + error.message, 'error');
+    }
+}
+
+async function delete3DModel(id) {
+    if (!confirm('Delete this model? This cannot be undone.')) return;
+    try {
+        const res = await apiFetch(`/3d-maps/${id}`, { method: 'DELETE' });
+        if (res && res.ok) {
+            showAlert('model3dAlert', '✅ Model deleted.', 'success');
+            loadModelUploadHistory();
+        } else {
+            showAlert('model3dAlert', '❌ Failed to delete model.', 'error');
+        }
+    } catch (error) {
+        showAlert('model3dAlert', '❌ Error: ' + error.message, 'error');
+    }
+}
+
 async function loadModelUploadHistory() {
     try {
         const response = await apiFetch('/model-upload-history');
@@ -2662,12 +2716,31 @@ async function loadModelUploadHistory() {
 
 function displayModelUploadHistory(uploads) {
     const tbody = document.querySelector('#modelHistoryTable tbody');
+
+    // Populate "Current Active Model" box from whichever row is active.
+    // Previously nothing ever wrote to these elements on page load, so
+    // they were stuck showing "Loading..." until you uploaded something
+    // in that same session.
+    const active = (uploads || []).find(u => u.is_active);
+    const vEl = document.getElementById('currentModelVersion');
+    const tEl = document.getElementById('currentModelTitle');
+    const dEl = document.getElementById('currentModelDate');
+    if (active) {
+        if (vEl) vEl.textContent = active.original_filename || active.filename || 'Active model';
+        if (tEl) tEl.textContent = active.description || '';
+        if (dEl) dEl.textContent = active.uploaded_at ? new Date(active.uploaded_at).toLocaleString() : 'N/A';
+    } else {
+        if (vEl) vEl.textContent = 'Default campus model';
+        if (tEl) tEl.textContent = 'No custom model uploaded yet';
+        if (dEl) dEl.textContent = 'N/A';
+    }
+
     if (!tbody) return;
     
     if (!uploads || uploads.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="5" style="text-align: center; padding: 2rem; color: #64748b;">
+                <td colspan="7" style="text-align: center; padding: 2rem; color: #64748b;">
                     No upload history yet
                 </td>
             </tr>
@@ -2680,15 +2753,21 @@ function displayModelUploadHistory(uploads) {
         const row = document.createElement('tr');
         const uploadDate = upload.uploaded_at ? new Date(upload.uploaded_at).toLocaleString() : 'N/A';
         const fileSize = formatFileSize(upload.file_size || 0);
-        const status = upload.status === 'success' ? '✅ Success' : '❌ Failed';
-        const statusClass = upload.status === 'success' ? 'success' : 'error';
-        
+        const statusBadge = upload.is_active
+            ? '<span class="badge badge-success">✅ Active</span>'
+            : '<span class="badge">Inactive</span>';
+
         row.innerHTML = `
-            <td>${uploadDate}</td>
-            <td><strong>${upload.original_filename}</strong></td>
+            <td>${statusBadge}</td>
+            <td><strong>${upload.original_filename || upload.filename || '—'}</strong></td>
+            <td>${upload.description || '—'}</td>
             <td>${fileSize}</td>
-            <td>${upload.description || '-'}</td>
-            <td><span class="badge badge-${statusClass}">${status}</span></td>
+            <td>${uploadDate}</td>
+            <td>—</td>
+            <td>
+                ${upload.is_active ? '' : `<button class="btn btn-small" onclick="activate3DModel(${upload.id})">Set Active</button>`}
+                <button class="btn btn-small btn-danger" onclick="delete3DModel(${upload.id})">🗑️ Delete</button>
+            </td>
         `;
         tbody.appendChild(row);
     });
@@ -2753,17 +2832,23 @@ async function handleModel3DUpload(e) {
             }
             if (xhr.status === 200) {
                 const response = JSON.parse(xhr.responseText);
-                showAlert('model3dAlert', '✅ ' + response.message + ' Please refresh the page to see the new model.', 'success');
+                showAlert('model3dAlert', '✅ ' + response.message, 'success');
                 
-                // Update current model display
-                document.getElementById('currentModelName').textContent = file.name;
-                document.getElementById('currentModelDate').textContent = new Date().toLocaleString();
+                // Update current model display (element IDs must match the
+                // HTML: currentModelVersion / currentModelTitle / currentModelDate —
+                // this used to write to a non-existent "currentModelName" element)
+                const vEl = document.getElementById('currentModelVersion');
+                const tEl = document.getElementById('currentModelTitle');
+                const dEl = document.getElementById('currentModelDate');
+                if (vEl) vEl.textContent = response.filename || file.name;
+                if (tEl) tEl.textContent = description || '';
+                if (dEl) dEl.textContent = new Date().toLocaleString();
                 
                 // Reset form
                 document.getElementById('model3dForm').reset();
                 clearFileSelection();
                 
-                // Reload upload history
+                // Reload upload history (also refreshes current-model display)
                 loadModelUploadHistory();
                 
                 // Hide progress
@@ -2910,7 +2995,7 @@ function displayMembers(members) {
 
 // Delete organization
 async function deleteOrganization(orgId) {
-    if (!confirm('Are you sure you want to delete this organization? All members will also be deleted.')) return;
+    if (!(typeof spartaConfirm==='function' ? await spartaConfirm('Delete this organization? All members will also be deleted.','error') : confirm('Delete this organization?'))) return;
     
     try {
         const response = await apiFetch(`/organizations/${orgId}`, { method: 'DELETE' });
@@ -2930,7 +3015,7 @@ async function deleteOrganization(orgId) {
 
 // Delete member
 async function deleteMember(memberId, orgId) {
-    if (!confirm('Are you sure you want to delete this member?')) return;
+    if (!(typeof spartaConfirm==='function' ? await spartaConfirm('Delete this member?','error') : confirm('Delete this member?'))) return;
     
     try {
         const response = await apiFetch(`/members/${memberId}`, { method: 'DELETE' });
@@ -3031,17 +3116,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Logout — clears HttpOnly cookie via server
 window.logout = function() {
-    if (confirm('Are you sure you want to logout?')) {
-        fetch(`${API_BASE}/logout`, { method: 'POST', credentials: 'include' })
-            .then(() => {
-                localStorage.removeItem('spartha_user');
-                window.location.replace('/login');
-            })
-            .catch(() => {
-                localStorage.removeItem('spartha_user');
-                window.location.replace('/login');
-            });
-    }
+    (async () => {
+      let _logoutOk = false;
+      if (typeof spartaConfirm === 'function') { _logoutOk = await spartaConfirm('Are you sure you want to logout?', 'warning'); }
+      else { _logoutOk = confirm('Are you sure you want to logout?'); }
+      if (!_logoutOk) return;
+      fetch(`${API_BASE}/logout`, { method: 'POST', credentials: 'include' })
+        .then(() => { localStorage.removeItem('spartha_user'); window.location.replace('/login'); })
+        .catch(() => { localStorage.removeItem('spartha_user'); window.location.replace('/login'); });
+    })();
 };
 
 // Change credentials modal
@@ -3260,12 +3343,12 @@ async function deletePopupAnn(id) {
 
 async function archivePopupAnn(id) {
     try {
-        const response = await apiFetch(`/announcement-popups/${id}/archive`, {
-            method: 'PATCH'
+        const response = await apiFetch(`/announcement-popups/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ is_archived: true, is_active: false })
         });
         if (!response || !response.ok) throw new Error('Archive failed');
         loadPopupAnnouncements();
-        showAlert('popupAlert', '✅ Popup archived successfully.', 'success');
     } catch (error) { showAlert('popupAlert', '❌ Error archiving popup', 'error'); }
 }
 

@@ -11,7 +11,19 @@
     <link rel="icon" type="image/png" href="https://sparta-production-0acb.up.railway.app/images/logo.png" id="pageFavicon">
     <link rel="apple-touch-icon" href="https://sparta-production-0acb.up.railway.app/images/logo.png" id="pageAppleTouchIcon">
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,300,0,0" rel="stylesheet">
     <link rel="stylesheet" href="chatbot_styles.css">
+    <style>
+      .ms {
+        font-family: "Material Symbols Outlined";
+        font-style: normal;
+        font-weight: normal;
+        font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
+        display: inline-block;
+        line-height: 1;
+        vertical-align: -3px;
+      }
+    </style>
 </head>
 <body>
     <!-- iOS-safe fixed background layer -->
@@ -38,7 +50,7 @@
                     </a>
                     <!-- Campus Navigator shortcut -->
                     <a href="sparta_campus-navigator.html" class="nav-icon-btn" title="Campus Navigator">
-                        <span class="nav-icon-emoji">🗺️</span>
+                        <span class="ms" style="font-size:1.1rem;font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;">map</span>
                         <span class="nav-icon-label">Map</span>
                     </a>
                     <!-- Language toggle — one-tap EN/TL switch -->
@@ -84,15 +96,15 @@
         <div class="chat-messages" id="chatMessages">
             <div class="message bot">
                 <div class="message-content">
-                    <strong id="welcomeTitle">👋 Welcome to SPARTA!</strong>
+                    <strong id="welcomeTitle"><span class="ms" style="color:var(--sparta-red,#B71C1C);font-size:1rem;">waving_hand</span> Welcome to SPARTA!</strong>
                     <br><br>
                     <span id="welcomeSubtitle">I'm your intelligent assistant for BSU Lipa Campus. I can help you with:</span>
                     <br><br>
-                    📍 <strong>Campus Navigation</strong> — Find buildings, rooms, offices<br>
-                    👥 <strong>Faculty & Staff</strong> — Contact info and office hours<br>
-                    📅 <strong>Announcements</strong> — Latest news and events<br>
-                    🏛️ <strong>University Info</strong> — History, programs, policies<br>
-                    🏆 <strong>Organizations</strong> — Student clubs and groups
+                    <span class="ms" style="font-size:1rem;vertical-align:-3px;color:var(--sparta-red);">location_on</span> <strong>Campus Navigation</strong> — Find buildings, rooms, offices<br>
+                    <span class="ms" style="font-size:1rem;color:var(--sparta-red,#B71C1C);">people</span> <strong>Faculty & Staff</strong> — Contact info and office hours<br>
+                    <span class="ms" style="font-size:1rem;vertical-align:-3px;color:var(--sparta-red);">campaign</span> <strong>Announcements</strong> — Latest news and events<br>
+                    <span class="ms" style="font-size:1rem;color:var(--sparta-red,#B71C1C);">account_balance</span> <strong>University Info</strong> — History, programs, policies<br>
+                    <span class="ms" style="font-size:1rem;color:var(--sparta-red,#B71C1C);">groups</span> <strong>Organizations</strong> — Student clubs and groups
                     <br><br>
                     <span id="welcomeQuestion">What would you like to know about BSU Lipa?</span>
                 </div>
@@ -110,11 +122,11 @@
 
         <!-- Quick Questions -->
         <div class="quick-questions" id="quickQuestionsContainer">
-            <button class="quick-question-btn" onclick="sendQuickQuestion('Who is the dean?')">🎓 Who is the dean?</button>
-            <button class="quick-question-btn" onclick="sendQuickQuestion('Who is the chancellor of BSU Lipa')">🎓 Who is the chancellor?</button>
-            <button class="quick-question-btn" onclick="sendQuickQuestion('Where is the speech lab?')">📍 Where is the speech lab?</button>
-            <button class="quick-question-btn" onclick="sendQuickQuestion('Tell me about SETS organization')">🏆 Tell me about SETS org</button>
-            <button class="quick-question-btn" onclick="sendQuickQuestion('When was BSU Lipa Founded?')">🏛️ When was BSU Lipa Founded?</button>
+            <button class="quick-question-btn" onclick="sendQuickQuestion('Who is the dean?')">Who is the dean?</button>
+            <button class="quick-question-btn" onclick="sendQuickQuestion('Who is the chancellor of BSU Lipa')">Who is the chancellor?</button>
+            <button class="quick-question-btn" onclick="sendQuickQuestion('Where is the speech lab?')">Where is the speech lab?</button>
+            <button class="quick-question-btn" onclick="sendQuickQuestion('Tell me about SETS organization')">Tell me about SETS org</button>
+            <button class="quick-question-btn" onclick="sendQuickQuestion('When was BSU Lipa Founded?')">When was BSU Lipa Founded?</button>
         </div>
 
         <!-- Input Area -->
@@ -127,7 +139,7 @@
                     autocomplete="off"
                 />
                 <button id="micBtn" class="input-btn" onclick="startVoice()">
-                    <span>🎤</span>
+                    <span class="ms" style="font-size:1rem;">mic</span>
                 </button>
                 <button id="sendBtn" class="input-btn" onclick="sendMessage()">
                     <span>Send</span>
@@ -191,7 +203,7 @@
 
         // ── Chatbot: welcome message ───────────────────────────────────────
         if (s.chatbot_greeting && el('welcomeTitle')) {
-            el('welcomeTitle').textContent = `👋 ${s.chatbot_greeting}`;
+            el('welcomeTitle').innerHTML = `<span class="ms" style="color:var(--sparta-red,#B71C1C);font-size:1rem;">waving_hand</span> ${s.chatbot_greeting}`;
         }
         const uniName = s.university_name || 'BSU Lipa Campus';
         if (el('welcomeSubtitle')) {
@@ -230,5 +242,6 @@
 })();
 </script>
 <script src="sparta_popup_announcements.js"></script>
-</body>
+    <script src="sparta-alert.js"></script>
+</body>>
 </html>

@@ -28,7 +28,7 @@ def verify_session(request: Request):
         request.session.clear()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session expired"
+            detail="Session expired. Please log in again."
         )
 
     return username
