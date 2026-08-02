@@ -482,6 +482,7 @@ app.add_middleware(
         "https://sparta-production-0acb.up.railway.app",
         "https://sparta.help",
         "https://www.sparta.help",
+        "https://admin.sparta.help",
     ],
     allow_origin_regex=r"https://.*\.(vercel\.app|devtunnels\.ms|trycloudflare\.com|ngrok-free\.app|ngrok\.io)|http://192\.168\.\d+\.\d+:\d+",
     allow_credentials=True,
