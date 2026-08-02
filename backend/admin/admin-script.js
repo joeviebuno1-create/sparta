@@ -214,18 +214,20 @@ function wireNavFormLiveValidation() {
 
 // ========== CONFIGURATION ==========
 // Detect Live Server (port 5500) vs running directly from FastAPI (port 8000)
+//
+// NOTE: this used to fall back to a hardcoded absolute production URL for
+// ANY non-localhost domain — which broke session cookies on custom domains
+// like admin.sparta.help. A cookie set via a request to
+// sparta-production-0acb.up.railway.app is scoped to that domain and is
+// invisible to admin.sparta.help, even though both point at the same
+// backend. Any domain that isn't the standalone Live Server test setup IS
+// the backend serving its own pages, so it should always call itself via a
+// relative path.
 const _isLiveServer = window.location.port === '5500' || window.location.port === '5501';
-const _isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const API_BASE = (_isLocal && !_isLiveServer)
-    ? '/api/admin'                                                          // FastAPI dev server
-    : _isLiveServer
-        ? 'http://127.0.0.1:8000/api/admin'                                // VS Code Live Server
-        : 'https://sparta-production-0acb.up.railway.app/api/admin';       // Production
+const API_BASE = _isLiveServer
+    ? 'http://127.0.0.1:8000/api/admin'   // VS Code Live Server (separate origin from FastAPI)
+    : '/api/admin';                        // Any real deployment — same-origin, always correct
 
-// Root app host (no /api/admin suffix) — needed for public routes like
-// /api/active-3d-model, which live outside the admin router.
-const APP_ROOT = API_BASE.replace(/\/api\/admin$/, '');
-    
 // Global state
 let allLocations = [];
 let allPaths = [];
@@ -1887,80 +1889,51 @@ function initNavigationTab() {
     controls.maxPolarAngle = Math.PI / 2.1;
     
     // Load GLB model
-    // NOTE: this used to be hardcoded to a fixed production URL pointing at
-    // the old default map file, so uploading a new model via the admin's
-    // "3D Campus Model" page never showed up here. Now fetches whichever
-    // model is actually active, same as the public campus navigator does.
     const loader = new THREE.GLTFLoader();
-    if (THREE.DRACOLoader) {
-        const dracoLoader = new THREE.DRACOLoader();
-        dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/libs/draco/');
-        loader.setDRACOLoader(dracoLoader);
-    }
-
-    function loadNavModel(modelPath) {
-        loader.load(
-            modelPath,
-            (gltf) => {
-                campusModel = gltf.scene;
-                
-                // Center and scale model.
-                // NOTE: position must be offset by center*scale, not just
-                // center — Object3D applies position as a raw world-space
-                // translation independent of its own scale. Subtracting the
-                // unscaled center only happened to look right for models
-                // whose original size was already close to ~100 units.
-                const box = new THREE.Box3().setFromObject(campusModel);
-                const center = box.getCenter(new THREE.Vector3());
-                const size = box.getSize(new THREE.Vector3());
-                
-                const scale = 100 / Math.max(size.x, size.y, size.z);
-                campusModel.scale.set(scale, scale, scale);
-                campusModel.position.sub(center.clone().multiplyScalar(scale));
-                
-                // Enable shadows
-                campusModel.traverse((node) => {
-                    if (node.isMesh) {
-                        node.castShadow = true;
-                        node.receiveShadow = true;
-                    }
-                });
-                
-                scene.add(campusModel);
-                
-                document.getElementById('mapLoading').style.display = 'none';
-                showAlert('navAlert', '✅ 3D Campus Map loaded! Click to place markers.', 'success');
-            },
-            (xhr) => {
-                const progress = xhr.total > 0 ? (xhr.loaded / xhr.total * 100).toFixed(0) : 0;
-                console.log(`Loading: ${progress}%`);
-                document.querySelector('.loading-text').textContent = 'Loading 3D Campus Map…';
-            },
-            (error) => {
-                console.error('Error loading model:', error);
-                document.getElementById('mapLoading').innerHTML = `
-                    <div style="color: white; text-align: center;">
-                        <div style="font-size: 3rem;">⚠️</div>
-                        <div style="font-size: 1.2rem; font-weight: 600;">Failed to Load Model</div>
-                        <div style="font-size: 0.9rem; margin-top: 0.5rem;">Check GLB file path</div>
-                    </div>
-                `;
-            }
-        );
-    }
-
-    fetch(`${APP_ROOT}/api/active-3d-model`)
-        .then(res => res.json())
-        .then(info => {
-            // path may be relative ("/api/3d-model-file?v=...", "/static/...")
-            // or absolute (a full Cloudinary/settings URL) — only prefix if relative.
-            const modelPath = /^https?:\/\//.test(info.path) ? info.path : `${APP_ROOT}${info.path}`;
-            loadNavModel(modelPath);
-        })
-        .catch(err => {
-            console.error('Failed to fetch active model info, falling back to default:', err);
-            loadNavModel(`${APP_ROOT}/static/batangas_state_university-_the_neu_lipa_map.glb`);
-        });
+    loader.load(
+        'https://sparta-production-0acb.up.railway.app/static/batangas_state_university-_the_neu_lipa_map.glb',
+        (gltf) => {
+            campusModel = gltf.scene;
+            
+            // Center and scale model
+            const box = new THREE.Box3().setFromObject(campusModel);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+            
+            campusModel.position.sub(center);
+            
+            const scale = 100 / Math.max(size.x, size.y, size.z);
+            campusModel.scale.set(scale, scale, scale);
+            
+            // Enable shadows
+            campusModel.traverse((node) => {
+                if (node.isMesh) {
+                    node.castShadow = true;
+                    node.receiveShadow = true;
+                }
+            });
+            
+            scene.add(campusModel);
+            
+            document.getElementById('mapLoading').style.display = 'none';
+            showAlert('navAlert', '✅ 3D Campus Map loaded! Click to place markers.', 'success');
+        },
+        (xhr) => {
+            const progress = (xhr.loaded / xhr.total * 100).toFixed(0);
+            console.log(`Loading: ${progress}%`);
+            document.querySelector('.loading-text').textContent = 'Loading 3D Campus Map…';
+        },
+        (error) => {
+            console.error('Error loading model:', error);
+            document.getElementById('mapLoading').innerHTML = `
+                <div style="color: white; text-align: center;">
+                    <div style="font-size: 3rem;">⚠️</div>
+                    <div style="font-size: 1.2rem; font-weight: 600;">Failed to Load Model</div>
+                    <div style="font-size: 0.9rem; margin-top: 0.5rem;">Check GLB file path</div>
+                </div>
+            `;
+        }
+    );
     
     // Raycaster for click detection
     raycaster = new THREE.Raycaster();
@@ -2660,35 +2633,6 @@ function formatFileSize(bytes) {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
 
-async function activate3DModel(id) {
-    try {
-        const res = await apiFetch(`/3d-maps/${id}/activate`, { method: 'POST' });
-        if (res && res.ok) {
-            showAlert('model3dAlert', '✅ Model activated. Refresh the campus navigator to see it.', 'success');
-            loadModelUploadHistory();
-        } else {
-            showAlert('model3dAlert', '❌ Failed to activate model.', 'error');
-        }
-    } catch (error) {
-        showAlert('model3dAlert', '❌ Error: ' + error.message, 'error');
-    }
-}
-
-async function delete3DModel(id) {
-    if (!confirm('Delete this model? This cannot be undone.')) return;
-    try {
-        const res = await apiFetch(`/3d-maps/${id}`, { method: 'DELETE' });
-        if (res && res.ok) {
-            showAlert('model3dAlert', '✅ Model deleted.', 'success');
-            loadModelUploadHistory();
-        } else {
-            showAlert('model3dAlert', '❌ Failed to delete model.', 'error');
-        }
-    } catch (error) {
-        showAlert('model3dAlert', '❌ Error: ' + error.message, 'error');
-    }
-}
-
 async function loadModelUploadHistory() {
     try {
         const response = await apiFetch('/model-upload-history');
@@ -2716,31 +2660,12 @@ async function loadModelUploadHistory() {
 
 function displayModelUploadHistory(uploads) {
     const tbody = document.querySelector('#modelHistoryTable tbody');
-
-    // Populate "Current Active Model" box from whichever row is active.
-    // Previously nothing ever wrote to these elements on page load, so
-    // they were stuck showing "Loading..." until you uploaded something
-    // in that same session.
-    const active = (uploads || []).find(u => u.is_active);
-    const vEl = document.getElementById('currentModelVersion');
-    const tEl = document.getElementById('currentModelTitle');
-    const dEl = document.getElementById('currentModelDate');
-    if (active) {
-        if (vEl) vEl.textContent = active.original_filename || active.filename || 'Active model';
-        if (tEl) tEl.textContent = active.description || '';
-        if (dEl) dEl.textContent = active.uploaded_at ? new Date(active.uploaded_at).toLocaleString() : 'N/A';
-    } else {
-        if (vEl) vEl.textContent = 'Default campus model';
-        if (tEl) tEl.textContent = 'No custom model uploaded yet';
-        if (dEl) dEl.textContent = 'N/A';
-    }
-
     if (!tbody) return;
     
     if (!uploads || uploads.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="7" style="text-align: center; padding: 2rem; color: #64748b;">
+                <td colspan="5" style="text-align: center; padding: 2rem; color: #64748b;">
                     No upload history yet
                 </td>
             </tr>
@@ -2753,21 +2678,15 @@ function displayModelUploadHistory(uploads) {
         const row = document.createElement('tr');
         const uploadDate = upload.uploaded_at ? new Date(upload.uploaded_at).toLocaleString() : 'N/A';
         const fileSize = formatFileSize(upload.file_size || 0);
-        const statusBadge = upload.is_active
-            ? '<span class="badge badge-success">✅ Active</span>'
-            : '<span class="badge">Inactive</span>';
-
+        const status = upload.status === 'success' ? '✅ Success' : '❌ Failed';
+        const statusClass = upload.status === 'success' ? 'success' : 'error';
+        
         row.innerHTML = `
-            <td>${statusBadge}</td>
-            <td><strong>${upload.original_filename || upload.filename || '—'}</strong></td>
-            <td>${upload.description || '—'}</td>
-            <td>${fileSize}</td>
             <td>${uploadDate}</td>
-            <td>—</td>
-            <td>
-                ${upload.is_active ? '' : `<button class="btn btn-small" onclick="activate3DModel(${upload.id})">Set Active</button>`}
-                <button class="btn btn-small btn-danger" onclick="delete3DModel(${upload.id})">🗑️ Delete</button>
-            </td>
+            <td><strong>${upload.original_filename}</strong></td>
+            <td>${fileSize}</td>
+            <td>${upload.description || '-'}</td>
+            <td><span class="badge badge-${statusClass}">${status}</span></td>
         `;
         tbody.appendChild(row);
     });
@@ -2832,23 +2751,17 @@ async function handleModel3DUpload(e) {
             }
             if (xhr.status === 200) {
                 const response = JSON.parse(xhr.responseText);
-                showAlert('model3dAlert', '✅ ' + response.message, 'success');
+                showAlert('model3dAlert', '✅ ' + response.message + ' Please refresh the page to see the new model.', 'success');
                 
-                // Update current model display (element IDs must match the
-                // HTML: currentModelVersion / currentModelTitle / currentModelDate —
-                // this used to write to a non-existent "currentModelName" element)
-                const vEl = document.getElementById('currentModelVersion');
-                const tEl = document.getElementById('currentModelTitle');
-                const dEl = document.getElementById('currentModelDate');
-                if (vEl) vEl.textContent = response.filename || file.name;
-                if (tEl) tEl.textContent = description || '';
-                if (dEl) dEl.textContent = new Date().toLocaleString();
+                // Update current model display
+                document.getElementById('currentModelName').textContent = file.name;
+                document.getElementById('currentModelDate').textContent = new Date().toLocaleString();
                 
                 // Reset form
                 document.getElementById('model3dForm').reset();
                 clearFileSelection();
                 
-                // Reload upload history (also refreshes current-model display)
+                // Reload upload history
                 loadModelUploadHistory();
                 
                 // Hide progress

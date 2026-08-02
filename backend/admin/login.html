@@ -436,12 +436,20 @@
 
   <script>
     // ── API base — same logic as admin-script.js ──────────────────
-    const API_BASE = (
-      window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1'
-    )
-      ? '/api/admin'
-      : 'https://sparta-production-0acb.up.railway.app/api/admin';
+    // NOTE: this page is always served BY the FastAPI backend itself
+    // (whichever domain reaches it — the default railway.app URL, or a
+    // custom domain like admin.sparta.help). A hardcoded absolute URL here
+    // broke login on any custom domain: the login/credentials calls hit
+    // sparta-production-0acb.up.railway.app and set a cookie scoped to
+    // THAT domain, but the post-login redirect to "/admin" is a relative
+    // path — landing back on the custom domain, which has no cookie at
+    // all, bouncing straight back to /login in an infinite loop.
+    // Only the standalone Live Server testing case (a genuinely different
+    // origin from the FastAPI app) actually needs the absolute fallback.
+    const _isLiveServer = window.location.port === '5500' || window.location.port === '5501';
+    const API_BASE = _isLiveServer
+      ? 'http://127.0.0.1:8000/api/admin'
+      : '/api/admin';
 
     // ── On load: if already logged in, go straight to /admin ─────
     window.addEventListener('DOMContentLoaded', async () => {
