@@ -491,9 +491,18 @@ app.add_middleware(
 )
 
 # Session middleware — signs cookie with itsdangerous
+_secret_key = os.getenv("SECRET_KEY")
+if not _secret_key:
+    raise RuntimeError(
+        "SECRET_KEY environment variable is not set. Refusing to start with "
+        "an insecure fallback secret. Generate one with: "
+        "python -c \"import secrets; print(secrets.token_hex(32))\" "
+        "and set it in Railway → Variables."
+    )
+
 app.add_middleware(
     SessionMiddleware,
-    secret_key=os.getenv("SECRET_KEY", "fallback-secret-change-this"),
+    secret_key=_secret_key,
     session_cookie="spartha_session",
     max_age=60 * 60 * int(os.getenv("ACCESS_TOKEN_EXPIRE_HOURS", 8)),  # respects env var
     https_only=True,
