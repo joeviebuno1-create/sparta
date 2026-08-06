@@ -13,7 +13,6 @@
     <!-- Three.js Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/DRACOLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
     
     <!-- External Stylesheet -->
@@ -1843,7 +1842,7 @@
         </div>
         <div class="form-full fg"><label>Content / Message</label><textarea id="m-popup-content" placeholder="Write your announcement details here..."></textarea></div>
         <div class="form-grid" style="margin-top:0.5rem;">
-          <div class="fg"><label><span class="ms" style="font-size:1rem;vertical-align:-3px;">schedule</span> Publish At <span style="font-weight:400;font-size:0.78rem;color:#888;">(blank = immediately)</span></label><input type="datetime-local" id="m-popup-scheduled-at"></div>
+          <div class="fg"><label><span class="ms" style="font-size:1rem;vertical-align:-3px;">schedule</span> Publish At <span style="font-weight:400;font-size:0.78rem;color:#888;">(blank = immediately)</span></label><input type="datetime-local" id="m-popup-scheduled-at" onchange="document.getElementById('m-popup-expires-at').min = this.value"></div>
           <div class="fg"><label><span class="ms" style="font-size:1rem;vertical-align:-3px;">timer_off</span> Expires At <span style="font-weight:400;font-size:0.78rem;color:#888;">(blank = never)</span></label><input type="datetime-local" id="m-popup-expires-at"></div>
         </div>
         <div class="form-full fg" style="margin-top:0.5rem;"><label><span class="ms" style="font-size:1rem;vertical-align:-3px;">image</span> Image (optional)</label>
@@ -2641,14 +2640,6 @@
         const tbody = document.getElementById('recentNavBody');
         if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#9CA3AF;padding:2rem;">No recent navigation searches yet.</td></tr>';
       }
-    }
-    // NOTE: everything below used to be accidentally nested inside
-    // _loadNavStatsForDashboard() above (a missing closing brace here meant
-    // this whole section — heatmap, intent health, DOMContentLoaded
-    // handlers, the announcements loader, etc. — was only defined after the
-    // dashboard's nav-stats fetch finished running). That's what caused
-    // "_hmInitDateDefaults is not defined" and the charts/heatmap/intent
-    // health/recent-nav table never rendering on first load.
 
     function _setText(id, val) {
       try {
@@ -2967,7 +2958,27 @@
       spartaOpenModal('org-add-modal');
     };
     window.openRespAddModal = () => spartaOpenModal('resp-add-modal');
-    window.openPopupAddModal= () => spartaOpenModal('popup-add-modal');
+    window.openPopupAddModal = () => {
+      // NOTE: previously this just opened the modal with whatever was left
+      // over from the last Edit — stale field values AND, critically, the
+      // submit button still carried the old announcement's editId. That
+      // meant "Add New" after an Edit could silently UPDATE the previous
+      // announcement instead of creating a new one.
+      ['m-popup-title','m-popup-content','m-popup-scheduled-at','m-popup-expires-at'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+      });
+      const expiresEl = document.getElementById('m-popup-expires-at');
+      if (expiresEl) expiresEl.removeAttribute('min');
+      const prio = document.getElementById('m-popup-priority'); if (prio) prio.value = '0';
+      const stat = document.getElementById('m-popup-status'); if (stat) stat.value = 'true';
+      const cat = document.getElementById('m-popup-category'); if (cat) cat.value = 'General';
+      if (typeof clearPopupModalImage === 'function') clearPopupModalImage();
+      const submitBtn = document.getElementById('popup-modal-submit');
+      if (submitBtn) delete submitBtn.dataset.editId;
+      const heading = document.querySelector('#popup-add-modal .modal-head h3');
+      if (heading) heading.textContent = 'Create Popup Announcement';
+      spartaOpenModal('popup-add-modal');
+    };
     window.openModal        = (id) => spartaOpenModal(id);
     window.closeModal       = (id) => spartaCloseModal(id);
 
@@ -3235,6 +3246,8 @@
       }
     };
 
+    }
+
   </script>
 
     <script>
@@ -3413,6 +3426,16 @@
           const scheduledAt = document.getElementById('m-popup-scheduled-at')?.value || null;
           const expiresAt   = document.getElementById('m-popup-expires-at')?.value || null;
           if (!title) { alert('Title is required.'); return; }
+          // Schedule validation — an announcement expiring before (or at)
+          // the moment it publishes can never actually be shown to anyone.
+          if (scheduledAt && expiresAt) {
+            const pubDate = new Date(scheduledAt);
+            const expDate = new Date(expiresAt);
+            if (expDate <= pubDate) {
+              alert('"Expires At" must be after "Publish At" — this announcement would never be visible with the current dates.');
+              return;
+            }
+          }
           const editId = popupSubmitBtn.dataset.editId;
           const fd = new FormData();
           fd.append('title', title);
@@ -4468,8 +4491,8 @@
 
       } catch(e) { console.warn('[loadWebsiteInfo]', e); }
 
-      // Load active popup preview (guarded — no preview UI is wired up yet)
-      if (typeof loadAnnouncementPreview === 'function') loadAnnouncementPreview();
+      // Load active popup preview
+      loadAnnouncementPreview();
     };
 
 
@@ -4613,13 +4636,6 @@
         const r = await fetch((typeof API_BASE!=='undefined'?API_BASE:'/api/admin')+'/authorities',{credentials:'include'});
         if (r&&r.ok) _authData = await r.json();
       } catch(e){}
-      // Re-render whichever view (cards/table) is currently active. Without
-      // this, the cards grid stayed stuck on its empty DOMContentLoaded-time
-      // render (which runs before any data has been fetched), even after
-      // _authData was populated — so switching to Card view showed
-      // "No authorities yet." despite the count showing 40 authorities.
-      if (_authView === 'cards') _renderAuthCards(_authData);
-      else                        _renderAuthTable(_authData);
     };
 
     // ================================================================

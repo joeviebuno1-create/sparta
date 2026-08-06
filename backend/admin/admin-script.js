@@ -234,6 +234,21 @@ const APP_ROOT = API_BASE.startsWith('http')
     ? API_BASE.replace(/\/api\/admin$/, '')
     : '';
 
+// Backend stores scheduled_at/expires_at as genuine UTC (see main.py's
+// _parse_dt — it subtracts 8h from what you type before storing). A raw
+// ISO string with no 'Z'/offset suffix gets misread as browser-local time
+// by `new Date()`, so every display of these fields must go through this
+// explicit UTC->Manila conversion instead of parsing the string directly.
+function utcIsoToManilaDate(isoNoZ) {
+    const utcMs = new Date(isoNoZ + 'Z').getTime();
+    return new Date(utcMs + 8 * 60 * 60 * 1000);
+}
+function utcIsoToManilaInputValue(isoNoZ) {
+    const manila = utcIsoToManilaDate(isoNoZ);
+    const pad = n => String(n).padStart(2, '0');
+    return `${manila.getUTCFullYear()}-${pad(manila.getUTCMonth()+1)}-${pad(manila.getUTCDate())}T${pad(manila.getUTCHours())}:${pad(manila.getUTCMinutes())}`;
+}
+
 // Global state
 let allLocations = [];
 let allPaths = [];
@@ -3191,10 +3206,10 @@ function renderPopupTable(popups) {
             ? `<img src="${p.image_data}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:6px;">`
             : '';
         const scheduledStr = p.scheduled_at
-            ? new Date(p.scheduled_at).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+            ? utcIsoToManilaDate(p.scheduled_at).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
             : '—';
         const expiresStr = p.expires_at
-            ? new Date(p.expires_at).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+            ? utcIsoToManilaDate(p.expires_at).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
             : '—';
         const schedBadge = p.scheduled_at || p.expires_at
             ? `<span style="font-size:0.75rem;color:#6366f1;"><span class="ms" style="font-size:0.9rem;vertical-align:-3px;">schedule</span> ${scheduledStr}</span>`
@@ -3318,13 +3333,17 @@ async function openPopupEditModal(id) {
         document.getElementById('m-popup-category').value = popup.category || 'General';
         document.getElementById('m-popup-priority').value = popup.priority ?? 0;
         document.getElementById('m-popup-status').value   = popup.is_active ? 'true' : 'false';
+        // NOTE: the backend stores these as genuine UTC (converted from the
+        // Philippine local time you typed, minus 8 hours). Uses the shared
+        // utcIsoToManilaInputValue() helper (defined near top of file) so
+        // display stays consistent with the table listing.
         if (popup.scheduled_at) {
-            const d = new Date(popup.scheduled_at);
-            document.getElementById('m-popup-scheduled-at').value = d.toISOString().slice(0,16);
+            const localVal = utcIsoToManilaInputValue(popup.scheduled_at);
+            document.getElementById('m-popup-scheduled-at').value = localVal;
+            document.getElementById('m-popup-expires-at').min = localVal;
         }
         if (popup.expires_at) {
-            const d = new Date(popup.expires_at);
-            document.getElementById('m-popup-expires-at').value = d.toISOString().slice(0,16);
+            document.getElementById('m-popup-expires-at').value = utcIsoToManilaInputValue(popup.expires_at);
         }
         if (popup.image_data) {
             document.getElementById('m-popup-img-prev-img').src = popup.image_data;

@@ -2232,13 +2232,20 @@ async def create_popup(
             image_data = f"data:{mime};base64,{b64}"
             image_filename = image.filename
 
-        # Parse datetime strings (ISO format from datetime-local input)
-        from datetime import datetime as _dt
+        # Parse datetime strings (local time from datetime-local input)
+        from datetime import datetime as _dt, timedelta as _td
         def _parse_dt(s):
             if not s or not s.strip(): return None
             try:
-                # Handle both "2025-01-15T10:30" and "2025-01-15T10:30:00"
-                return _dt.fromisoformat(s.strip())
+                # datetime-local sends local wall-clock time with no
+                # timezone info (e.g. "2026-08-29T06:25" meaning 6:25 AM
+                # Philippine time) — but comparisons elsewhere use
+                # datetime.utcnow(). Without converting here, that string
+                # gets stored as if it were already UTC, making every
+                # scheduled/expiry time run 8 hours later than intended
+                # (Asia/Manila has no DST, so this fixed offset is safe).
+                local_dt = _dt.fromisoformat(s.strip())
+                return local_dt - _td(hours=8)
             except ValueError:
                 return None
 
@@ -2281,10 +2288,12 @@ async def update_popup(
         if not popup:
             raise HTTPException(status_code=404, detail="Popup not found")
 
-        from datetime import datetime as _dt
+        from datetime import datetime as _dt, timedelta as _td
         def _parse_dt(s):
             if not s or not s.strip(): return None
-            try: return _dt.fromisoformat(s.strip())
+            try:
+                local_dt = _dt.fromisoformat(s.strip())
+                return local_dt - _td(hours=8)  # Asia/Manila local -> UTC (no DST)
             except ValueError: return None
 
         popup.title       = title
