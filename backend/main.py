@@ -469,7 +469,17 @@ try:
 except Exception as _me:
     print(f"[migration] Non-fatal migration warning: {_me}")
 
-app = FastAPI()
+# SECURITY: /docs, /redoc, and /openapi.json are disabled by default —
+# they publicly expose your entire API surface (every endpoint, including
+# admin routes, plus request/response schemas) to any unauthenticated
+# visitor, which is real reconnaissance value for an attacker. To enable
+# them for local development, set ENABLE_API_DOCS=true in your environment.
+_enable_docs = os.getenv("ENABLE_API_DOCS", "false").lower() == "true"
+app = FastAPI(
+    docs_url="/docs" if _enable_docs else None,
+    redoc_url="/redoc" if _enable_docs else None,
+    openapi_url="/openapi.json" if _enable_docs else None,
+)
 
 # CORS middleware
 app.add_middleware(
@@ -491,6 +501,15 @@ app.add_middleware(
 )
 
 # Session middleware — signs cookie with itsdangerous
+#
+# SECURITY: SECRET_KEY must be set as a real environment variable. There is
+# intentionally no fallback default here anymore — a hardcoded fallback
+# secret sitting in source code (especially if the repo is public on
+# GitHub) lets anyone forge their own validly-signed session cookie via
+# DevTools (Application → Cookies), granting admin access without ever
+# entering a password. If this raises on startup, set SECRET_KEY in
+# Railway's Environment Variables — generate one with:
+#   python -c "import secrets; print(secrets.token_hex(32))"
 _secret_key = os.getenv("SECRET_KEY")
 if not _secret_key:
     raise RuntimeError(
@@ -769,68 +788,15 @@ admin_router = APIRouter(
 # ROUTES - HOME
 # ============================================
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/")
 async def read_root():
-    return """
-    <html>
-        <head>
-            <title>SPARTHA API - RAG ENHANCED</title>
-            <style>
-                body {
-                    font-family: Arial, sans-serif;
-                    max-width: 800px;
-                    margin: 50px auto;
-                    padding: 20px;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                }
-                h1 { text-align: center; }
-                .card {
-                    background: rgba(255, 255, 255, 0.1);
-                    backdrop-filter: blur(10px);
-                    border-radius: 10px;
-                    padding: 20px;
-                    margin: 20px 0;
-                }
-                ul { line-height: 1.8; }
-                a { color: #ffd700; text-decoration: none; }
-                a:hover { text-decoration: underline; }
-                .feature {
-                    background: rgba(255, 215, 0, 0.1);
-                    padding: 10px;
-                    border-radius: 5px;
-                    margin: 10px 0;
-                }
-                .badge {
-                    background: #ffd700;
-                    color: #764ba2;
-                    padding: 5px 10px;
-                    border-radius: 15px;
-                    font-weight: bold;
-                    font-size: 0.8em;
-                }
-            </style>
-        </head>
-        <body>
-            <h1>🏫 SPARTHA API <span class="badge">RAG ENHANCED</span></h1>
-            <div class="card">
-                <h2>Smart Path and Resource Tracking Hub for Academia</h2>
-                <p>Enhanced chatbot with Database-RAG for accurate, context-aware responses</p>
-            </div>
-            <div class="card">
-                <h3>📍 Available Endpoints:</h3>
-                <ul>
-                    <li><a href="/docs">/docs</a> - Interactive API Documentation</li>
-                    <li><a href="/health">/health</a> - System Health Check</li>
-                    <li>POST /api/chat - RAG-Enhanced Chatbot</li>
-                    <li>POST /api/admin/login - Admin Login (sets HttpOnly cookie)</li>
-                    <li>POST /api/admin/logout - Admin Logout (clears cookie)</li>
-                    <li>GET/POST/PUT/DELETE /api/admin/* - Protected Admin Endpoints</li>
-                </ul>
-            </div>
-        </body>
-    </html>
-    """
+    # admin.sparta.help is entirely dedicated to the admin backend — there's
+    # no reason for a visitor hitting the bare domain to see anything but
+    # the login screen. This used to render a landing page that listed every
+    # available endpoint (including admin routes), which is unnecessary
+    # information disclosure for an unauthenticated visitor.
+    from fastapi.responses import RedirectResponse as _Redir
+    return _Redir(url="/login", status_code=302)
 
 # ============================================
 # ROUTES - RAG-ENHANCED CHATBOT (PUBLIC)
