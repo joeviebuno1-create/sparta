@@ -1619,7 +1619,7 @@ function createMarker(position, color=0x1E90FF) {
     
     // Blue cone marker - matching professional navigation apps
     const cone=new THREE.Mesh(
-        new THREE.ConeGeometry(1.0, 4, 8), 
+        new THREE.ConeGeometry(0.22, 0.9, 8), 
         new THREE.MeshStandardMaterial({
             color: 0x1E90FF,  // Dodger Blue
             emissive: 0x1E90FF,
@@ -1628,12 +1628,12 @@ function createMarker(position, color=0x1E90FF) {
             roughness: 0.2
         })
     );
-    cone.position.y=2; 
+    cone.position.y=0.45; 
     g.add(cone);
     
     // Glowing blue sphere on top
     const sphere=new THREE.Mesh(
-        new THREE.SphereGeometry(0.7, 16, 16), 
+        new THREE.SphereGeometry(0.16, 16, 16), 
         new THREE.MeshStandardMaterial({
             color: 0x4169E1,  // Royal Blue
             emissive: 0x1E90FF,
@@ -1642,12 +1642,12 @@ function createMarker(position, color=0x1E90FF) {
             roughness: 0.1
         })
     );
-    sphere.position.y=4.5; 
+    sphere.position.y=1.0; 
     g.add(sphere);
     
     // Inner blue glow ring
     const ring1 = new THREE.Mesh(
-        new THREE.RingGeometry(1.5, 2.0, 32),
+        new THREE.RingGeometry(0.34, 0.45, 32),
         new THREE.MeshBasicMaterial({
             color: 0x4A90E2,  // Soft Blue
             transparent: true,
@@ -1656,12 +1656,12 @@ function createMarker(position, color=0x1E90FF) {
         })
     );
     ring1.rotation.x = -Math.PI / 2;
-    ring1.position.y = 0.1;
+    ring1.position.y = 0.05;
     g.add(ring1);
     
     // Outer ripple ring
     const ring2 = new THREE.Mesh(
-        new THREE.RingGeometry(2.2, 2.6, 32),
+        new THREE.RingGeometry(0.5, 0.6, 32),
         new THREE.MeshBasicMaterial({
             color: 0x87CEEB,  // Sky Blue
             transparent: true,
@@ -1670,7 +1670,7 @@ function createMarker(position, color=0x1E90FF) {
         })
     );
     ring2.rotation.x = -Math.PI / 2;
-    ring2.position.y = 0.05;
+    ring2.position.y = 0.03;
     g.add(ring2);
     
     // Enhanced animation with multiple effects
@@ -1733,25 +1733,25 @@ function clearEvacMarkers() {
 function createEvacMarker(position) {
     const g = new THREE.Group();
     const cone = new THREE.Mesh(
-        new THREE.ConeGeometry(2.8, 11, 8),
+        new THREE.ConeGeometry(1.4, 5.5, 8),
         new THREE.MeshStandardMaterial({ 
             color: 0xE67E22, 
             emissive: 0xE67E22, 
             emissiveIntensity: 0.4 
         })
     );
-    cone.position.y = 5.5;
+    cone.position.y = 2.75;
     g.add(cone);
     
     const sphere = new THREE.Mesh(
-        new THREE.SphereGeometry(1.8, 16, 16),
+        new THREE.SphereGeometry(0.9, 16, 16),
         new THREE.MeshStandardMaterial({ 
             color: 0xE67E22, 
             emissive: 0xE67E22, 
             emissiveIntensity: 0.6 
         })
     );
-    sphere.position.y = 12;
+    sphere.position.y = 6;
     g.add(sphere);
     
     let s = 1, growing = true;
@@ -2174,7 +2174,7 @@ async function drawSavedRoute(route) {
         const isFirst = i === 0;
         const isLast  = i === waypointPositions.length - 1;
         const col = isFirst ? 0xFFFFFF : (isLast ? 0x00FF88 : 0xFFAA00);
-        const r   = isFirst || isLast ? 1.4 : 0.9;
+        const r   = isFirst || isLast ? 0.7 : 0.45;
         const dot = new THREE.Mesh(
             new THREE.SphereGeometry(r, 10, 10),
             new THREE.MeshBasicMaterial({ color: col, depthTest: false, depthWrite: false })
@@ -2192,25 +2192,25 @@ async function drawSavedRoute(route) {
         
         const eg = new THREE.Group();
         const ec = new THREE.Mesh(
-            new THREE.ConeGeometry(1.4, 6, 8),
+            new THREE.ConeGeometry(0.7, 3, 8),
             new THREE.MeshBasicMaterial({
                 color: 0x00FF00,
                 depthTest: false, depthWrite: false,
             })
         );
         ec.renderOrder = 1000;
-        ec.position.y = 3;
+        ec.position.y = 1.5;
         eg.add(ec);
         
         const es = new THREE.Mesh(
-            new THREE.SphereGeometry(0.9, 16, 16),
+            new THREE.SphereGeometry(0.45, 16, 16),
             new THREE.MeshStandardMaterial({
                 color: 0x00FF00,
                 emissive: 0x00FF00,
                 emissiveIntensity: .7
             })
         );
-        es.position.y = 6.5;
+        es.position.y = 3.25;
         eg.add(es);
         
         eg.position.copy(waypointPositions[0]);

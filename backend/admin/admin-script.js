@@ -228,6 +228,12 @@ const API_BASE = _isLiveServer
     ? 'http://127.0.0.1:8000/api/admin'   // VS Code Live Server (separate origin from FastAPI)
     : '/api/admin';                        // Any real deployment — same-origin, always correct
 
+// Root app host (no /api/admin suffix) — needed for public routes like
+// /api/active-3d-model, which live outside the admin router.
+const APP_ROOT = API_BASE.startsWith('http')
+    ? API_BASE.replace(/\/api\/admin$/, '')
+    : '';
+
 // Global state
 let allLocations = [];
 let allPaths = [];
@@ -1890,50 +1896,83 @@ function initNavigationTab() {
     
     // Load GLB model
     const loader = new THREE.GLTFLoader();
-    loader.load(
-        'https://sparta-production-0acb.up.railway.app/static/batangas_state_university-_the_neu_lipa_map.glb',
-        (gltf) => {
-            campusModel = gltf.scene;
-            
-            // Center and scale model
-            const box = new THREE.Box3().setFromObject(campusModel);
-            const center = box.getCenter(new THREE.Vector3());
-            const size = box.getSize(new THREE.Vector3());
-            
-            campusModel.position.sub(center);
-            
-            const scale = 100 / Math.max(size.x, size.y, size.z);
-            campusModel.scale.set(scale, scale, scale);
-            
-            // Enable shadows
-            campusModel.traverse((node) => {
-                if (node.isMesh) {
-                    node.castShadow = true;
-                    node.receiveShadow = true;
-                }
-            });
-            
-            scene.add(campusModel);
-            
-            document.getElementById('mapLoading').style.display = 'none';
-            showAlert('navAlert', '✅ 3D Campus Map loaded! Click to place markers.', 'success');
-        },
-        (xhr) => {
-            const progress = (xhr.loaded / xhr.total * 100).toFixed(0);
-            console.log(`Loading: ${progress}%`);
-            document.querySelector('.loading-text').textContent = 'Loading 3D Campus Map…';
-        },
-        (error) => {
-            console.error('Error loading model:', error);
-            document.getElementById('mapLoading').innerHTML = `
-                <div style="color: white; text-align: center;">
-                    <div style="font-size: 3rem;">⚠️</div>
-                    <div style="font-size: 1.2rem; font-weight: 600;">Failed to Load Model</div>
-                    <div style="font-size: 0.9rem; margin-top: 0.5rem;">Check GLB file path</div>
-                </div>
-            `;
-        }
-    );
+    // DRACOLoader — required to decode Draco-compressed models. Without
+    // this, GLTFLoader throws "No DRACOLoader instance provided" and the
+    // model never loads at all (this is what was happening).
+    if (THREE.DRACOLoader) {
+        const dracoLoader = new THREE.DRACOLoader();
+        dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/libs/draco/');
+        loader.setDRACOLoader(dracoLoader);
+    }
+
+    function loadNavModel(modelPath) {
+        loader.load(
+            modelPath,
+            (gltf) => {
+                campusModel = gltf.scene;
+                
+                // Center and scale model.
+                // NOTE: position must be offset by center*scale, not just
+                // center — Object3D applies position as a raw world-space
+                // translation independent of its own scale.
+                const box = new THREE.Box3().setFromObject(campusModel);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+                
+                const scale = 100 / Math.max(size.x, size.y, size.z);
+                campusModel.scale.set(scale, scale, scale);
+                campusModel.position.sub(center.clone().multiplyScalar(scale));
+                
+                // Enable shadows
+                campusModel.traverse((node) => {
+                    if (node.isMesh) {
+                        node.castShadow = true;
+                        node.receiveShadow = true;
+                    }
+                });
+                
+                scene.add(campusModel);
+                
+                document.getElementById('mapLoading').style.display = 'none';
+                showAlert('navAlert', '✅ 3D Campus Map loaded! Click to place markers.', 'success');
+            },
+            (xhr) => {
+                // Guard against xhr.total === 0 (no Content-Length header),
+                // which produced "Loading: Infinity%" forever.
+                const progress = xhr.total > 0 ? (xhr.loaded / xhr.total * 100).toFixed(0) : 0;
+                console.log(`Loading: ${progress}%`);
+                // Guard against the element not existing yet/anymore —
+                // this was throwing "Cannot set properties of null" and
+                // aborting the whole load callback.
+                const loadingTextEl = document.querySelector('.loading-text');
+                if (loadingTextEl) loadingTextEl.textContent = 'Loading 3D Campus Map…';
+            },
+            (error) => {
+                console.error('Error loading model:', error);
+                const mapLoadingEl = document.getElementById('mapLoading');
+                if (mapLoadingEl) mapLoadingEl.innerHTML = `
+                    <div style="color: white; text-align: center;">
+                        <div style="font-size: 3rem;">⚠️</div>
+                        <div style="font-size: 1.2rem; font-weight: 600;">Failed to Load Model</div>
+                        <div style="font-size: 0.9rem; margin-top: 0.5rem;">Check GLB file path</div>
+                    </div>
+                `;
+            }
+        );
+    }
+
+    // Fetch whichever model is actually active (DB upload > settings URL >
+    // default static file) instead of a hardcoded stale URL.
+    fetch(`${APP_ROOT}/api/active-3d-model`)
+        .then(res => res.json())
+        .then(info => {
+            const modelPath = /^https?:\/\//.test(info.path) ? info.path : `${APP_ROOT}${info.path}`;
+            loadNavModel(modelPath);
+        })
+        .catch(err => {
+            console.error('Failed to fetch active model info, falling back to default:', err);
+            loadNavModel(`${APP_ROOT}/static/batangas_state_university-_the_neu_lipa_map.glb`);
+        });
     
     // Raycaster for click detection
     raycaster = new THREE.Raycaster();

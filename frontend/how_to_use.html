@@ -1,545 +1,849 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>How to Use SPARTA - BSU Lipa</title>
-    <link rel="icon" type="image/png" href="https://sparta-production-0acb.up.railway.app/images/logo.png">
-    <link rel="apple-touch-icon" href="https://sparta-production-0acb.up.railway.app/images/logo.png">
-    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --sparta-red:      #E6392F;
-            --sparta-deep-red: #8B0000;
-            --sparta-gold:     #F7C21B;
-            --sparta-cream:    #FFF7E6;
-            --sparta-black:    #111111;
-            --sparta-success:  #2ECC71;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#E6392F">
+<title>SPARTA User Guide - BSU Lipa</title>
+<link rel="icon" type="image/png" href="https://sparta-production-0acb.up.railway.app/images/logo.png">
+<link rel="apple-touch-icon" href="https://sparta-production-0acb.up.railway.app/images/logo.png">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,300,0,0" rel="stylesheet">
+<style>
+:root{
+  --sparta-red:#E6392F;
+  --sparta-deep-red:#8B0000;
+  --sparta-gold:#F7C21B;
+  --sparta-cream:#FFF7E6;
+  --sparta-black:#111111;
+  --ink:#3a3a3a;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{font-family:'Sora',sans-serif;color:var(--sparta-black);background:#f6f5f2;overflow-x:hidden;}
+.ms{font-family:"Material Symbols Outlined";font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;vertical-align:-4px;line-height:1;display:inline-block;}
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+/* ============ TOP NAV (sticky, jump between tracks) ============ */
+.guide-nav{
+  position:sticky; top:0; z-index:200;
+  background:rgba(17,17,17,0.94);
+  backdrop-filter:blur(10px);
+  display:flex; align-items:center; gap:.4rem;
+  padding:.6rem 1rem;
+  overflow-x:auto;
+  scrollbar-width:none;
+}
+.guide-nav::-webkit-scrollbar{display:none;}
+.guide-nav a{
+  flex-shrink:0;
+  color:rgba(255,255,255,0.75);
+  text-decoration:none;
+  font-size:.78rem; font-weight:700;
+  padding:.45rem .9rem;
+  border-radius:99px;
+  border:1px solid rgba(255,255,255,0.15);
+  transition:.18s;
+  white-space:nowrap;
+}
+.guide-nav a:hover, .guide-nav a.active{
+  background:var(--sparta-gold); color:#1a1200; border-color:var(--sparta-gold);
+}
+.guide-nav .gn-logo{
+  width:26px;height:26px;border-radius:50%;flex-shrink:0;margin-right:.3rem;
+}
 
-        html { opacity: 0; transition: opacity 0.22s ease; }
-        html.page-ready { opacity: 1; }
+/* ============ COVER ============ */
+.cover{
+  position:relative;
+  min-height:92vh;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  text-align:center;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(247,194,27,0.25) 0%, transparent 45%),
+    radial-gradient(circle at 85% 80%, rgba(255,255,255,0.12) 0%, transparent 40%),
+    linear-gradient(150deg, var(--sparta-red) 0%, var(--sparta-deep-red) 75%);
+  color:#fff;
+  padding:3rem 1.5rem;
+  overflow:hidden;
+}
+.cover::before{
+  content:'';
+  position:absolute; inset:0;
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 40px);
+  pointer-events:none;
+}
+.cover-badge{
+  display:inline-flex; align-items:center; gap:.4rem;
+  background:rgba(255,255,255,0.14); border:1px solid rgba(255,255,255,0.35);
+  padding:.4rem .9rem; border-radius:99px;
+  font-size:.72rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+  margin-bottom:1.6rem; color:var(--sparta-gold);
+  animation:fadeDown .6s ease;
+}
+.cover-logo{
+  width:120px;height:120px;border-radius:50%;
+  box-shadow:0 16px 46px rgba(0,0,0,0.35), 0 0 0 6px rgba(255,255,255,0.12);
+  margin-bottom:1.6rem;
+  animation:pulseLogo 2.6s ease-in-out infinite;
+}
+@keyframes pulseLogo{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
+@keyframes fadeDown{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:none}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
 
-        body {
-            font-family: 'Sora', sans-serif;
-            background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
-            color: var(--sparta-black);
-            overflow-x: hidden;
-        }
+.cover h1{
+  font-size:3.4rem; font-weight:800; letter-spacing:.06em;
+  text-shadow:2px 3px 10px rgba(0,0,0,0.3);
+  animation:fadeUp .7s ease .1s both;
+}
+.cover .subtitle{
+  font-size:1.15rem; font-weight:500; opacity:.94; margin-top:.6rem;
+  animation:fadeUp .7s ease .2s both;
+}
+.cover .desc{
+  max-width:560px; margin:1.4rem auto 0; font-size:.95rem; line-height:1.7; opacity:.88;
+  animation:fadeUp .7s ease .3s both;
+}
+.cover-meta{
+  margin-top:2.2rem; display:flex; gap:.6rem; flex-wrap:wrap; justify-content:center;
+  animation:fadeUp .7s ease .4s both;
+}
+.cover-meta span{
+  background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.28);
+  padding:.35rem .8rem; border-radius:8px; font-size:.72rem; font-weight:600;
+}
 
-        /* ── Back button ── */
-        .back-bar {
-            position: fixed;
-            top: 0; left: 0; right: 0;
-            z-index: 100;
-            padding: 0.65rem 1.2rem;
-            padding-top: max(0.65rem, env(safe-area-inset-top, 0px));
-            background: rgba(230,57,47,0.97);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-        }
+/* Track picker cards */
+.track-picker{
+  position:relative; z-index:1;
+  display:flex; gap:1.2rem; flex-wrap:wrap; justify-content:center;
+  margin-top:2.8rem; max-width:780px;
+  animation:fadeUp .7s ease .5s both;
+}
+.track-card{
+  background:rgba(255,255,255,0.97); color:var(--sparta-black);
+  border-radius:18px; padding:1.5rem 1.4rem;
+  width:320px; text-align:left;
+  text-decoration:none;
+  box-shadow:0 14px 34px rgba(0,0,0,0.25);
+  border-bottom:4px solid var(--sparta-gold);
+  transition:transform .2s, box-shadow .2s;
+  display:block;
+}
+.track-card:hover{transform:translateY(-5px); box-shadow:0 20px 44px rgba(0,0,0,0.3);}
+.track-card .tc-icon{
+  width:46px;height:46px;border-radius:12px;
+  background:linear-gradient(135deg,var(--sparta-red),var(--sparta-deep-red));
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.4rem;
+  margin-bottom:.85rem;
+}
+.track-card h3{font-size:1.05rem;font-weight:800;margin-bottom:.3rem;}
+.track-card p{font-size:.82rem;color:#666;line-height:1.55;}
+.track-card .tc-go{margin-top:.7rem;font-size:.76rem;font-weight:700;color:var(--sparta-red);}
 
-        .back-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 14px 6px 10px;
-            background: rgba(255,255,255,0.15);
-            border: 1.5px solid rgba(255,255,255,0.4);
-            border-radius: 50px;
-            text-decoration: none;
-            color: #fff;
-            font-size: 13px;
-            font-weight: 700;
-            font-family: 'Sora', sans-serif;
-            transition: background 0.18s, transform 0.18s;
-            cursor: pointer;
-        }
-        .back-btn:hover { background: rgba(255,255,255,0.25); transform: translateX(-2px); }
-        .back-btn-arrow { font-size: 15px; }
+.scroll-hint{
+  position:relative; z-index:1;
+  margin-top:2.6rem; font-size:.75rem; opacity:.75;
+  display:flex; flex-direction:column; align-items:center; gap:.3rem;
+  animation:fadeUp .7s ease .6s both;
+}
+.scroll-hint .arrow{animation:bounce 1.6s infinite;}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
 
-        .back-bar-title {
-            font-size: 14px;
-            font-weight: 700;
-            color: rgba(255,255,255,0.92);
-            letter-spacing: 0.02em;
-        }
+/* ============ SECTION SCAFFOLDING ============ */
+.track{padding:4rem 0 1rem;}
+.track-header{
+  text-align:center; max-width:720px; margin:0 auto 2.6rem; padding:0 1.5rem;
+}
+.track-eyebrow{
+  display:inline-flex; align-items:center; gap:.4rem;
+  font-size:.72rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--sparta-red); background:rgba(230,57,47,0.08);
+  padding:.35rem .85rem; border-radius:99px; margin-bottom:1rem;
+}
+.track-header h2{font-size:2.1rem; font-weight:800; margin-bottom:.7rem;}
+.track-header p{font-size:.95rem; color:#666; line-height:1.65;}
 
-        /* ── Hero ── */
-        .hero {
-            background: linear-gradient(135deg, var(--sparta-red) 0%, var(--sparta-deep-red) 100%);
-            color: white;
-            padding: 5.5rem 2rem 3rem;
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-        }
+.container{max-width:1000px; margin:0 auto; padding:0 1.5rem;}
 
-        .hero::before {
-            content: '';
-            position: absolute;
-            top: -50%; right: -20%;
-            width: 600px; height: 600px;
-            background: radial-gradient(circle, rgba(247,194,27,0.2) 0%, transparent 70%);
-            border-radius: 50%;
-            animation: float 6s ease-in-out infinite;
-        }
-        @keyframes float { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-24px,-24px)} }
+.section-block{margin-bottom:3.2rem;}
+.section-block h3.blk-title{
+  font-size:1.25rem; font-weight:800; margin-bottom:1.3rem;
+  display:flex; align-items:center; gap:.55rem;
+  padding-bottom:.6rem;
+  border-bottom:2px solid rgba(0,0,0,0.06);
+}
+.section-block h3.blk-title .ms{color:var(--sparta-red); font-size:1.4rem;}
 
-        .hero-content { position: relative; z-index: 1; max-width: 760px; margin: 0 auto; }
+/* Step list */
+.steps{display:flex; flex-direction:column; gap:1rem;}
+.step{
+  display:flex; gap:1.1rem; background:#fff; border-radius:16px; padding:1.3rem 1.4rem;
+  box-shadow:0 2px 12px rgba(0,0,0,0.06); border:1px solid rgba(0,0,0,0.05);
+}
+.step-num{
+  flex-shrink:0; width:38px;height:38px;border-radius:50%;
+  background:linear-gradient(135deg,var(--sparta-red),var(--sparta-deep-red));
+  color:#fff; display:flex; align-items:center; justify-content:center;
+  font-weight:800; font-size:.95rem;
+}
+.step-body h4{font-size:.95rem; font-weight:700; margin-bottom:.3rem;}
+.step-body p{font-size:.85rem; color:#555; line-height:1.6;}
+.step-tag{
+  display:inline-block; margin-top:.55rem; font-size:.74rem; font-weight:600;
+  background:var(--sparta-cream); color:#8a5a00; padding:.3rem .65rem; border-radius:8px;
+  border:1px solid rgba(247,194,27,0.4);
+}
 
-        .logo-hero {
-            width: 110px; height: 110px;
-            margin: 0 auto 1.5rem;
-            border-radius: 50%;
-            box-shadow: 0 12px 40px rgba(0,0,0,0.3);
-            animation: pulseLogo 2s ease-in-out infinite;
-        }
-        @keyframes pulseLogo { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
+/* Feature grid */
+.feat-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:1rem;}
+.feat-card{
+  background:#fff; border-radius:14px; padding:1.15rem 1.2rem;
+  box-shadow:0 2px 10px rgba(0,0,0,0.06); border:1px solid rgba(0,0,0,0.05);
+}
+.feat-card .fc-icon{
+  width:38px;height:38px;border-radius:10px; margin-bottom:.65rem;
+  background:rgba(230,57,47,0.09); color:var(--sparta-red);
+  display:flex; align-items:center; justify-content:center; font-size:1.1rem;
+}
+.feat-card h4{font-size:.88rem; font-weight:700; margin-bottom:.35rem;}
+.feat-card p{font-size:.78rem; color:#666; line-height:1.55;}
 
-        .hero h1 {
-            font-family: 'Sora', sans-serif;
-            font-size: 3rem;
-            font-weight: 800;
-            letter-spacing: 0.04em;
-            margin-bottom: 0.75rem;
-            text-shadow: 2px 2px 8px rgba(0,0,0,0.25);
-            animation: slideDown 0.7s ease-out;
-        }
-        @keyframes slideDown { from{opacity:0;transform:translateY(-24px)} to{opacity:1;transform:translateY(0)} }
+/* Legend swatches (navigator) */
+.legend-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:.7rem;}
+.legend-item{
+  display:flex; align-items:center; gap:.65rem;
+  background:#fff; border-radius:12px; padding:.7rem .85rem;
+  border:1px solid rgba(0,0,0,0.06); box-shadow:0 1px 6px rgba(0,0,0,0.04);
+  font-size:.8rem;
+}
+.dot{width:14px;height:14px;border-radius:50%; flex-shrink:0;}
+.dot.green{background:#2ECC71;}
+.dot.blue{background:#3B82F6;}
+.dot.evac{background:#F97316;}
+.line-swatch{width:26px;height:4px;border-radius:2px; flex-shrink:0;}
+.line-swatch.gold{background:var(--sparta-gold);}
+.line-swatch.evac{background:#F97316;}
+.legend-item strong{display:block; font-size:.8rem;}
+.legend-item span.ldesc{font-size:.7rem; color:#888;}
 
-        .hero p { font-size: 1.15rem; font-weight: 400; opacity: 0.92; margin-bottom: 1.8rem; animation: slideUp2 0.7s ease-out; }
-        @keyframes slideUp2 { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+/* Callout boxes */
+.callout{
+  border-radius:14px; padding:1.1rem 1.3rem; font-size:.85rem; line-height:1.6;
+  display:flex; gap:.75rem; align-items:flex-start; margin-top:1rem;
+}
+.callout .ms{font-size:1.3rem; flex-shrink:0; margin-top:.1rem;}
+.callout.tip{background:#EFF9F2; border:1px solid rgba(46,204,113,0.3); color:#1c5c34;}
+.callout.tip .ms{color:#2ECC71;}
+.callout.warn{background:#FFF4E5; border:1px solid rgba(247,194,27,0.5); color:#7a5200;}
+.callout.warn .ms{color:#C98A00;}
+.callout.danger{background:#FDEBEA; border:1px solid rgba(230,57,47,0.35); color:#8B0000;}
+.callout.danger .ms{color:var(--sparta-red);}
 
-        /* ── Stats row ── */
-        .quick-stats {
-            display: flex;
-            justify-content: center;
-            gap: 1.2rem;
-            flex-wrap: wrap;
-            margin-top: 0;
-        }
+/* Mini device mock for chatbot examples */
+.chat-mock{
+  background:#fff; border-radius:16px; padding:1rem 1.1rem; max-width:420px;
+  box-shadow:0 2px 14px rgba(0,0,0,0.08); border:1px solid rgba(0,0,0,0.06);
+}
+.chat-bubble{
+  border-radius:14px; padding:.6rem .85rem; font-size:.82rem; line-height:1.5; margin-bottom:.55rem;
+  max-width:85%;
+}
+.chat-bubble.bot{background:var(--sparta-cream); color:#4a3200; border-bottom-left-radius:4px;}
+.chat-bubble.user{background:var(--sparta-red); color:#fff; margin-left:auto; border-bottom-right-radius:4px;}
 
-        .stat-card {
-            background: rgba(255,255,255,0.12);
-            border: 1.5px solid rgba(255,255,255,0.3);
-            border-radius: 14px;
-            padding: 1rem 1.4rem;
-            backdrop-filter: blur(8px);
-            text-align: center;
-            min-width: 110px;
-        }
-        .stat-icon  { font-size: 1.6rem; margin-bottom: 0.3rem; }
-        .stat-number { font-size: 1.5rem; font-weight: 800; display: block; color: var(--sparta-gold); }
-        .stat-label  { font-size: 0.78rem; font-weight: 500; opacity: 0.85; }
+/* FAQ accordion */
+.faq{background:#fff; border-radius:12px; border:1px solid rgba(0,0,0,0.06); overflow:hidden; margin-bottom:.6rem; box-shadow:0 1px 6px rgba(0,0,0,0.04);}
+.faq summary{
+  list-style:none; cursor:pointer; padding:.9rem 1.1rem; font-size:.85rem; font-weight:700;
+  display:flex; justify-content:space-between; align-items:center; gap:1rem;
+}
+.faq summary::-webkit-details-marker{display:none;}
+.faq summary .plus{color:var(--sparta-red); font-size:1.1rem; transition:transform .2s;}
+.faq[open] summary .plus{transform:rotate(45deg);}
+.faq .faq-a{padding:0 1.1rem 1rem; font-size:.82rem; color:#555; line-height:1.6;}
 
-        /* ── Content sections ── */
-        .container { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
+/* Divider between tracks */
+.track-divider{
+  background:var(--sparta-black); color:#fff; text-align:center; padding:3rem 1.5rem;
+  position:relative; overflow:hidden;
+}
+.track-divider::before{
+  content:''; position:absolute; top:-30%; left:50%; transform:translateX(-50%);
+  width:500px;height:500px; background:radial-gradient(circle,rgba(247,194,27,0.14) 0%, transparent 70%);
+}
+.track-divider h3{position:relative; font-size:1.5rem; font-weight:800; margin-bottom:.5rem;}
+.track-divider p{position:relative; font-size:.85rem; opacity:.75; margin-bottom:1.4rem;}
+.divider-btn{
+  position:relative; display:inline-flex; align-items:center; gap:.5rem;
+  background:var(--sparta-gold); color:#1a1200; text-decoration:none;
+  font-weight:800; font-size:.85rem; padding:.7rem 1.4rem; border-radius:99px;
+  transition:transform .18s;
+}
+.divider-btn:hover{transform:translateY(-2px);}
 
-        .section {
-            padding: 3.5rem 0 2rem;
-        }
+/* Table (quick reference) */
+.ref-table{width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 2px 10px rgba(0,0,0,0.06);}
+.ref-table th{background:var(--sparta-black); color:#fff; text-align:left; font-size:.74rem; text-transform:uppercase; letter-spacing:.05em; padding:.7rem .9rem;}
+.ref-table td{padding:.7rem .9rem; font-size:.82rem; border-top:1px solid rgba(0,0,0,0.06); color:#444;}
+.ref-table tr:nth-child(even) td{background:#fafafa;}
+.ref-table td.kbd{font-weight:700; color:var(--sparta-red); white-space:nowrap;}
 
-        .section-title {
-            font-family: 'Sora', sans-serif;
-            font-size: 1.8rem;
-            font-weight: 800;
-            color: var(--sparta-black);
-            margin-bottom: 2rem;
-            text-align: center;
-            position: relative;
-            padding-bottom: 0.75rem;
-        }
-        .section-title::after {
-            content: '';
-            position: absolute;
-            bottom: 0; left: 50%;
-            transform: translateX(-50%);
-            width: 48px; height: 3px;
-            background: var(--sparta-red);
-            border-radius: 99px;
-        }
+/* CTA + footer */
+.cta-section{
+  background:linear-gradient(135deg,var(--sparta-red),var(--sparta-deep-red));
+  color:#fff; text-align:center; padding:3.5rem 1.5rem; margin-top:2rem;
+}
+.cta-section h2{font-size:1.7rem; font-weight:800; margin-bottom:.6rem;}
+.cta-section p{opacity:.9; margin-bottom:1.6rem; font-size:.92rem;}
+.cta-buttons{display:flex; gap:.9rem; justify-content:center; flex-wrap:wrap;}
+.btn{
+  display:inline-flex; align-items:center; gap:.5rem; padding:.8rem 1.5rem; border-radius:99px;
+  text-decoration:none; font-weight:700; font-size:.88rem; transition:.18s;
+}
+.btn-primary{background:var(--sparta-gold); color:#1a1200;}
+.btn-primary:hover{transform:translateY(-2px); box-shadow:0 8px 20px rgba(0,0,0,0.25);}
+.btn-secondary{background:rgba(255,255,255,0.14); color:#fff; border:1.5px solid rgba(255,255,255,0.5);}
+.btn-secondary:hover{background:rgba(255,255,255,0.24);}
 
-        /* ── Features grid ── */
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 1.25rem;
-        }
+.page-footer{background:var(--sparta-black); color:rgba(255,255,255,0.5); text-align:center; padding:1.6rem; font-size:.78rem;}
+.page-footer a{color:var(--sparta-gold); text-decoration:none;}
 
-        .feature-card {
-            background: white;
-            border-radius: 16px;
-            padding: 1.5rem;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.07);
-            border: 1px solid rgba(0,0,0,0.06);
-            transition: transform 0.22s, box-shadow 0.22s;
-        }
-        .feature-card:hover { transform: translateY(-4px); box-shadow: 0 8px 28px rgba(0,0,0,0.12); }
+/* ============ MOBILE RESPONSIVENESS ============ */
+@media (max-width:900px){
+  .feat-grid{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));}
+  .legend-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));}
+}
 
-        .feature-icon { font-size: 2rem; margin-bottom: 0.75rem; display: block; }
-        .feature-card h3 { font-size: 1rem; font-weight: 700; color: var(--sparta-red); margin-bottom: 0.5rem; }
-        .feature-card p  { font-size: 0.88rem; color: #555; line-height: 1.6; margin-bottom: 0.75rem; }
-        .feature-card ul { list-style: none; }
-        .feature-card ul li {
-            font-size: 0.82rem;
-            color: #666;
-            padding: 4px 0;
-            padding-left: 18px;
-            position: relative;
-        }
-        .feature-card ul li::before { content:'›'; position:absolute; left:0; color:var(--sparta-red); font-weight:700; }
+@media (max-width:640px){
+  body{font-size:15px;}
+  .guide-nav{padding:.5rem .7rem; gap:.3rem;}
+  .guide-nav a{font-size:.72rem; padding:.4rem .7rem;}
+  .guide-nav .gn-logo{width:22px;height:22px;}
 
-        /* ── Steps ── */
-        .steps-container { display: flex; flex-direction: column; gap: 1.5rem; max-width: 740px; margin: 0 auto; }
+  .cover{min-height:auto; padding:4.5rem 1.1rem 2.5rem;}
+  .cover-logo{width:88px;height:88px;}
+  .cover h1{font-size:2.2rem;}
+  .cover .subtitle{font-size:1rem;}
+  .cover .desc{font-size:.88rem;}
+  .cover-meta span{font-size:.68rem;}
+  .track-picker{gap:.9rem;}
+  .track-card{width:100%; padding:1.25rem 1.1rem;}
 
-        .step {
-            display: flex;
-            align-items: flex-start;
-            gap: 1.25rem;
-            background: white;
-            border-radius: 16px;
-            padding: 1.5rem;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.07);
-            border: 1px solid rgba(0,0,0,0.06);
-        }
+  .track{padding:2.6rem 0 .5rem;}
+  .track-header{margin-bottom:1.8rem;}
+  .track-header h2{font-size:1.5rem;}
+  .track-header p{font-size:.88rem;}
 
-        .step-number {
-            width: 44px; height: 44px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--sparta-red), var(--sparta-deep-red));
-            color: white;
-            font-size: 1.1rem;
-            font-weight: 800;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            box-shadow: 0 4px 12px rgba(230,57,47,0.35);
-        }
+  .container{padding:0 1.1rem;}
+  .section-block{margin-bottom:2.4rem;}
+  .section-block h3.blk-title{font-size:1.08rem;}
 
-        .step-content h3 { font-size: 1rem; font-weight: 700; color: var(--sparta-black); margin-bottom: 0.4rem; }
-        .step-content p  { font-size: 0.88rem; color: #555; line-height: 1.65; }
+  .step{padding:1rem 1rem; gap:.85rem;}
+  .step-num{width:32px;height:32px;font-size:.85rem;}
+  .step-body h4{font-size:.9rem;}
+  .step-body p{font-size:.82rem;}
 
-        .step-example {
-            margin-top: 0.6rem;
-            background: var(--sparta-cream);
-            border-left: 3px solid var(--sparta-red);
-            border-radius: 0 8px 8px 0;
-            padding: 0.55rem 0.75rem;
-            font-size: 0.82rem;
-            color: #555;
-            line-height: 1.5;
-        }
-        .step-example strong { color: var(--sparta-red); }
+  .feat-grid{grid-template-columns:1fr 1fr; gap:.75rem;}
+  .feat-card{padding:.95rem 1rem;}
 
-        /* ── Tips section ── */
-        .tips-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-        }
+  .chat-mock{max-width:100%;}
+  .chat-bubble{max-width:92%; font-size:.8rem;}
 
-        .tip-card {
-            background: white;
-            border-radius: 14px;
-            padding: 1.25rem;
-            border-left: 4px solid var(--sparta-gold);
-            box-shadow: 0 2px 10px rgba(0,0,0,0.06);
-        }
-        .tip-card h4 { font-size: 0.9rem; font-weight: 700; color: var(--sparta-black); margin-bottom: 0.4rem; }
-        .tip-card p  { font-size: 0.82rem; color: #666; line-height: 1.55; }
+  .legend-grid{grid-template-columns:1fr 1fr; gap:.6rem;}
 
-        /* ── CTA ── */
-        .cta-section {
-            background: linear-gradient(135deg, var(--sparta-red), var(--sparta-deep-red));
-            color: white;
-            padding: 3.5rem 2rem;
-            text-align: center;
-        }
-        .cta-section h2 { font-size: 1.8rem; font-weight: 800; margin-bottom: 0.75rem; }
-        .cta-section p  { font-size: 1rem; opacity: 0.88; margin-bottom: 2rem; }
+  /* Tables scroll horizontally instead of squeezing */
+  .ref-table{display:block; overflow-x:auto; white-space:nowrap; -webkit-overflow-scrolling:touch;}
+  .ref-table th, .ref-table td{white-space:nowrap;}
 
-        .cta-buttons { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+  .callout{padding:.9rem 1rem; font-size:.82rem;}
 
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 0.85rem 1.8rem;
-            border-radius: 50px;
-            font-size: 0.95rem;
-            font-weight: 700;
-            font-family: 'Sora', sans-serif;
-            text-decoration: none;
-            cursor: pointer;
-            border: 2px solid transparent;
-            transition: all 0.22s ease;
-        }
-        .btn-primary { background: var(--sparta-gold); color: var(--sparta-black); }
-        .btn-primary:hover { background: #ffe040; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(247,194,27,0.4); }
-        .btn-secondary { background: transparent; color: white; border-color: rgba(255,255,255,0.6); }
-        .btn-secondary:hover { background: rgba(255,255,255,0.15); border-color: white; }
+  .track-divider{padding:2.2rem 1.1rem;}
+  .track-divider h3{font-size:1.25rem;}
 
-        /* ── Footer ── */
-        .page-footer {
-            background: var(--sparta-black);
-            color: rgba(255,255,255,0.55);
-            text-align: center;
-            padding: 1.5rem;
-            font-size: 0.82rem;
-        }
-        .page-footer a { color: var(--sparta-gold); text-decoration: none; }
+  .cta-section{padding:2.6rem 1.1rem;}
+  .cta-section h2{font-size:1.35rem;}
+  .cta-buttons{flex-direction:column; align-items:stretch;}
+  .btn{justify-content:center;}
 
-        /* ── Responsive: tablet ── */
-        @media (max-width: 768px) {
-            .hero { padding: 5rem 1.25rem 2.5rem; }
-            .hero h1 { font-size: 2.2rem; }
-            .hero p  { font-size: 1rem; }
-            .section-title { font-size: 1.5rem; }
-            .section { padding: 2.5rem 0 1.5rem; }
-            .quick-stats { gap: 0.85rem; }
-            .stat-card { padding: 0.8rem 1rem; min-width: 90px; }
-            .stat-number { font-size: 1.25rem; }
-            .cta-section h2 { font-size: 1.5rem; }
-            .cta-buttons { flex-direction: column; align-items: center; }
-            .btn { width: 100%; max-width: 300px; justify-content: center; }
-        }
+  .faq summary{font-size:.82rem; padding:.8rem 1rem;}
+  .faq .faq-a{font-size:.8rem;}
+}
 
-        /* ── Responsive: large phone ── */
-        @media (max-width: 480px) {
-            .hero { padding: 4.5rem 1rem 2rem; }
-            .hero h1 { font-size: 1.8rem; letter-spacing: 0.02em; }
-            .hero p  { font-size: 0.92rem; }
-            .logo-hero { width: 88px; height: 88px; }
-            .stat-card { padding: 0.7rem 0.85rem; min-width: 80px; }
-            .stat-number { font-size: 1.1rem; }
-            .stat-label  { font-size: 0.7rem; }
-            .step { flex-direction: column; align-items: flex-start; }
-            .step-number { width: 38px; height: 38px; font-size: 1rem; }
-            .features-grid { grid-template-columns: 1fr; }
-            .tips-grid { grid-template-columns: 1fr; }
-            .back-btn { font-size: 12px; padding: 5px 11px 5px 8px; }
-            .back-bar-title { font-size: 13px; }
-            .section { padding: 2rem 0 1rem; }
-            .section-title { font-size: 1.3rem; }
-            .feature-card { padding: 1.2rem; }
-        }
-
-        /* ── Responsive: small phone ── */
-        @media (max-width: 360px) {
-            .hero h1 { font-size: 1.5rem; }
-            .logo-hero { width: 76px; height: 76px; }
-            .quick-stats { gap: 0.6rem; }
-            .stat-card { min-width: 70px; padding: 0.6rem 0.75rem; }
-            .section-title { font-size: 1.2rem; }
-            .step-content h3 { font-size: 0.92rem; }
-            .step-content p  { font-size: 0.82rem; }
-            .btn { font-size: 0.88rem; padding: 0.75rem 1.4rem; }
-            .back-bar { padding: 0.5rem 0.9rem; }
-        }
-    </style>
+@media (max-width:380px){
+  .cover h1{font-size:1.9rem;}
+  .feat-grid{grid-template-columns:1fr;}
+  .legend-grid{grid-template-columns:1fr;}
+}
+</style>
 </head>
 <body>
 
-    <!-- Fixed back bar -->
-    <div class="back-bar">
-        <a href="sparta_main_menu.html" class="back-btn" id="backBtn">
-            <span class="back-btn-arrow">←</span>
-            <span>Back</span>
-        </a>
-        <span class="back-bar-title">How to Use SPARTA</span>
-    </div>
+<!-- ============ STICKY GUIDE NAV ============ -->
+<nav class="guide-nav" id="guideNav">
+  <img src="https://sparta-production-0acb.up.railway.app/images/logo.png" alt="SPARTA" class="gn-logo">
+  <a href="#cover">Cover</a>
+  <a href="#chatbot-track">Chatbot Track</a>
+  <a href="#navigator-track">Navigator Track</a>
+  <a href="#quick-ref">Quick Reference</a>
+  <a href="#faq">FAQ</a>
+</nav>
 
-    <!-- Hero -->
-    <div class="hero">
-        <div class="hero-content">
-            <img src="https://sparta-production-0acb.up.railway.app/images/logo.png" alt="BSU Logo" class="logo-hero">
-            <h1>How to Use SPARTA</h1>
-            <p>Your Smart Campus Companion at BSU Lipa</p>
+<!-- ============ COVER ============ -->
+<header class="cover" id="cover">
+  <span class="cover-badge"><span class="ms">auto_awesome</span> Official User Guide</span>
+  <img src="https://sparta-production-0acb.up.railway.app/images/logo.png" alt="BSU Logo" class="cover-logo">
+  <h1>SPARTA</h1>
+  <p class="subtitle">Smart Campus Companion Portal</p>
+  <p class="desc">
+    This guide walks you through both sides of SPARTA — chatting with the AI assistant for instant answers,
+    and using the interactive 3D map to navigate BSU Lipa in person. Pick a track below, or scroll through the
+    whole guide from top to bottom.
+  </p>
+  <div class="cover-meta">
+    <span>🏫 Batangas State University — Lipa Campus</span>
+    <span>🌐 English &amp; Tagalog Supported</span>
+  </div>
+
+  <div class="track-picker">
+    <a href="#chatbot-track" class="track-card">
+      <div class="tc-icon"><span class="ms">forum</span></div>
+      <h3>💬 Chatbot Track</h3>
+      <p>Learn how to ask SPARTA questions, use voice input, switch languages, and get instant answers about BSU Lipa.</p>
+      <div class="tc-go">Start this track →</div>
+    </a>
+    <a href="#navigator-track" class="track-card">
+      <div class="tc-icon"><span class="ms">map</span></div>
+      <h3>🗺️ Navigator Track</h3>
+      <p>Learn how to search locations, get directions on the 3D campus map, and find emergency evacuation routes.</p>
+      <div class="tc-go">Start this track →</div>
+    </a>
+  </div>
+
+  <div class="scroll-hint">
+    <span>Scroll to begin</span>
+    <span class="arrow ms">expand_more</span>
+  </div>
+</header>
+
+<!-- ======================================================= -->
+<!-- ============ TRACK 1 — CHATBOT ======================== -->
+<!-- ======================================================= -->
+<section class="track" id="chatbot-track">
+  <div class="track-header">
+    <span class="track-eyebrow"><span class="ms" style="font-size:1rem;">forum</span> Track One</span>
+    <h2>💬 Talking to SPARTA</h2>
+    <p>SPARTA's chatbot answers questions about admissions, offices, faculty, events, and more — in plain English or Tagalog, 24/7.</p>
+  </div>
+
+  <div class="container">
+
+    <!-- Getting there -->
+    <div class="section-block">
+      <h3 class="blk-title"><span class="ms">login</span>Getting to the Chatbot</h3>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <h4>Open the Main Menu</h4>
+            <p>Launch SPARTA in your browser. You'll land on the main menu with quick-access tiles.</p>
+          </div>
         </div>
-        <div class="quick-stats">
-            <div class="stat-card">
-                <div class="stat-icon">💬</div>
-                <span class="stat-number">24/7</span>
-                <span class="stat-label">Always Available</span>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">🗺️</div>
-                <span class="stat-number">100+</span>
-                <span class="stat-label">Campus Locations</span>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">⚡</div>
-                <span class="stat-number">Fast</span>
-                <span class="stat-label">Instant Answers</span>
-            </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <h4>Tap "Talk to SPARTA"</h4>
+            <p>This opens the chat window — no login or account needed. Works on phone, tablet, or desktop.</p>
+            <span class="step-tag">💡 Bookmark the page for one-tap access anytime</span>
+          </div>
         </div>
+      </div>
     </div>
 
-    <!-- Main Content -->
-    <div class="container">
-
-        <!-- What Can SPARTA Do? -->
-        <section class="section">
-            <h2 class="section-title">What Can SPARTA Do?</h2>
-            <div class="features-grid">
-                <div class="feature-card">
-                    <span class="feature-icon">💬</span>
-                    <h3>Answer Questions</h3>
-                    <p>Get instant answers about BSU Lipa — from admissions to academic programs.</p>
-                    <ul>
-                        <li>Admission requirements</li>
-                        <li>Course offerings</li>
-                        <li>School policies</li>
-                        <li>Contact information</li>
-                    </ul>
-                </div>
-                <div class="feature-card">
-                    <span class="feature-icon">🗺️</span>
-                    <h3>Navigate Campus</h3>
-                    <p>Find your way around campus with our interactive 3D map.</p>
-                    <ul>
-                        <li>Locate classrooms</li>
-                        <li>Find offices and facilities</li>
-                        <li>Get directions</li>
-                        <li>Explore buildings</li>
-                    </ul>
-                </div>
-                <div class="feature-card">
-                    <span class="feature-icon">📅</span>
-                    <h3>Stay Updated</h3>
-                    <p>Never miss important announcements and events.</p>
-                    <ul>
-                        <li>Latest news</li>
-                        <li>Event schedules</li>
-                        <li>Academic calendar</li>
-                        <li>Important dates</li>
-                    </ul>
-                </div>
-                <div class="feature-card">
-                    <span class="feature-icon">👥</span>
-                    <h3>Find People</h3>
-                    <p>Get contact information for university staff and faculty.</p>
-                    <ul>
-                        <li>Faculty directory</li>
-                        <li>Office locations</li>
-                        <li>Contact details</li>
-                        <li>Office hours</li>
-                    </ul>
-                </div>
-            </div>
-        </section>
-
-        <!-- Step-by-Step Guide -->
-        <section class="section">
-            <h2 class="section-title">Getting Started in 5 Easy Steps</h2>
-            <div class="steps-container">
-                <div class="step">
-                    <div class="step-number">1</div>
-                    <div class="step-content">
-                        <h3>Access SPARTA</h3>
-                        <p>Tap "Talk to SPARTA" from the main menu. SPARTA is available 24/7 on any device — phone, tablet, or computer.</p>
-                        <div class="step-example"><strong>Tip:</strong> Bookmark the page for quick access anytime!</div>
-                    </div>
-                </div>
-                <div class="step">
-                    <div class="step-number">2</div>
-                    <div class="step-content">
-                        <h3>Type Your Question</h3>
-                        <p>Just type in plain language — no special commands needed. SPARTA understands casual conversation.</p>
-                        <div class="step-example"><strong>Example:</strong> "Where is Room 301?" or "What are the admission requirements for Engineering?"</div>
-                    </div>
-                </div>
-                <div class="step">
-                    <div class="step-number">3</div>
-                    <div class="step-content">
-                        <h3>Get Instant Answers</h3>
-                        <p>SPARTA responds right away with accurate, helpful information. Ask follow-up questions anytime.</p>
-                        <div class="step-example"><strong>Follow-up:</strong> "Can you tell me more?" or "How do I get there?"</div>
-                    </div>
-                </div>
-                <div class="step">
-                    <div class="step-number">4</div>
-                    <div class="step-content">
-                        <h3>Explore the 3D Map</h3>
-                        <p>Tap "Navigate the Campus" to explore the interactive 3D campus map — find buildings, rooms, and plan your route.</p>
-                        <div class="step-example"><strong>Try:</strong> Searching for "Library" or "College of Engineering" to see directions.</div>
-                    </div>
-                </div>
-                <div class="step">
-                    <div class="step-number">5</div>
-                    <div class="step-content">
-                        <h3>Use Voice Input</h3>
-                        <p>Tap the 🎤 microphone button and speak your question naturally. SPARTA supports both English and Tagalog.</p>
-                        <div class="step-example"><strong>Say:</strong> "Saan ang library?" or "Who is the dean of COE?"</div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Pro Tips -->
-        <section class="section">
-            <h2 class="section-title">Pro Tips</h2>
-            <div class="tips-grid">
-                <div class="tip-card">
-                    <h4>🎯 Be Specific</h4>
-                    <p>The more specific your question, the better the answer. Try "Where is the COE Dean's office?" instead of just "dean".</p>
-                </div>
-                <div class="tip-card">
-                    <h4>🌐 Switch Languages</h4>
-                    <p>Tap the EN|TL toggle in the chatbot header to switch between English and Tagalog in one tap.</p>
-                </div>
-                <div class="tip-card">
-                    <h4>⚡ Quick Questions</h4>
-                    <p>Swipe the chip row below the chat to see popular quick-questions. Tap any chip to send instantly.</p>
-                </div>
-                <div class="tip-card">
-                    <h4>🔔 Announcements</h4>
-                    <p>Tap the bell icon on the main menu to see the latest campus announcements and events.</p>
-                </div>
-            </div>
-        </section>
-
-    </div>
-
-    <!-- CTA -->
-    <div class="cta-section">
-        <h2>Ready to Explore BSU Lipa?</h2>
-        <p>Start chatting with SPARTA or navigate the 3D campus map right now.</p>
-        <div class="cta-buttons">
-            <a href="sparta_chatbot.html" class="btn btn-primary">💬 Talk to SPARTA</a>
-            <a href="sparta_campus-navigator.html" class="btn btn-secondary">🗺️ Explore Campus</a>
+    <!-- Asking questions -->
+    <div class="section-block">
+      <h3 class="blk-title"><span class="ms">chat_bubble</span>Asking a Question</h3>
+      <div class="feat-grid" style="margin-bottom:1.3rem;">
+        <div class="feat-card">
+          <div class="fc-icon"><span class="ms">keyboard</span></div>
+          <h4>Type Naturally</h4>
+          <p>No commands or keywords required — just ask like you would ask a person.</p>
         </div>
+        <div class="feat-card">
+          <div class="fc-icon"><span class="ms">mic</span></div>
+          <h4>Use Voice Input</h4>
+          <p>Tap the mic icon and speak your question. SPARTA transcribes and answers automatically.</p>
+        </div>
+        <div class="feat-card">
+          <div class="fc-icon"><span class="ms">bolt</span></div>
+          <h4>Try Quick Questions</h4>
+          <p>Tap a suggestion chip under the chat box (e.g. "Who is the dean?") to send it instantly.</p>
+        </div>
+      </div>
+
+      <div class="chat-mock">
+        <div class="chat-bubble user">Where is the speech lab?</div>
+        <div class="chat-bubble bot">The Speech Lab is on the 2nd floor of the CTE Building, near the Faculty Room. Want directions on the map?</div>
+        <div class="chat-bubble user">Saan ang library?</div>
+        <div class="chat-bubble bot">Ang Library ay matatagpuan sa Main Building, Ground Floor, tabi ng Registrar's Office.</div>
+      </div>
     </div>
 
-    <div class="page-footer">
-        Batangas State University — The National Engineering University &nbsp;|&nbsp;
-        <a href="sparta_main_menu.html">← Back to Main Menu</a>
+    <!-- Voice + language -->
+    <div class="section-block">
+      <h3 class="blk-title"><span class="ms">translate</span>Voice &amp; Language Controls</h3>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num"><span class="ms" style="color:#fff;vertical-align:-2px;">mic</span></div>
+          <div class="step-body">
+            <h4>Microphone Button</h4>
+            <p>Tap the 🎤 icon in the input bar, allow microphone access when prompted, then speak clearly. Recognition matches your current language setting.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num" style="font-size:.75rem;">EN｜TL</div>
+          <div class="step-body">
+            <h4>Language Toggle</h4>
+            <p>Tap the <strong>EN | TL</strong> pill in the header to switch between English and Tagalog with one tap — this affects both chat replies and voice recognition/speech.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num"><span class="ms" style="color:#fff;vertical-align:-2px;">volume_up</span></div>
+          <div class="step-body">
+            <h4>Text-to-Speech</h4>
+            <p>SPARTA can read its answers aloud. A "Speaking…" indicator appears while it talks — tap the ✕ on that indicator to stop at any time.</p>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <script>
-        // Page transition
-        (function(){
-            window.addEventListener('DOMContentLoaded', function(){
-                document.documentElement.classList.add('page-ready');
-            });
-            document.addEventListener('click', function(e){
-                var a = e.target.closest('a[href]');
-                if(a && !a.target && !e.ctrlKey && !e.metaKey && a.hostname === location.hostname){
-                    e.preventDefault();
-                    var href = a.href;
-                    document.documentElement.style.opacity = '0';
-                    setTimeout(function(){ location.href = href; }, 220);
-                }
-            });
-        })();
-    </script>
+    <!-- What to ask -->
+    <div class="section-block">
+      <h3 class="blk-title"><span class="ms">help</span>What You Can Ask</h3>
+      <div class="feat-grid">
+        <div class="feat-card">
+          <div class="fc-icon"><span class="ms">location_on</span></div>
+          <h4>Campus Navigation</h4>
+          <p>"Where is Room 301?" — find buildings, rooms, and offices.</p>
+        </div>
+        <div class="feat-card">
+          <div class="fc-icon"><span class="ms">group</span></div>
+          <h4>Faculty &amp; Staff</h4>
+          <p>"Who is the dean of COE?" — get names, contact info, office hours.</p>
+        </div>
+        <div class="feat-card">
+          <div class="fc-icon"><span class="ms">account_balance</span></div>
+          <h4>University Info</h4>
+          <p>"When was BSU Lipa founded?" — history, programs, and policies.</p>
+        </div>
+        <div class="feat-card">
+          <div class="fc-icon"><span class="ms">diversity_3</span></div>
+          <h4>Organizations</h4>
+          <p>"Tell me about SETS org" — student clubs and organizations.</p>
+        </div>
+        <div class="feat-card">
+          <div class="fc-icon"><span class="ms">school</span></div>
+          <h4>Programs &amp; Admissions</h4>
+          <p>"What are the requirements for BSIT?" — courses, requirements, and enrollment.</p>
+        </div>
+        <div class="feat-card">
+          <div class="fc-icon"><span class="ms">map</span></div>
+          <h4>Jump to the Map</h4>
+          <p>Tap the map icon in the chat header to open the Campus Navigator directly.</p>
+        </div>
+      </div>
+      <div class="callout tip">
+        <span class="ms">tips_and_updates</span>
+        <div><strong>Pro tip:</strong> Be specific. "Where is the COE Dean's office?" gets a better answer than just "dean."</div>
+      </div>
+    </div>
+
+    <!-- Popup Announcements -->
+    <div class="section-block">
+      <h3 class="blk-title"><span class="ms">campaign</span>Staying Updated with Announcements</h3>
+      <p style="font-size:.9rem;color:#555;line-height:1.7;margin-bottom:1.1rem;">
+        SPARTA doesn't rely on asking the chatbot for news — announcements are pushed to you automatically through the
+        <strong>pop-up announcement system</strong>, available on every page.
+      </p>
+      <div class="feat-grid">
+        <div class="feat-card">
+          <div class="fc-icon"><span class="ms">notifications_active</span></div>
+          <h4>Automatic Pop-up</h4>
+          <p>New announcements appear in a card as soon as you open SPARTA — no need to ask.</p>
+        </div>
+        <div class="feat-card">
+          <div class="fc-icon"><span class="ms">notifications</span></div>
+          <h4>The 🔔 Bell Icon</h4>
+          <p>A floating bell button stays on screen. Tap it anytime to reopen announcements you've dismissed.</p>
+        </div>
+        <div class="feat-card">
+          <div class="fc-icon"><span class="ms">swipe</span></div>
+          <h4>Browse &amp; Drag</h4>
+          <p>Use the arrows or dots to page through multiple announcements. The bell can also be dragged to any spot on your screen.</p>
+        </div>
+      </div>
+      <div class="callout tip">
+        <span class="ms">tips_and_updates</span>
+        <div><strong>Tip:</strong> Closed the pop-up already? Just tap the 🔔 bell in the corner of the screen to bring it back.</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<div class="track-divider">
+  <h3>Ready for the 3D map?</h3>
+  <p>Now that you know how to chat with SPARTA, learn how to navigate campus in person.</p>
+  <a href="#navigator-track" class="divider-btn"><span class="ms">arrow_downward</span> Go to Navigator Track</a>
+</div>
+
+<!-- ======================================================= -->
+<!-- ============ TRACK 2 — NAVIGATOR ======================= -->
+<!-- ======================================================= -->
+<section class="track" id="navigator-track">
+  <div class="track-header">
+    <span class="track-eyebrow"><span class="ms" style="font-size:1rem;">map</span> Track Two</span>
+    <h2>🗺️ Using the Campus Navigator</h2>
+    <p>An interactive 3D map of BSU Lipa — search any room or building, get walking directions, and find emergency exits.</p>
+  </div>
+
+  <div class="container">
+
+    <!-- Getting there -->
+    <div class="section-block">
+      <h3 class="blk-title"><span class="ms">login</span>Getting to the Navigator</h3>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <h4>From the Main Menu</h4>
+            <p>Tap "Navigate the Campus" on the main menu — or tap the map icon inside the chatbot header.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <h4>Let the Map Load</h4>
+            <p>The 3D campus model loads automatically. You'll see a loading indicator briefly while it initializes.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Searching -->
+    <div class="section-block">
+      <h3 class="blk-title"><span class="ms">search</span>Searching for a Location</h3>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num"><span class="ms" style="color:#fff;vertical-align:-2px;">search</span></div>
+          <div class="step-body">
+            <h4>Type in the Search Bar</h4>
+            <p>Use the search box at the top of the sidebar (desktop) or the floating search bar on the map (mobile). Start typing a room or building name — results appear live as you type.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num"><span class="ms" style="color:#fff;vertical-align:-2px;">layers</span></div>
+          <div class="step-body">
+            <h4>Filter by Floor</h4>
+            <p>Use the floor pills (e.g. "All Floors", "Floor 1", "Floor 2") to narrow results to a specific level of a building.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num"><span class="ms" style="color:#fff;vertical-align:-2px;">place</span></div>
+          <div class="step-body">
+            <h4>Select a Result</h4>
+            <p>Tap a location from the results list. The map flies to that spot and opens an info card with details.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Directions -->
+    <div class="section-block">
+      <h3 class="blk-title"><span class="ms">directions</span>Getting Directions</h3>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <h4>Open a Location's Info Card</h4>
+            <p>Search for or tap your destination on the map to open its info panel.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <h4>Tap "Get Directions"</h4>
+            <p>SPARTA draws an animated golden path from the Main Entrance Gate to your destination.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <h4>Check the Route Info Card</h4>
+            <p>See estimated distance and walking time at a glance before you head out.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="section-block">
+      <h3 class="blk-title"><span class="ms">sports_esports</span>Map Controls</h3>
+      <div class="ref-table" style="overflow:hidden;">
+        <table class="ref-table">
+          <tr><th>Action</th><th>Desktop</th><th>Mobile</th></tr>
+          <tr><td>Rotate view</td><td class="kbd">Click + drag</td><td class="kbd">One-finger drag</td></tr>
+          <tr><td>Zoom in / out</td><td class="kbd">Scroll wheel</td><td class="kbd">Pinch in / out</td></tr>
+          <tr><td>Pan the map</td><td class="kbd">Right-click + drag</td><td class="kbd">Two-finger drag</td></tr>
+          <tr><td>Reset view</td><td class="kbd">🧭 Reset button</td><td class="kbd">🧭 Reset button</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="section-block">
+      <h3 class="blk-title"><span class="ms">map</span>Reading the Legend</h3>
+      <p style="font-size:.85rem;color:#666;margin-bottom:1.1rem;">Tap the <strong>Legend</strong> tab in the sidebar (or bottom nav on mobile) any time to see what markers and lines mean.</p>
+      <div class="legend-grid" style="margin-bottom:1rem;">
+        <div class="legend-item"><div class="dot green"></div><div><strong>Start Point</strong><span class="ldesc">Main Entrance Gate</span></div></div>
+        <div class="legend-item"><div class="dot blue"></div><div><strong>Destination</strong><span class="ldesc">Your selected location</span></div></div>
+        <div class="legend-item"><div class="dot evac"></div><div><strong>Emergency Exit</strong><span class="ldesc">Evacuation points</span></div></div>
+        <div class="legend-item"><div class="line-swatch gold"></div><div><strong>Navigation Path</strong><span class="ldesc">Animated golden route</span></div></div>
+        <div class="legend-item"><div class="line-swatch evac"></div><div><strong>Evacuation Route</strong><span class="ldesc">Orange emergency path</span></div></div>
+      </div>
+      <div class="legend-grid">
+        <div class="legend-item"><span style="font-size:1.1rem;">🏫</span><div><strong>Classroom</strong><span class="ldesc">Lecture halls &amp; rooms</span></div></div>
+        <div class="legend-item"><span style="font-size:1.1rem;">🏛️</span><div><strong>Office / Admin</strong><span class="ldesc">Administrative offices</span></div></div>
+        <div class="legend-item"><span style="font-size:1.1rem;">📚</span><div><strong>Library</strong><span class="ldesc">Reading &amp; study areas</span></div></div>
+        <div class="legend-item"><span style="font-size:1.1rem;">🔬</span><div><strong>Laboratory</strong><span class="ldesc">Science &amp; computer labs</span></div></div>
+        <div class="legend-item"><span style="font-size:1.1rem;">🍽️</span><div><strong>Cafeteria</strong><span class="ldesc">Dining &amp; food areas</span></div></div>
+        <div class="legend-item"><span style="font-size:1.1rem;">🏋️</span><div><strong>Gymnasium</strong><span class="ldesc">Sports &amp; fitness</span></div></div>
+        <div class="legend-item"><span style="font-size:1.1rem;">🏥</span><div><strong>Clinic</strong><span class="ldesc">Medical services</span></div></div>
+        <div class="legend-item"><span style="font-size:1.1rem;">🚻</span><div><strong>Restroom</strong><span class="ldesc">Comfort rooms</span></div></div>
+        <div class="legend-item"><span style="font-size:1.1rem;">🚪</span><div><strong>Entrance / Exit</strong><span class="ldesc">Campus access points</span></div></div>
+      </div>
+    </div>
+
+    <!-- Emergency -->
+    <div class="section-block">
+      <h3 class="blk-title"><span class="ms">emergency</span>Emergency Evacuation</h3>
+      <p style="font-size:.85rem;color:#666;margin-bottom:1rem;">Tap the <strong>Evacuation</strong> tab to see the nearest emergency exits and safety contacts from wherever you are on campus.</p>
+      <div class="feat-grid">
+        <div class="feat-card">
+          <div class="fc-icon"><span class="ms">exit_to_app</span></div>
+          <h4>Emergency Exits</h4>
+          <p>Browse or search all campus evacuation points, each marked in orange on the map.</p>
+        </div>
+        <div class="feat-card">
+          <div class="fc-icon"><span class="ms">call</span></div>
+          <h4>Emergency Contacts</h4>
+          <p>Quick-dial numbers for campus security and Lipa City Emergency (911) are listed in this tab.</p>
+        </div>
+        <div class="feat-card">
+          <div class="fc-icon"><span class="ms">route</span></div>
+          <h4>Evacuation Routes</h4>
+          <p>Tap an exit to draw its orange evacuation path from your current view.</p>
+        </div>
+      </div>
+      <div class="callout danger">
+        <span class="ms">warning</span>
+        <div><strong>Important:</strong> These routes are for orientation only. Always follow physical evacuation signage and instructions from campus security during an actual emergency.</div>
+      </div>
+    </div>
+
+    <!-- Saved / Favorites -->
+    <div class="section-block">
+      <h3 class="blk-title"><span class="ms">bookmark</span>Saving Favorite Locations</h3>
+      <div class="callout tip">
+        <span class="ms">star</span>
+        <div>Frequently-visited spots (like your classroom or the library) can be saved for quick access — look for the <strong>Favorites</strong> tab in the sidebar or bottom navigation.</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ QUICK REFERENCE ============ -->
+<section class="track" id="quick-ref" style="background:#efeee9; padding-bottom:3rem;">
+  <div class="track-header">
+    <span class="track-eyebrow"><span class="ms" style="font-size:1rem;">bolt</span> Cheat Sheet</span>
+    <h2>Quick Reference</h2>
+    <p>The essentials from both tracks in one place.</p>
+  </div>
+  <div class="container">
+    <table class="ref-table">
+      <tr><th>I want to…</th><th>Do this</th></tr>
+      <tr><td>Ask a question</td><td class="kbd">Open Chatbot → type or tap 🎤</td></tr>
+      <tr><td>Switch to Tagalog</td><td class="kbd">Tap EN | TL toggle in chat header</td></tr>
+      <tr><td>Stop SPARTA from talking</td><td class="kbd">Tap ✕ on the "Speaking…" indicator</td></tr>
+      <tr><td>Find a room or office</td><td class="kbd">Navigator → Search bar</td></tr>
+      <tr><td>Get walking directions</td><td class="kbd">Select location → "Get Directions"</td></tr>
+      <tr><td>See what map icons mean</td><td class="kbd">Navigator → Legend tab</td></tr>
+      <tr><td>Find the nearest exit</td><td class="kbd">Navigator → Evacuation tab</td></tr>
+      <tr><td>Jump between Chat and Map</td><td class="kbd">Map icon in chat header</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section class="track" id="faq">
+  <div class="track-header">
+    <span class="track-eyebrow"><span class="ms" style="font-size:1rem;">quiz</span> Common Questions</span>
+    <h2>Frequently Asked Questions</h2>
+  </div>
+  <div class="container" style="max-width:760px;">
+    <details class="faq" open>
+      <summary>Do I need to create an account to use SPARTA? <span class="plus">+</span></summary>
+      <div class="faq-a">No. Both the chatbot and the campus navigator are open to anyone — no sign-up or login required.</div>
+    </details>
+    <details class="faq">
+      <summary>Does voice input work in Tagalog? <span class="plus">+</span></summary>
+      <div class="faq-a">Yes. Switch the language toggle to TL before tapping the microphone, and SPARTA will listen and reply in Tagalog.</div>
+    </details>
+    <details class="faq">
+      <summary>What if my browser doesn't support voice input? <span class="plus">+</span></summary>
+      <div class="faq-a">You can always type your question instead — every chatbot feature is fully usable with text alone.</div>
+    </details>
+    <details class="faq">
+      <summary>Can I use the Navigator to find the nearest exit during an emergency? <span class="plus">+</span></summary>
+      <div class="faq-a">Yes, the Evacuation tab shows nearby emergency exits and routes. Treat it as a helpful reference — always prioritize posted signage and staff instructions in a real emergency.</div>
+    </details>
+    <details class="faq">
+      <summary>Does SPARTA work on mobile? <span class="plus">+</span></summary>
+      <div class="faq-a">Yes, both the chatbot and the 3D navigator are fully responsive, with touch-friendly controls like pinch-to-zoom and a bottom navigation bar on the map.</div>
+    </details>
+  </div>
+</section>
+
+<!-- ============ CTA ============ -->
+<div class="cta-section">
+  <h2>Ready to Explore BSU Lipa?</h2>
+  <p>Start chatting with SPARTA or jump straight into the 3D campus map.</p>
+  <div class="cta-buttons">
+    <a href="sparta_chatbot.html" class="btn btn-primary"><span class="ms">forum</span> Talk to SPARTA</a>
+    <a href="sparta_campus-navigator.html" class="btn btn-secondary"><span class="ms">map</span> Explore Campus</a>
+  </div>
+</div>
+
+<div class="page-footer">
+  SPARTA · Batangas State University — The National Engineering University, Lipa Campus &nbsp;|&nbsp;
+  <a href="sparta_main_menu.html">← Back to Main Menu</a>
+</div>
+
+<script>
+// Highlight active nav link on scroll
+(function(){
+  var links = document.querySelectorAll('.guide-nav a[href^="#"]');
+  var sections = Array.from(links).map(function(l){ return document.querySelector(l.getAttribute('href')); }).filter(Boolean);
+  function onScroll(){
+    var pos = window.scrollY + 120;
+    var current = sections[0];
+    sections.forEach(function(sec){ if (sec.offsetTop <= pos) current = sec; });
+    links.forEach(function(l){ l.classList.toggle('active', l.getAttribute('href') === '#' + current.id); });
+  }
+  window.addEventListener('scroll', onScroll);
+  onScroll();
+})();
+</script>
 </body>
 </html>
