@@ -255,6 +255,7 @@ class AdminCredentials(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, nullable=False)
     password_hash = Column(String, nullable=False)  # SHA-256 hash
+    session_token = Column(String, nullable=True)  # current valid session token; rotated on login/logout for real revocation
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

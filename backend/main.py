@@ -447,6 +447,18 @@ def _run_migrations():
     except Exception as faq_err:
         print(f"[migration] faq_documents patch: {faq_err}")
 
+    # admin_credentials: session_token — enables real server-side logout
+    # revocation instead of relying only on clearing the browser cookie.
+    try:
+        if inspector.has_table('admin_credentials'):
+            admin_cols = [c['name'] for c in inspector.get_columns('admin_credentials')]
+            if 'session_token' not in admin_cols:
+                conn.execute(text("ALTER TABLE admin_credentials ADD COLUMN session_token VARCHAR"))
+                conn.commit()
+                print("[migration] Added admin_credentials.session_token")
+    except Exception as admin_tok_err:
+        print(f"[migration] admin_credentials.session_token patch: {admin_tok_err}")
+
     # ── search_logs.searched_at backfill ──────────────────────────────
     # Backfills any rows where searched_at is NULL (old rows before the
     # column had a server default). Safe to run every startup — only
@@ -582,21 +594,21 @@ def frontend_file(filename: str):
 # ── HTML pages ──────────────────────────────────────────
 @app.get("/admin.html", response_class=HTMLResponse)
 @app.get("/admin",     response_class=HTMLResponse)
-async def serve_admin(request: Request):
-    """Serve admin.html — redirect to /login if session is missing or expired."""
+async def serve_admin(request: Request, db: Session = Depends(get_db)):
+    """Serve admin.html — redirect to /login if session is missing, expired, or revoked."""
     from fastapi.responses import RedirectResponse as _Redir
     try:
-        verify_session(request)   # uses auth.py — checks "username" key + expiry
+        verify_session(request, db)   # uses auth.py — checks token against DB (revocable on logout)
     except Exception:
         return _Redir(url="/login?next=/admin", status_code=302)
     return frontend_file("admin.html")
 
 @app.get("/login", response_class=HTMLResponse)
-async def serve_login(request: Request):
+async def serve_login(request: Request, db: Session = Depends(get_db)):
     """Serve login.html — bounce to /admin if already authenticated."""
     from fastapi.responses import RedirectResponse as _Redir
     try:
-        verify_session(request)
+        verify_session(request, db)
         return _Redir(url="/admin", status_code=302)   # already logged in
     except Exception:
         pass
@@ -1188,8 +1200,10 @@ async def admin_login(login_request: AdminLoginRequest, request: Request, db: Se
     if not credential or not verify_password(login_request.password, credential.password_hash):
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
-    # Store username + expiry in signed session cookie (see auth.py)
-    create_session(request, credential.username)
+    # Store username + token + expiry in signed session cookie AND the DB
+    # (see auth.py) — the DB copy is what makes logout actually revoke the
+    # token everywhere, not just clear the cookie on one browser.
+    create_session(request, credential.username, db)
 
     return JSONResponse(content={
         "success": True,
@@ -1198,9 +1212,11 @@ async def admin_login(login_request: AdminLoginRequest, request: Request, db: Se
     })
 
 @app.post("/api/admin/logout")
-async def admin_logout(request: Request):
-    """Logout — clears the signed session cookie"""
-    clear_session(request)   # clears entire session including "username" and "expires_at"
+async def admin_logout(request: Request, db: Session = Depends(get_db)):
+    """Logout — clears the signed session cookie AND rotates the DB-stored
+    token, so any other copy of the old token stops working immediately
+    too, not just on the browser that clicked Logout."""
+    clear_session(request, db)
     from fastapi.responses import RedirectResponse as _Redir
     # Return JSON for API calls; client-side JS will redirect to /login
     return JSONResponse(content={"success": True, "message": "Logged out", "redirect": "/login"})
