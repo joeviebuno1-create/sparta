@@ -5385,11 +5385,11 @@
   function vAuthEdit() {
     V.clearAll('auth-edit-modal');
     return V.all(
-      ['m-auth-edit-name', [['required'],['minLen',2],['maxLen',100]]],
-      ['m-auth-edit-pos',  [['required'],['minLen',2],['maxLen',120]]],
-      ['m-auth-edit-dept', [['required'],['minLen',2],['maxLen',150]]],
-      ['m-auth-edit-email',[['email']]],
-      ['m-auth-edit-phone',[['phone']]]
+      ['m-auth-name-edit', [['required'],['minLen',2],['maxLen',100]]],
+      ['m-auth-pos-edit',  [['required'],['minLen',2],['maxLen',120]]],
+      ['m-auth-dept-edit', [['required'],['minLen',2],['maxLen',150]]],
+      ['m-auth-email-edit',[['email']]],
+      ['m-auth-phone-edit',[['phone']]]
     );
   }
 
