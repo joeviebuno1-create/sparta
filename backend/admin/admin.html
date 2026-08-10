@@ -13,6 +13,7 @@
     <!-- Three.js Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/DRACOLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
     
     <!-- External Stylesheet -->
@@ -2640,6 +2641,7 @@
         const tbody = document.getElementById('recentNavBody');
         if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#9CA3AF;padding:2rem;">No recent navigation searches yet.</td></tr>';
       }
+    }
 
     function _setText(id, val) {
       try {
@@ -3245,8 +3247,6 @@
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:2rem;">No announcements yet.</td></tr>';
       }
     };
-
-    }
 
   </script>
 
