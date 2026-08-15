@@ -70,6 +70,7 @@ import numpy as np
 
 # Import RAG-based chatbot
 from rag_chatbot import process_chat_with_rag
+from profanity_filter import contains_profanity
 
 # Import FAQ PDF extractor
 from pypdf import PdfReader
@@ -887,6 +888,17 @@ async def chat(message: ChatMessage, request: Request, db: Session = Depends(get
     clean_message = _re.sub(r"\s{10,}", " ", clean_message).strip()
     if not clean_message:
         raise HTTPException(status_code=400, detail="Message contains invalid characters.")
+
+    # ── Profanity filter — English + Filipino/Tagalog, blocks before the
+    # message ever reaches the RAG pipeline or Claude API ─────────────────
+    if contains_profanity(clean_message):
+        return {
+            "response": "Let's keep things respectful here. Could you please rephrase your question?",
+            "confidence": 0.0,
+            "intent": "flagged_profanity",
+            "suggestions": [],
+            "metadata": {"rag_enabled": False, "context_used": 0, "entities_found": {}}
+        }
 
     try:
         result = process_chat_with_rag(
@@ -2685,6 +2697,19 @@ async def get_active_3d_model(db: Session = Depends(get_db)):
 
 @app.get("/health")
 async def health_check():
+    # Kept intentionally minimal — this stays public since Railway and any
+    # uptime monitor need to ping it without auth. The old version returned
+    # your embedding model name, version string, and which AI backends are
+    # active, which is unnecessary reconnaissance value for a public
+    # endpoint. Detailed diagnostics moved to the admin-only route below.
+    return {"status": "healthy"}
+
+
+@admin_router.get("/system-status")
+async def system_status():
+    """Detailed system diagnostics — admin-only (behind admin_router's
+    verify_session dependency). This is what /health used to expose
+    publicly."""
     from gemini_handler import GEMINI_ENABLED
     return {
         "status": "healthy",
