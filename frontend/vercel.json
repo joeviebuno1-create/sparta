@@ -1,0 +1,21 @@
+{
+  "redirects": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "www.sparta.help" }],
+      "destination": "https://sparta.help/",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.sparta.help" }],
+      "destination": "https://sparta.help/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/",
+      "destination": "/sparta_main_menu.html",
+      "permanent": true
+    }
+  ]
+}

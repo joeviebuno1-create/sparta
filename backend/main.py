@@ -811,6 +811,16 @@ async def read_root():
     from fastapi.responses import RedirectResponse as _Redir
     return _Redir(url="/login", status_code=302)
 
+@app.get("/robots.txt", response_class=Response)
+async def robots_txt():
+    # This backend is served directly at admin.sparta.help — nothing here
+    # is meant to appear in search results, so block it entirely. Your
+    # PUBLIC site (sparta.help, on Vercel) has its own separate robots.txt
+    # that allows crawling — robots.txt is fetched per-origin, so this one
+    # only governs admin.sparta.help.
+    content = "User-agent: *\nDisallow: /\n"
+    return Response(content=content, media_type="text/plain")
+
 # ============================================
 # ROUTES - RAG-ENHANCED CHATBOT (PUBLIC)
 # ============================================
@@ -893,7 +903,7 @@ async def chat(message: ChatMessage, request: Request, db: Session = Depends(get
     # message ever reaches the RAG pipeline or Claude API ─────────────────
     if contains_profanity(clean_message):
         return {
-            "response": "Let's keep things respectful here. Could you please rephrase your question?",
+            "response": "Let's keep things respectful here 🙂 Could you please rephrase your question?",
             "confidence": 0.0,
             "intent": "flagged_profanity",
             "suggestions": [],
