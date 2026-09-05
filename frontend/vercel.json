@@ -1,8 +1,10 @@
 {
+  "cleanUrls": true,
+  "trailingSlash": false,
   "redirects": [
     {
       "source": "/",
-      "destination": "/sparta_main_menu.html",
+      "destination": "/sparta_main_menu",
       "permanent": true
     }
   ]
